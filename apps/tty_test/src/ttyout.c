@@ -42,6 +42,18 @@ static size_t sos_debug_print(const void *vData, size_t count) {
 
 size_t sos_write(void *vData, size_t count) {
     //implement this to use your syscall
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, count + 1);
+    seL4_SetTag(tag);
+
+    seL4_SetMR(0, 2); // syscall 2 is what our protocol will use to write things
+    const char *realdata = vData;
+    size_t i;
+    for (i = 0; i < count; i++) {
+        seL4_SetMR(i + 1, realdata[i]);
+    }
+
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
     return sos_debug_print(vData, count);
 }
 

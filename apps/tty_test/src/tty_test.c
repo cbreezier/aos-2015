@@ -43,6 +43,8 @@ int main(void){
     ttyout_init();
 
     do {
+        printf("hi\n");
+        printf("hi\nho\n");
         printf("task:\tHello world, I'm\ttty_test!\n");
         thread_block();
         // sleep(1);	// Implement this as a syscall

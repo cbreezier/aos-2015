@@ -77,6 +77,9 @@ struct {
  */
 #define SOS_SYSCALL0 0
 
+/* Serial handle */
+struct serial *serial;
+
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
@@ -98,16 +101,33 @@ void handle_syscall(seL4_Word badge, int num_args) {
     assert(reply_cap != CSPACE_NULL);
 
     /* Process system call */
+    seL4_MessageInfo_t reply;
+    char buffer[1450];
+    size_t i;
+    
     switch (syscall_number) {
     case SOS_SYSCALL0:
         dprintf(0, "syscall: thread made syscall 0!\n");
 
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, 0);
         seL4_Send(reply_cap, reply);
 
         break;
+    case 2:
+        // printf("length: %d\n", num_args);
+        for (i = 0; i < num_args; i++) 
+            buffer[i] = seL4_GetMR(i + 1);
+        // buffer[i] = '\0';
+        // printf("buffer is: %s\n", buffer);
+        serial_send(serial, buffer, num_args);
 
+        // Reply so that we can context switch back to caller
+        reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, 0);
+        seL4_Send(reply_cap, reply);
+
+        break;
     default:
         printf("Unknown syscall %d\n", syscall_number);
         /* we don't want to reply to an unknown syscall */
@@ -409,6 +429,9 @@ int main(void) {
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
+
+    /* Initialise serial */
+    serial = serial_init();
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
