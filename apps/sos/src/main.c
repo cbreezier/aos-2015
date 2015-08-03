@@ -102,9 +102,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     /* Process system call */
     seL4_MessageInfo_t reply;
-    char buffer[1450];
+    seL4_Word buffer[350];
     size_t i;
-    
+
     switch (syscall_number) {
     case SOS_SYSCALL0:
         dprintf(0, "syscall: thread made syscall 0!\n");
@@ -116,9 +116,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
         break;
     case 2:
         // printf("length: %d\n", num_args);
-        for (i = 0; i < num_args; i++) 
+        for (i = 0; i <= num_args / 4; i++) 
             buffer[i] = seL4_GetMR(i + 1);
-        // buffer[i] = '\0';
+        // *((char *) buffer + num_args) = '\0';
         // printf("buffer is: %s\n", buffer);
         serial_send(serial, buffer, num_args);
 

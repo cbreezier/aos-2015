@@ -44,11 +44,11 @@ size_t sos_write(void *vData, size_t count) {
     //implement this to use your syscall
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, count + 1);
     seL4_SetTag(tag);
-
     seL4_SetMR(0, 2); // syscall 2 is what our protocol will use to write things
-    const char *realdata = vData;
+
+    const seL4_Word *realdata = vData;
     size_t i;
-    for (i = 0; i < count; i++) {
+    for (i = 0; i <= count / 4; i++) {
         seL4_SetMR(i + 1, realdata[i]);
     }
 
