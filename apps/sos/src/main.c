@@ -120,7 +120,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
             buffer[i] = seL4_GetMR(i + 1);
         // *((char *) buffer + num_args) = '\0';
         // printf("buffer is: %s\n", buffer);
-        serial_send(serial, buffer, num_args);
+        serial_send(serial, (char *) buffer, num_args);
 
         // Reply so that we can context switch back to caller
         reply = seL4_MessageInfo_new(0, 0, 0, 1);
