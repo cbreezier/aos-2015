@@ -19,6 +19,7 @@
 #include <nfs/nfs.h>
 #include <elf/elf.h>
 #include <serial/serial.h>
+#include <clock/clock.h>
 
 #include "network.h"
 #include "elf.h"
@@ -44,6 +45,7 @@
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
+#define IRQ_BADGE_TIMER   (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_PRIORITY         (0)
@@ -131,6 +133,9 @@ void syscall_loop(seL4_CPtr ep) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
+            }
+            if (badge & IRQ_BADGE_TIMER) {
+                timer_interrupt();
             }
 
         }else if(label == seL4_VMFault){
@@ -395,6 +400,11 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
+void setup_tick_timer(uint32_t id, void *data) {
+    printf("Time: %llu\n", time_stamp());
+    register_timer(100000, &setup_tick_timer, NULL);
+}
+
 /*
  * Main entry point - called by crt.
  */
@@ -406,6 +416,10 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    /* Start the timer hardware */
+    start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    setup_tick_timer(0, NULL);
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
