@@ -220,11 +220,25 @@ int remove_timer(uint32_t id) {
 }
 
 int timer_interrupt(void) {
+    if (*(epit_clocks[0].sr)) {
+        if (head->delay > (1ull << 32)) {
+            head->delay -= (1ull << 32);
+        } else {
+            head->callback(head->id, head->data);
+            struct list_node *to_free = head;
+            head = head->next;
+            free(to_free);
+            reschedule(head->delay);
+        }
+    } else {
+        *(epit_clocks[0].sr) = 1;
+        overflow_offset++;
+    }
     return 0;
 }
 
 timestamp_t time_stamp(void) {
-    return 0;
+    return overflow_offset * (1ull << 32) + *(epit_clocks[1].cnr);
 }
 
 int stop_timer(void) {
