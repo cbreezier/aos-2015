@@ -20,6 +20,7 @@
 #include <elf/elf.h>
 #include <serial/serial.h>
 #include <clock/clock.h>
+#include <utils/number_allocator.h>
 
 #include "network.h"
 #include "elf.h"
@@ -120,12 +121,20 @@ void handle_syscall(seL4_Word badge, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
+uint32_t a, b, c;
+bool removed = false;
+
 void syscall_loop(seL4_CPtr ep) {
 
     while (1) {
         seL4_Word badge;
         seL4_Word label;
         seL4_MessageInfo_t message;
+
+        if (time_stamp() > 12000000 && !removed) {
+            remove_timer(a);
+            removed = true;
+        }
 
         // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
@@ -407,8 +416,10 @@ void setup_tick_timer(uint32_t id, void *data) {
     timestamp_t t = time_stamp();
     timestamp_t diff = t - last_time;
     last_time = t;
-    printf("Time: %llu, difference: %llu\n", t, diff);
-    register_timer(100000, setup_tick_timer, NULL);
+    printf("Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
+    id = register_timer(*((uint64_t*) data), setup_tick_timer, data);
+    printf("a = %llu\n", *((uint64_t*)data));
+    a = id;
 }
 
 /*
@@ -423,9 +434,15 @@ int main(void) {
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
+
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    setup_tick_timer(0, NULL);
+    uint64_t t1 = 1100000;
+    uint64_t t2 = 77004001;
+    uint64_t t3 = 400000;
+    setup_tick_timer(0, &t1);
+    setup_tick_timer(0, &t2);
+    setup_tick_timer(0, &t3);
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

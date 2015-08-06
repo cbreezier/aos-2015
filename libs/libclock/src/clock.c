@@ -174,6 +174,7 @@ static void reschedule(uint64_t delay) {
 }
 
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
+    printf("registering timer delay %llu\n", delay);
     bool rescheduling = false;
 
     struct list_node *node = malloc(sizeof(struct list_node));
@@ -181,16 +182,24 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     node->data = data;
     node->id = allocator_get_num(allocator);
     node->delay = delay;
+    uint64_t current_us = clock_counter_to_us(epit_clocks[0]->cnr);
     if (head == NULL) {
         node->next = NULL;
         head = node; 
         rescheduling = true;
     } else {
+        uint64_t overcompensation;
+        if (head->delay > MAX_US_EPIT) {
+            overcompensation = MAX_US_EPIT - current_us;
+        } else {
+            overcompensation = head->delay - current_us;
+        }
         uint64_t running_delay = 0;
         struct list_node *prev = NULL;
         struct list_node *cur = head;
-        while (cur != NULL && running_delay + cur->delay <= delay) {
-            running_delay += cur->delay;
+        while (cur != NULL && running_delay + (cur == head ? cur->delay - overcompensation : cur->delay) 
+        <= delay) {
+            running_delay += (cur == head ? cur->delay - overcompensation : cur->delay);
             prev = cur;
             cur = cur->next;
         }
@@ -215,11 +224,10 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
         /* Update the time of the immediate next timer (the one which used to be the first) */
         if (head->next != NULL) {
             /* Subtract the time that it has run since it was first */
-            uint32_t current_cnr = epit_clocks[0]->cnr;
             if (head->next->delay > MAX_US_EPIT) {
-                head->next->delay -= MAX_US_EPIT - clock_counter_to_us(current_cnr);
+                head->next->delay -= MAX_US_EPIT - current_us;
             } else {
-                head->next->delay = clock_counter_to_us(current_cnr);
+                head->next->delay = current_us;
             }
             head->next->delay -= delay;
         }
@@ -231,8 +239,9 @@ int remove_timer(uint32_t id) {
     if (head == NULL) return 0;
     if (head->id == id) {
         if (head->next == NULL) {
+            allocator_release_num(allocator, head->id); 
             free(head);
-            head = NULL;
+            return 0;
         }
         /* Add the time that this first timer has already run onto the immediate next timer */
         uint32_t current_cnr = epit_clocks[0]->cnr;
@@ -244,6 +253,7 @@ int remove_timer(uint32_t id) {
 
         struct list_node *to_free = head;
         head = head->next;
+        allocator_release_num(allocator, to_free->id);
         free(to_free);
 
         reschedule(head->delay);
@@ -281,6 +291,7 @@ int timer_interrupt(void) {
                 reschedule(head->delay);
             }
             to_free->callback(to_free->id, to_free->data);
+            allocator_release_num(allocator, to_free->id);
             free(to_free);
         }
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
@@ -299,5 +310,6 @@ timestamp_t time_stamp(void) {
 }
 
 int stop_timer(void) {
+    
     return 0;
 }
