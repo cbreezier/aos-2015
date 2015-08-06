@@ -32,6 +32,4 @@ void allocator_release_num(struct number_allocator *na, uint32_t num);
  */
 void destroy_allocator(struct number_allocator *na);
 
-bool allocator_assert_num(struct number_allocator *na, uint32_t num);
-
 #endif /* _NUMBER_ALLOCATOR_H_ */

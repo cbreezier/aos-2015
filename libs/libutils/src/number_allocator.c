@@ -38,6 +38,8 @@ struct allocation *insert_num(struct allocation *node, uint32_t num, bool *succe
 uint32_t min(uint32_t a, uint32_t b) {
     return a < b ? a : b;
 }
+
+/* Returns the minimum value within a subtree */
 uint32_t tree_min(struct allocation *node) {
     if (node == NULL) {
         return -1;
@@ -111,6 +113,10 @@ struct number_allocator *init_allocator(void) {
     return na;
 }
 
+/* 
+ * Randomly generate numbers until one is found which is not
+ * currently allocated.
+ */
 uint32_t allocator_get_num(struct number_allocator *na) {
     uint32_t num;
     bool success = false;
@@ -120,12 +126,6 @@ uint32_t allocator_get_num(struct number_allocator *na) {
     } while (!success);
 
     return num;
-}
-
-bool allocator_assert_num(struct number_allocator *na, uint32_t num) {
-    bool ret;
-    na->root = insert_num(na->root, num, &ret);
-    return ret;
 }
 
 void allocator_release_num(struct number_allocator *na, uint32_t num) {

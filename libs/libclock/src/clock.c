@@ -13,18 +13,10 @@
 #define EPIT2_IRQ 89
 
 #define EPIT_CLOCK_FREQUENCY_MHZ 66
+/* Number of microseconds taken from a 66Mhz clock to go from 2^32-1 to 0. */
 #define MAX_US_EPIT 65075262
 
-/*
- * Relying on:
- *  - init_allocator()
- *  - uint32_t allocator_get_num()
- *  - allocator_release_num(uint32_t)
- *  - destroy_allocator()
- *
- */
-
-
+/* Bit position of fields within the EPIT CR */
 enum {
     EN = 0,
     ENMOD = 1,
@@ -35,6 +27,11 @@ enum {
     CLKSRC = 24
 };
 
+/* 
+ * List of timers, sorted by their order of activation.
+ * Delay is relative to the previous timer in the list, such
+ * rescheduling a timer can be done in constant time
+ */
 struct list_node {
     uint64_t delay;
 
@@ -72,7 +69,7 @@ static volatile struct epit_clocks {
     unsigned int cnr;
 } *epit_clocks[2];
 
-/* Taken from network.c - FIX */
+/* Taken from network.c */
 static seL4_CPtr
 enable_irq(int irq, seL4_CPtr aep, int *err) {
     seL4_CPtr cap;
@@ -146,10 +143,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
 
     overflow_offset = 0;
 
-
     allocator = init_allocator();
-
-    printf("done initialising clock\n");
 
     return 0;
 }
@@ -165,16 +159,20 @@ static uint64_t clock_counter_to_us(uint64_t cnr) {
     return cnr/EPIT_CLOCK_FREQUENCY_MHZ;
 }
 
+/* 
+ * Given a time (in us), sets up EPIT1 such that it
+ * causes an interrupt in that much time. Note that if
+ * the time is greater than MAX_US_EPIT, it'll simply cause
+ * an interrupt in MAX_US_EPIT.
+ */
 static void reschedule(uint64_t delay) {
     epit_clocks[0]->cr |= BIT(IOVW);
     uint32_t clock_counter = us_to_clock_counter(delay);
     epit_clocks[0]->lr = clock_counter;
-    // epit_clocks[0]->cmpr = clock_counter;
     epit_clocks[0]->cr &= ~(BIT(IOVW));
 }
 
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
-    printf("registering timer delay %llu\n", delay);
     bool rescheduling = false;
 
     struct list_node *node = malloc(sizeof(struct list_node));
@@ -188,6 +186,12 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
         head = node; 
         rescheduling = true;
     } else {
+        /* 
+         * Need to consider that time has elapsed since the timer at
+         * the front of the queue has started. This considers it, as
+         * the value within the timer at the front of the queue is still
+         * the original one.
+         */
         uint64_t overcompensation;
         if (head->delay > MAX_US_EPIT) {
             overcompensation = MAX_US_EPIT - current_us;
@@ -197,6 +201,12 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
         uint64_t running_delay = 0;
         struct list_node *prev = NULL;
         struct list_node *cur = head;
+        /* 
+         * Find the position at which to insert the new timer.
+         * "cur" will contain the element following the position
+         * at which we need to insert it, and "prev" the position
+         * prior to it.
+         */
         while (cur != NULL && running_delay + (cur == head ? cur->delay - overcompensation : cur->delay) 
         <= delay) {
             running_delay += (cur == head ? cur->delay - overcompensation : cur->delay);
@@ -213,7 +223,7 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
             prev->next = node;
         }
 
-        /* Adjust it to be relative to the current one (unless inserting at the head) */
+        /* Adjust the delay to be relative to the new timer (unless inserting at the head) */
         if (cur != NULL && prev != NULL) {
             cur->delay -= delay - running_delay;
         }
@@ -287,6 +297,11 @@ int timer_interrupt(void) {
         } else {
             struct list_node *to_free = head;
             head = head->next;
+            /* 
+             * Rescheduling must be done prior to callback, for
+             * efficiency, and to handle the possibility that
+             * the callback registers a new timer
+             */
             if (head != NULL) {
                 reschedule(head->delay);
             }
