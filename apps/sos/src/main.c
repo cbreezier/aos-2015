@@ -434,7 +434,6 @@ int main(void) {
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
-
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     uint64_t t1 = 1100000;
@@ -443,6 +442,10 @@ int main(void) {
     setup_tick_timer(0, &t1);
     setup_tick_timer(0, &t2);
     setup_tick_timer(0, &t3);
+
+    stop_timer();
+
+    
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

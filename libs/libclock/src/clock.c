@@ -2,7 +2,7 @@
 #include <cspace/cspace.h>
 #include <bits/limits.h>
 #include <bits/errno.h>
-#include "../../../apps/sos/src/mapping.h"
+#include <mapping.h>
 
 #include <stdio.h>
 
@@ -276,7 +276,7 @@ int remove_timer(uint32_t id) {
 }
 
 int timer_interrupt(void) {
-    if (epit_clocks[0]->sr && !epit_clocks[1]->sr) {
+    if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
         if (head == NULL) return 0;
         if (head->delay > MAX_US_EPIT) {
@@ -296,7 +296,7 @@ int timer_interrupt(void) {
         }
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
         assert(!err);
-    } else {
+    } else if (epit_clocks[1]->sr) {
         epit_clocks[1]->sr = 0xFFFFFFFF;
         overflow_offset++;
         int err = seL4_IRQHandler_Ack(clock_irqs[1].cap);
@@ -310,6 +310,23 @@ timestamp_t time_stamp(void) {
 }
 
 int stop_timer(void) {
-    
+    epit_clocks[0]->cr &= ~(BIT(EN)); 
+    epit_clocks[1]->cr &= ~(BIT(EN)); 
+
+    epit_clocks[0]->sr = 0xFFFFFFFF;
+    epit_clocks[1]->sr = 0xFFFFFFFF;
+
+    free((struct epit_clocks*)epit_clocks[0]);
+    free((struct epit_clocks*)epit_clocks[1]);
+
+    destroy_allocator(allocator);
+
+    struct list_node *prev;
+    struct list_node *cur = head;
+    while (cur != NULL) {
+        prev = cur;
+        cur = cur->next;
+        free(prev);
+    }
     return 0;
 }
