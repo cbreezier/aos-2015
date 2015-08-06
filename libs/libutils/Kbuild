@@ -10,6 +10,4 @@
 
 libs-$(CONFIG_LIB_UTILS) += libutils
 
-libutils: common $(libc)
-
-
+libutils: common $(libc) libsel4

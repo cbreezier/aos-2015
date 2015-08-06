@@ -127,19 +127,15 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word label;
         seL4_MessageInfo_t message;
 
-        int *p1 = 0xb0016004, *p2 = 0xb0017004;
-        printf("STATUS REGISTERS, r1 = %d, r2 = %d\n", *p1, *p2);
+        // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
-        printf("Received message\n");
         label = seL4_MessageInfo_get_label(message);
         if(badge & IRQ_EP_BADGE){
-            printf("badged\n");
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
                 timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
-                printf("network badge\n");
                 network_irq();
             }
 
@@ -406,9 +402,13 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
+timestamp_t last_time = 0;
 void setup_tick_timer(uint32_t id, void *data) {
-    printf("Time: %llu\n", time_stamp());
-    register_timer(1000000, setup_tick_timer, NULL);
+    timestamp_t t = time_stamp();
+    timestamp_t diff = t - last_time;
+    last_time = t;
+    printf("Time: %llu, difference: %llu\n", t, diff);
+    register_timer(100000, setup_tick_timer, NULL);
 }
 
 /*

@@ -24,6 +24,7 @@ menuconfig APP_SOS
     select LIB_CLOCK
     select LIB_SOS
     select LIB_PLATSUPPORT
+    select LIB_UTILS
     default y
     help
         Simple Operating System (aka AOS implementation)

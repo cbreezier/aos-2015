@@ -8,6 +8,15 @@
 # @TAG(NICTA_BSD)
 #
 
+config LIB_UTILS
+    bool "Build libutils"
+    select LIB_SEL4
+    select LIB_SEL4_C
+    select HAVE_SEL4_LIBS
+    default y
+    help
+        "Utility library"
+
 menuconfig LIB_UTILS
     bool "OS independent util library."
     default y
