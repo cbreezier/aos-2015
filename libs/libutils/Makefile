@@ -12,10 +12,13 @@
 TARGETS := libutils.a
 
 # Header files/directories this library provides
-HDRFILES := $(wildcard ${SOURCE_DIR}/include/*) 
+HDRFILES := $(wildcard $(SOURCE_DIR)/include/*) 
 
-CFILES := \
-  $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.c)) \
-  $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/arch/$(ARCH)/*.c))
+#CFILES := \
+#    $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.c)) \
+#    $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/arch/$(ARCH)/*.c))
+CFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.c)) 
+
+CFLAGS := -g -O0
 
 include $(SEL4_COMMON)/common.mk

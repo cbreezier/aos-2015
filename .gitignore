@@ -1,0 +1,12 @@
+.config*
+build/*
+cscope*
+images/*
+include/*
+*.diff
+*.i
+*.s
+stage/*
+*.core
+*.sw[pon]
+.nfs*
