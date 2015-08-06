@@ -127,15 +127,20 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word label;
         seL4_MessageInfo_t message;
 
+        int *p1 = 0xb0016004, *p2 = 0xb0017004;
+        printf("STATUS REGISTERS, r1 = %d, r2 = %d\n", *p1, *p2);
         message = seL4_Wait(ep, &badge);
+        printf("Received message\n");
         label = seL4_MessageInfo_get_label(message);
         if(badge & IRQ_EP_BADGE){
+            printf("badged\n");
             /* Interrupt */
-            if (badge & IRQ_BADGE_NETWORK) {
-                network_irq();
-            }
             if (badge & IRQ_BADGE_TIMER) {
                 timer_interrupt();
+            }
+            if (badge & IRQ_BADGE_NETWORK) {
+                printf("network badge\n");
+                network_irq();
             }
 
         }else if(label == seL4_VMFault){
@@ -146,6 +151,7 @@ void syscall_loop(seL4_CPtr ep) {
 
             assert(!"Unable to handle vm faults");
         }else if(label == seL4_NoFault) {
+            printf("handling syscall\n");
             /* System call */
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
 
@@ -402,7 +408,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 
 void setup_tick_timer(uint32_t id, void *data) {
     printf("Time: %llu\n", time_stamp());
-    register_timer(100000, &setup_tick_timer, NULL);
+    register_timer(1000000, setup_tick_timer, NULL);
 }
 
 /*
