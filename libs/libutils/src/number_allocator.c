@@ -2,12 +2,14 @@
 #include <clock/clock.h>
 #include <stdlib.h>
 
+/* Represents the allocation of one number as a node in a BST */
 struct allocation {
     uint32_t num;
     struct allocation *left;
     struct allocation *right;
 };
 
+/* Returns the new root of the subtree after insertion */
 struct allocation *insert_num(struct allocation *node, uint32_t num, bool *success) {
     if (node == NULL) {
         node = malloc(sizeof(struct allocation));

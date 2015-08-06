@@ -6,7 +6,10 @@
 
 struct allocation;
 struct number_allocator {
+    /* BST root keeping track of all allocated numbers */
     struct allocation *root;
+
+    /* Represents the state of the PRNG */
     uint32_t seed;
 };
 

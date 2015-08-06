@@ -62,17 +62,17 @@ struct number_allocator *allocator;
 #define EPIT2_BASE_ADDRESS (void*) 0x20D4000
 
 static volatile struct epit_clocks {
-    unsigned int cr;
-    unsigned int sr;
-    unsigned int lr;
-    unsigned int cmpr;
-    unsigned int cnr;
+    unsigned int cr;   /* Control register */
+    unsigned int sr;   /* Status register */
+    unsigned int lr;   /* Load register */
+    unsigned int cmpr; /* Compare register */
+    unsigned int cnr;  /* Counter */
 } *epit_clocks[2];
 
 /* Taken from network.c */
 static seL4_CPtr
 enable_irq(int irq, seL4_CPtr aep, int *err) {
-    seL4_CPtr cap;
+    seL4_CPtr cap = NULL;
     /* Create an IRQ handler */
     cap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, irq);
     if (!cap) {
@@ -104,8 +104,10 @@ int start_timer(seL4_CPtr interrupt_ep) {
         return err;
     }
 
+    /* Head of the list of registered timers */
     head = NULL;
- 
+    
+    /* Map hardware address into a virtual address */
     epit_clocks[0] = map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE);
     if (epit_clocks[0] == NULL) {
         return EFAULT;
@@ -116,28 +118,29 @@ int start_timer(seL4_CPtr interrupt_ep) {
     }
    
     /* Set up */ 
-    epit_clocks[0]->cr &= ~(BIT(EN));
-    epit_clocks[0]->cr |= BIT(RLD);    
+    epit_clocks[0]->cr &= ~(BIT(EN));  // Disable
+    epit_clocks[0]->cr |= BIT(RLD);    // Set and forget mode
     epit_clocks[0]->cr |= BIT(CLKSRC); // Set CLKSRC to peripheral clock
     epit_clocks[0]->cr &= ~(0xFFF << PRESCALER);
-    epit_clocks[0]->cr |= BIT(OCIEN);
-    epit_clocks[0]->cr |= BIT(ENMOD);
-    epit_clocks[0]->cmpr = 0;
+    epit_clocks[0]->cr |= BIT(OCIEN);  // Generate interrupts upon compare event
+    epit_clocks[0]->cr |= BIT(ENMOD);  // Load from LR upon overflow
+    epit_clocks[0]->cmpr = 0;          // Generate compare event when CNR = 0
 
-    epit_clocks[1]->cr &= ~(BIT(EN));
-    epit_clocks[1]->cr &= ~(BIT(RLD));
+    epit_clocks[1]->cr &= ~(BIT(EN));  // Disable
+    epit_clocks[1]->cr &= ~(BIT(RLD)); // Free running mode
     epit_clocks[1]->cr |= BIT(CLKSRC); // Set CLKSRC to peripheral clock
     epit_clocks[1]->cr &= ~(0xFFF << PRESCALER);
-    epit_clocks[1]->cr |= BIT(OCIEN);
-    epit_clocks[1]->cr |= BIT(ENMOD);
+    epit_clocks[1]->cr |= BIT(OCIEN);  // Generate interrupts upon compare event
+    epit_clocks[1]->cr |= BIT(ENMOD);  // Load 0xFFFFFFFF upon overflow
+    epit_clocks[1]->cmpr = 0;          // Generate compare event when CNR = 0
 
+    /* Set LR and CNR to maximum value to begin with */
     epit_clocks[1]->cr |= BIT(IOVW);
     epit_clocks[1]->lr = 0xFFFFFFFF;
-    epit_clocks[1]->cmpr = 0;
     epit_clocks[1]->cr &= ~(BIT(IOVW));
 
 
-    /* enable */
+    /* Enable */
     epit_clocks[0]->cr |= BIT(EN);
     epit_clocks[1]->cr |= BIT(EN);
 
@@ -148,6 +151,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
     return 0;
 }
 
+/* Microseconds to clock counter */
 static uint32_t us_to_clock_counter(uint64_t us) {
     if (us > MAX_US_EPIT) {
         return 0xFFFFFFFF;
@@ -155,6 +159,7 @@ static uint32_t us_to_clock_counter(uint64_t us) {
     return us*EPIT_CLOCK_FREQUENCY_MHZ;
 }
 
+/* Clock counter to microseconds */
 static uint64_t clock_counter_to_us(uint64_t cnr) {
     return cnr/EPIT_CLOCK_FREQUENCY_MHZ;
 }
@@ -214,6 +219,11 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
             cur = cur->next;
         }
 
+        /*
+         * When inserting a new timer, the relative delay of
+         * the next timer is reduced by the relative delay of
+         * the new timer.
+         */
         node->next = cur;
         node->delay -= running_delay;
         if (prev == NULL) {
@@ -261,13 +271,16 @@ int remove_timer(uint32_t id) {
             head->next->delay += clock_counter_to_us(current_cnr);
         }
 
+        /* Remove the timer and free its memory */
         struct list_node *to_free = head;
         head = head->next;
         allocator_release_num(allocator, to_free->id);
         free(to_free);
 
+        /* Must reschedule timer since we modified the head */
         reschedule(head->delay);
     } else {
+        /* List traversal to find the timer and remove it */
         struct list_node *prev = NULL;
         struct list_node *cur = head;
         while (cur != NULL && cur->id != id) {
@@ -286,9 +299,18 @@ int remove_timer(uint32_t id) {
 }
 
 int timer_interrupt(void) {
+    /*
+     * Check which timer actually generated the interrupt.
+     * The status register of that timer will be set.
+     */
     if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
         if (head == NULL) return 0;
+
+        /*
+         * Timer isn't finished - just one loop of the EPIT
+         * needs to be decremented.
+         */
         if (head->delay > MAX_US_EPIT) {
             head->delay -= MAX_US_EPIT;
             if (head->delay <= MAX_US_EPIT) {
