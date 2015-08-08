@@ -189,11 +189,12 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     
     epit_clocks[0]->cr &= ~(BIT(EN));
 
-    uint64_t current_us;
+    uint64_t current_us = 0;
 
     if (epit_clocks[0]->sr) {
-        timer_interrupt();
-        current_us = 0;
+        if (head != NULL) {
+            current_us = head->delay < MAX_US_EPIT ? head->delay : MAX_US_EPIT;
+        }
     } else {
         current_us = clock_counter_to_us(epit_clocks[0]->cnr);
     }
@@ -276,12 +277,13 @@ int remove_timer(uint32_t id) {
         epit_clocks[0]->cr &= ~(BIT(EN));
 
         /* Add the time that this first timer has already run onto the immediate next timer */
-        uint32_t current_cnr;
+        uint32_t current_us;
         if (epit_clocks[0]->sr) {
-            timer_interrupt();
-            current_cnr = 0;
+            if (head != NULL) {
+                current_us = head->delay < MAX_US_EPIT ? head->delay : MAX_US_EPIT;
+            }
         } else {
-            current_cnr = clock_counter_to_us(epit_clocks[0]->cnr);
+            current_us = clock_counter_to_us(epit_clocks[0]->cnr);
         }
 
         epit_clocks[0]->cr |= BIT(EN);
@@ -292,9 +294,9 @@ int remove_timer(uint32_t id) {
             return 0;
         }
         if (head->delay > MAX_US_EPIT) {
-            head->next->delay += head->delay - MAX_US_EPIT - current_cnr;
+            head->next->delay += head->delay - MAX_US_EPIT - current_us;
         } else {
-            head->next->delay += current_cnr;
+            head->next->delay += current_us;
         }
 
         /* Remove the timer and free its memory */
@@ -376,7 +378,7 @@ timestamp_t time_stamp(void) {
          * have a queued interrupt.
          */
         timer_interrupt();
-        timer_interrupt();   
+        timer_interrupt();
         epit1_cnr = epit_clocks[1]->cnr;
     } 
     /* 
@@ -387,8 +389,8 @@ timestamp_t time_stamp(void) {
 }
 
 int stop_timer(void) {
-    epit_clocks[0]->cr &= ~(BIT(EN)); 
-    epit_clocks[1]->cr &= ~(BIT(EN)); 
+    epit_clocks[0]->cr &= ~(BIT(EN));
+    epit_clocks[1]->cr &= ~(BIT(EN));
 
     epit_clocks[0]->sr = 0xFFFFFFFF;
     epit_clocks[1]->sr = 0xFFFFFFFF;

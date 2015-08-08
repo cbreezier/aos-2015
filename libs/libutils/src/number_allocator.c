@@ -1,6 +1,8 @@
 #include <utils/number_allocator.h>
 #include <stdlib.h>
 
+#define DEFAULT_SEED 1000000009
+
 /* Represents the allocation of one number as a node in a BST */
 struct allocation {
     uint32_t num;
@@ -109,6 +111,9 @@ struct number_allocator *init_allocator(uint32_t seed) {
     na->root = NULL;
 
     /* seed for random number generation */
+    if (seed == 0) {
+        seed = DEFAULT_SEED;
+    }
     na->seed = seed;
 
     return na;
