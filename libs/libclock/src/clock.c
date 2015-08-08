@@ -72,7 +72,7 @@ static volatile struct epit_clocks {
 /* Taken from network.c */
 static seL4_CPtr
 enable_irq(int irq, seL4_CPtr aep, int *err) {
-    seL4_CPtr cap = NULL;
+    seL4_CPtr cap;
     /* Create an IRQ handler */
     cap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, irq);
     if (!cap) {
@@ -185,7 +185,20 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     node->data = data;
     node->id = allocator_get_num(allocator);
     node->delay = delay;
-    uint64_t current_us = clock_counter_to_us(epit_clocks[0]->cnr);
+    
+    epit_clocks[0]->cr &= ~(BIT(EN));
+
+    uint64_t current_us;
+
+    if (epit_clocks[0]->sr) {
+        timer_interrupt();
+        current_us = 0;
+    } else {
+        current_us = clock_counter_to_us(epit_clocks[0]->cnr);
+    }
+
+    epit_clocks[0]->cr |= BIT(EN);
+
     if (head == NULL) {
         node->next = NULL;
         head = node; 
@@ -258,13 +271,25 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
 int remove_timer(uint32_t id) {
     if (head == NULL) return 0;
     if (head->id == id) {
+    
+        epit_clocks[0]->cr &= ~(BIT(EN));
+
+        /* Add the time that this first timer has already run onto the immediate next timer */
+        uint32_t current_cnr;
+        if (epit_clocks[0]->sr) {
+            timer_interrupt();
+            current_cnr = 0;
+        } else {
+            current_cnr = epit_clocks[0]->cnr;
+        }
+
+        epit_clocks[0]->cr |= BIT(EN);
+
         if (head->next == NULL) {
             allocator_release_num(allocator, head->id); 
             free(head);
             return 0;
         }
-        /* Add the time that this first timer has already run onto the immediate next timer */
-        uint32_t current_cnr = epit_clocks[0]->cnr;
         if (head->delay > MAX_US_EPIT) {
             head->next->delay += head->delay - MAX_US_EPIT - clock_counter_to_us(current_cnr);
         } else {
@@ -343,7 +368,21 @@ int timer_interrupt(void) {
 }
 
 timestamp_t time_stamp(void) {
-    return clock_counter_to_us(overflow_offset * (1ull << 32) + (1ull << 32) - epit_clocks[1]->cnr - 1);
+    uint32_t epit1_cnr = epit_clocks[1]->cnr;
+    if (epit_clocks[1]->sr) {
+        /* 
+         * Call twice to handle the possibility that epit1 might also
+         * have a queued interrupt.
+         */
+        timer_interrupt();
+        timer_interrupt();   
+        return clock_counter_to_us(overflow_offset * (1ull << 32) + (1ull << 32) - epit_clocks[1]->cnr - 1);
+    } 
+    /* 
+     * Use value obtained before checking the status register,
+     * incase it has ticked inbetween checking and returning
+     */
+    return clock_counter_to_us(overflow_offset * (1ull << 32) + (1ull << 32) - epit1_cnr - 1);
 }
 
 int stop_timer(void) {

@@ -151,10 +151,10 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word label;
         seL4_MessageInfo_t message;
 
-        if (time_stamp() > 12000000 && !removed) {
-            remove_timer(a);
-            removed = true;
-        }
+//        if (time_stamp() > 12000000 && !removed) {
+//            remove_timer(a);
+//            removed = true;
+//        }
 
         // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
@@ -176,7 +176,6 @@ void syscall_loop(seL4_CPtr ep) {
 
             assert(!"Unable to handle vm faults");
         }else if(label == seL4_NoFault) {
-            printf("handling syscall\n");
             /* System call */
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
 
@@ -437,9 +436,7 @@ void setup_tick_timer(uint32_t id, void *data) {
     timestamp_t diff = t - last_time;
     last_time = t;
     printf("Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
-    id = register_timer(*((uint64_t*) data), setup_tick_timer, data);
-    printf("a = %llu\n", *((uint64_t*)data));
-    a = id;
+    a = register_timer(*((uint64_t*) data), setup_tick_timer, data);
 }
 
 /*
@@ -462,10 +459,6 @@ int main(void) {
     setup_tick_timer(0, &t1);
     setup_tick_timer(0, &t2);
     setup_tick_timer(0, &t3);
-
-    stop_timer();
-
-    
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
