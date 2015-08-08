@@ -146,7 +146,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
 
     overflow_offset = 0;
 
-    allocator = init_allocator();
+    allocator = init_allocator(time_stamp());
 
     return 0;
 }

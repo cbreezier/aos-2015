@@ -2,7 +2,7 @@
 #ifndef _NUMBER_ALLOCATOR_H_
 #define _NUMBER_ALLOCATOR_H_
 
-#include <clock/clock.h>
+#include <sel4/sel4.h>
 
 struct allocation;
 struct number_allocator {
@@ -16,7 +16,7 @@ struct number_allocator {
 /*
  * Creates an empty number_allocator
  */
-struct number_allocator *init_allocator(void);
+struct number_allocator *init_allocator(uint32_t seed);
 
 /*
  * Returns a valid 32bit unsigned int from the

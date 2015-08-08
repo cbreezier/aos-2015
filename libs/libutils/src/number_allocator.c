@@ -1,5 +1,4 @@
 #include <utils/number_allocator.h>
-#include <clock/clock.h>
 #include <stdlib.h>
 
 /* Represents the allocation of one number as a node in a BST */
@@ -102,7 +101,7 @@ uint32_t gen_random(struct number_allocator *na) {
     return na->seed*1597334677;
 }
 
-struct number_allocator *init_allocator(void) {
+struct number_allocator *init_allocator(uint32_t seed) {
     struct number_allocator *na = malloc(sizeof(struct number_allocator));
     if (na == NULL) {
         return NULL;
@@ -110,7 +109,7 @@ struct number_allocator *init_allocator(void) {
     na->root = NULL;
 
     /* seed for random number generation */
-    na->seed = time_stamp();
+    na->seed = seed;
 
     return na;
 }
