@@ -8,7 +8,8 @@
  * @TAG(NICTA_BSD)
  */
 
-#include "mapping.h"
+//#include "mapping.h"
+#include <utils/mapping.h>
 
 #include <ut_manager/ut.h>
 #include "vmem_layout.h"
