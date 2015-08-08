@@ -281,7 +281,7 @@ int remove_timer(uint32_t id) {
             timer_interrupt();
             current_cnr = 0;
         } else {
-            current_cnr = epit_clocks[0]->cnr;
+            current_cnr = clock_counter_to_us(epit_clocks[0]->cnr);
         }
 
         epit_clocks[0]->cr |= BIT(EN);
@@ -292,9 +292,9 @@ int remove_timer(uint32_t id) {
             return 0;
         }
         if (head->delay > MAX_US_EPIT) {
-            head->next->delay += head->delay - MAX_US_EPIT - clock_counter_to_us(current_cnr);
+            head->next->delay += head->delay - MAX_US_EPIT - current_cnr;
         } else {
-            head->next->delay += clock_counter_to_us(current_cnr);
+            head->next->delay += current_cnr;
         }
 
         /* Remove the timer and free its memory */
@@ -377,7 +377,7 @@ timestamp_t time_stamp(void) {
          */
         timer_interrupt();
         timer_interrupt();   
-        return clock_counter_to_us(overflow_offset * (1ull << 32) + (1ull << 32) - epit_clocks[1]->cnr - 1);
+        epit1_cnr = epit_clocks[1]->cnr;
     } 
     /* 
      * Use value obtained before checking the status register,
