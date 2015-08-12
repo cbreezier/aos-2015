@@ -22,6 +22,8 @@
 #include <clock/clock.h>
 #include <utils/number_allocator.h>
 
+
+#include "frametable.h"
 #include "network.h"
 #include "elf.h"
 
@@ -439,6 +441,66 @@ void setup_tick_timer(uint32_t id, void *data) {
     a = register_timer(*((uint64_t*) data), setup_tick_timer, data);
 }
 
+static void test0() {
+    printf("Starting test0\n");
+    /* Allocate 10 pages and make sure you can touch them all */
+    for (int i = 0; i < 10; i++) {
+        /* Allocate a page */
+        seL4_Word vaddr;
+        frame_alloc(&vaddr);
+        assert(vaddr);
+
+        /* Test you can touch the page */
+        *((int*)vaddr) = 0x37;
+        assert(*((int*)vaddr) == 0x37);
+
+        printf("Page #%d allocated at %p\n",  i, (void *) vaddr);
+    }
+    printf("test0 done\n");
+}
+
+static void test1() {
+    printf("Starting test1\n");
+    /* Test that you eventually run out of memory gracefully,
+     *    and doesn't crash */
+    for (int i = 0;; ++i) {
+        /* Allocate a page */
+        seL4_Word vaddr;
+        frame_alloc(&vaddr);
+        if (!vaddr) {
+            printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
+            break;
+        }
+
+
+        /* Test you can touch the page */
+        *((int*)vaddr) = 0x37;
+        assert(*((int*)vaddr) == 0x37);
+    }
+    printf("test1 done\n");
+}
+
+static void test2() {
+    printf("Starting test2\n");
+    /* Test that you never run out of memory if you always free frames. 
+     *     This loop should never finish */
+    for (int i = 0;; i++) {
+        /* Allocate a page */
+        seL4_Word vaddr;
+        uint32_t page = frame_alloc(&vaddr);
+        assert(vaddr != 0);
+
+        /* Test you can touch the page */
+        *((int*)vaddr) = 0x37;
+        assert(*((int*)vaddr) == 0x37);
+
+        if (i % 10000 == 0) printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
+
+        frame_free(page);
+    }
+    printf("test2 done\n");
+}
+
 /*
  * Main entry point - called by crt.
  */
@@ -448,23 +510,29 @@ int main(void) {
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
+    frametable_init();
+
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    uint64_t t1 = 1100000;
-    uint64_t t2 = 77004001;
-    uint64_t t3 = 400000;
-    setup_tick_timer(0, &t1);
-    setup_tick_timer(0, &t2);
-    setup_tick_timer(0, &t3);
+//    uint64_t t1 = 1100000;
+//    uint64_t t2 = 77004001;
+//    uint64_t t3 = 400000;
+//    setup_tick_timer(0, &t1);
+//    setup_tick_timer(0, &t2);
+//    setup_tick_timer(0, &t3);
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
     /* Initialise serial */
     serial = serial_init();
+
+    test0();
+    //test1();
+    test2();
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");

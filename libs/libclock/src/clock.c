@@ -2,7 +2,6 @@
 #include <cspace/cspace.h>
 #include <bits/limits.h>
 #include <bits/errno.h>
-//#include <mapping.h>
 #include <utils/mapping.h>
 
 #include <stdio.h>

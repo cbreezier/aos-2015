@@ -393,7 +393,7 @@ seL4_Word ut_alloc(int sizebits){
         addr = do_ut_alloc_from_bitfield(sizebits);
         break;
     default:
-        assert(!"ut_free received invalid size");
+        assert(!"ut_alloc received invalid size");
         return 0;
     }
 
