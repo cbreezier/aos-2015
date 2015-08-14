@@ -9,6 +9,16 @@
 
 #define ROUND_UP(n, b) (((((n) - 1ul) >> (b)) + 1ul) << (b))
 
+/*
+ * This frametable uses a linked list approach for finding the next
+ * free frame. Each free frame has an index field referring to the next
+ * frame in the list.
+ *
+ * Note that '0', while a valid frame, is always allocated to the
+ * frametable itself. Therefore, it cannot be given away to a user, and
+ * internally we use it in a similar way to NULL.
+ */
+
 
 struct ft_entry {
     seL4_Word seL4_id;
@@ -36,6 +46,7 @@ void frametable_init() {
     free_head = frametable_frames_required;
     free_tail = num_frames-1;
 
+    /* Allocate all frames required to hold the frametable data */
     for (uint32_t i = 0; i < frametable_frames_required; ++i) {
         seL4_Word id = ut_alloc(seL4_PageBits); 
         if (!id) {
@@ -46,7 +57,7 @@ void frametable_init() {
         int err = cspace_ut_retype_addr(id, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &cap);
         conditional_panic(err, "Unable to init frametable(retype)");
 
-        err = map_page(cap, /*dest_as*/ seL4_CapInitThreadPD, low_addr + PAGE_SIZE*i, seL4_AllRights, seL4_ARM_Default_VMAttributes);
+        err = map_page(cap, seL4_CapInitThreadPD, low_addr + PAGE_SIZE*i, seL4_AllRights, seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Unable to init frametable(map)");
 
         ft[i].seL4_id = id;
@@ -54,6 +65,7 @@ void frametable_init() {
         ft[i].next_free = 0;
     }
 
+    /* Default initialise all frames which can be given away to users */
     for (uint32_t i = frametable_frames_required; i < num_frames; ++i) {
         ft[i].seL4_id = 0;
         ft[i].cap = 0;
@@ -69,7 +81,6 @@ uint32_t frame_alloc(seL4_Word *vaddr) {
     }
 
     int idx = free_head;
-
 
     ft[idx].seL4_id = ut_alloc(seL4_PageBits);
     if (!ft[idx].seL4_id) {
@@ -105,9 +116,11 @@ int frame_free(uint32_t idx) {
 
     seL4_ARM_Page_Unmap(ft[idx].cap);
 
+    /* Remove all child capabilities */
     int err = cspace_revoke_cap(cur_cspace, ft[idx].cap);
     conditional_panic(err, "unable to revoke cap(free");
 
+    /* Remove the capability itself */
     err = cspace_delete_cap(cur_cspace, ft[idx].cap);
     conditional_panic(err, "unable to delete cap(free");
 
