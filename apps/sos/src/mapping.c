@@ -28,7 +28,7 @@ extern const seL4_BootInfo* _boot_info;
  * @return 0 on success
  */
 static int 
-_map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr){
+_map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *ret_cap){
     seL4_Word pt_addr;
     seL4_ARM_PageTable pt_cap;
     int err;
@@ -52,6 +52,7 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr){
                                  pd, 
                                  vaddr, 
                                  seL4_ARM_Default_VMAttributes);
+    *ret_cap = pt_cap;
     return err;
 }
 
@@ -64,7 +65,8 @@ map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
     err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
     if(err == seL4_FailedLookup){
         /* Assume the error was because we have no page table */
-        err = _map_page_table(pd, vaddr);
+        seL4_ARM_PageTable unused;
+        err = _map_page_table(pd, vaddr, &unused);
         if(!err){
             /* Try the mapping again */
             err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
@@ -73,6 +75,26 @@ map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
 
     return err;
 }
+
+int 
+sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
+                seL4_CapRights rights, seL4_ARM_VMAttributes attr, seL4_ARM_PageTable *pt_cap){
+    int err;
+
+    /* Attempt the mapping */
+    err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
+    if(err == seL4_FailedLookup){
+        /* Assume the error was because we have no page table */
+        err = _map_page_table(pd, vaddr, pt_cap);
+        if(!err){
+            /* Try the mapping again */
+            err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
+        }
+    }
+
+    return err;
+}
+
 
 void* 
 map_device(void* paddr, int size){

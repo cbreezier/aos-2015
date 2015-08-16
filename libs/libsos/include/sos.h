@@ -16,6 +16,9 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <sel4/sel4.h>
+#include <cspace/cspace.h>
+
+#include <addrspace.h>
 
 /* System calls for SOS */
 
@@ -41,20 +44,33 @@ typedef int st_type_t;
 
 
 typedef struct {
-  st_type_t st_type;    /* file type */
-  fmode_t   st_fmode;   /* access mode */
-  unsigned  st_size;    /* file size in bytes */
-  long      st_ctime;   /* file creation time (ms since booting) */
-  long      st_atime;   /* file last access (open) time (ms since booting) */
+    st_type_t st_type;    /* file type */
+    fmode_t   st_fmode;   /* access mode */
+    unsigned  st_size;    /* file size in bytes */
+    long      st_ctime;   /* file creation time (ms since booting) */
+    long      st_atime;   /* file last access (open) time (ms since booting) */
 } sos_stat_t;
 
 typedef int pid_t;
 
 typedef struct {
-  pid_t     pid;
-  unsigned  size;       /* in pages */
-  unsigned  stime;      /* start time in msec since booting */
-  char      command[N_NAME];    /* Name of exectuable */
+    pid_t     pid;
+    unsigned  size;       /* in pages */
+    unsigned  stime;      /* start time in msec since booting */
+    char      command[N_NAME];    /* Name of exectuable */
+
+    seL4_Word tcb_addr;
+    seL4_TCB tcb_cap;
+
+    seL4_Word vroot_addr;
+    seL4_ARM_PageDirectory vroot;
+
+    seL4_Word ipc_buffer_addr;
+    seL4_CPtr ipc_buffer_cap;
+
+    cspace_t *croot;
+
+    struct addrspace *as;
 } sos_process_t;
 
 /* I/O system calls */

@@ -3,6 +3,16 @@
 
 #include <sos.h>
 
+struct ft_entry {
+    seL4_Word seL4_id;
+    seL4_CPtr cap;
+
+    uint32_t next_free;
+
+    uint32_t is_freeable : 1;
+    uint32_t is_swapable : 1;
+} *ft;
+
 void frametable_init();
 
 /* 

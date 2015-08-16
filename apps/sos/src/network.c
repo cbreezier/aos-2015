@@ -100,7 +100,6 @@ sos_usleep(int usecs) {
 void 
 network_irq(void) {
     int err;
-    int i;
     /* skip if the network was not initialised */
     if(_irq_ep == seL4_CapNull){
         return;
@@ -152,7 +151,6 @@ void
 network_init(seL4_CPtr interrupt_ep) {
     struct ip_addr netmask, ipaddr, gw;
     int err;
-    int i;
 
     ps_io_mapper_t io_mapper = {
         .cookie = NULL,

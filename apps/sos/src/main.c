@@ -21,6 +21,7 @@
 #include <serial/serial.h>
 #include <clock/clock.h>
 #include <utils/number_allocator.h>
+#include <sos.h>
 
 
 #include "frametable.h"
@@ -60,21 +61,7 @@ extern char _cpio_archive[];
 
 const seL4_BootInfo* _boot_info;
 
-
-struct {
-
-    seL4_Word tcb_addr;
-    seL4_TCB tcb_cap;
-
-    seL4_Word vroot_addr;
-    seL4_ARM_PageDirectory vroot;
-
-    seL4_Word ipc_buffer_addr;
-    seL4_CPtr ipc_buffer_cap;
-
-    cspace_t *croot;
-
-} tty_test_process;
+sos_process_t tty_test_process;
 
 
 /*
@@ -530,8 +517,8 @@ int main(void) {
     /* Initialise serial */
     serial = serial_init();
 
-    test0();
-    test1();
+    //test0();
+    //test1();
     //test2();
 
     /* Wait on synchronous endpoint for IPC */

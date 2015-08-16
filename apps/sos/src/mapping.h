@@ -26,6 +26,21 @@
  */
 int map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
                 seL4_CapRights rights, seL4_ARM_VMAttributes attr);
+ /**
+ * Maps a page into a page table. 
+ * A 2nd level table will be created if required
+ *
+ * @param frame_cap a capbility to the page to be mapped
+ * @param pd A capability to the page directory to map to
+ * @param vaddr The virtual address for the mapping
+ * @param rights The access rights for the mapping
+ * @param attr The VM attributes to use for the mapping
+ * @param pt_cap Capability to page table to be returned
+ * @return 0 on success
+ */
+int sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
+                seL4_CapRights rights, seL4_ARM_VMAttributes attr, seL4_ARM_PageTable *pt_cap);
+
  
  /**
  * Maps a device to virtual memory
