@@ -25,6 +25,9 @@ struct ft_entry {
     seL4_CPtr cap;
 
     uint32_t next_free;
+
+    uint32_t is_freeable : 1;
+    uint32_t is_swapable : 1;
 } *ft;
 
 uint32_t free_head, free_tail;
@@ -63,6 +66,8 @@ void frametable_init() {
         ft[i].seL4_id = id;
         ft[i].cap = cap;
         ft[i].next_free = 0;
+        ft[i].is_freeable = 0;
+        ft[i].is_swapable = 0;
     }
 
     /* Default initialise all frames which can be given away to users */
@@ -71,6 +76,8 @@ void frametable_init() {
         ft[i].cap = 0;
 
         ft[i].next_free = (i == num_frames - 1) ? 0 : i+1;
+        ft[i].is_freeable = 1;
+        ft[i].is_swapable = 1;
     }
 }
 
@@ -102,7 +109,7 @@ uint32_t frame_alloc(seL4_Word *vaddr) {
 }
 
 int frame_free(uint32_t idx) {
-    if (!idx) {
+    if (!idx || !ft[idx].is_freeable) {
         return EFAULT; 
     }
 

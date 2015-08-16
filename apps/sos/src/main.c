@@ -531,8 +531,8 @@ int main(void) {
     serial = serial_init();
 
     test0();
-    //test1();
-    test2();
+    test1();
+    //test2();
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
