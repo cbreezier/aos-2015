@@ -27,6 +27,9 @@ struct pt_entry {
 
 struct addrspace {
     struct region_entry *region_head;
+    struct region_entry *stack_region;
+    struct region_entry *heap_region;
+
     struct pt_entry **page_directory;
     seL4_CPtr *page_caps;
 };
@@ -36,5 +39,9 @@ int as_init(struct addrspace **as);
 int as_destroy(struct addrspace *as);
 
 int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x);
+
+int as_add_stack(struct addrspace *as);
+
+int as_add_heap(struct addrspace *as);
 
 #endif /* _ADDRSPACE_H_ */

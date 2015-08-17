@@ -22,7 +22,7 @@
 #include <sel4/types.h>
 #include <cspace/cspace.h>
 #include <dma.h>
-#include <mapping.h>
+#include <utils/mapping.h>
 #include <ut_manager/ut.h>
 #include <vmem_layout.h>
 

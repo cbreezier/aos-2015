@@ -4,7 +4,7 @@
 #include <bits/limits.h>
 #include <cspace/cspace.h>
 #include <sys/panic.h>
-#include <mapping.h>
+#include <utils/mapping.h>
 #include <bits/errno.h>
 
 #define ROUND_UP(n, b) (((((n) - 1ul) >> (b)) + 1ul) << (b))
@@ -91,6 +91,7 @@ uint32_t frame_alloc(seL4_Word *vaddr) {
     int err = cspace_ut_retype_addr(ft[idx].seL4_id, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &(ft[idx].cap));
     conditional_panic(err, "Unable to alloc frame(retype)");
 
+    printf("frame alloc cap %u\n", (uint32_t)ft[idx].cap);
     err = map_page(ft[idx].cap, seL4_CapInitThreadPD, *vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to alloc frame(map)");
 
@@ -125,4 +126,8 @@ int frame_free(uint32_t idx) {
     ut_free(ft[idx].seL4_id, seL4_PageBits);
 
     return 0;
+}
+
+seL4_Word frame_idx_to_addr(uint32_t idx) {
+    return low_addr + PAGE_SIZE*idx;
 }

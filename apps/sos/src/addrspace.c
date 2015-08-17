@@ -1,4 +1,9 @@
 #include <addrspace.h>
+#include <vmem_layout.h>
+
+#define MEMORY_TOP (0xFFFFFFFF)
+#define STACK_SIZE (0x40000000)
+#define HEAP_SIZE (0x10000000)
 
 int as_init(struct addrspace **as) {
     *as = NULL;
@@ -26,8 +31,9 @@ int as_init(struct addrspace **as) {
     return 0;
 }
 
-int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x) {
-	if (as == NULL) {
+static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x, struct region_entry **ret) {
+    bool invalid_location = (size == 0 || size == MEMORY_TOP || start < 0 || start > MEMORY_TOP - size - 1);
+	if (as == NULL || invalid_location) {
 		return EINVAL;
 	}
 
@@ -71,5 +77,26 @@ int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bo
         prev->next = new_region;
     }
 
+    *ret = new_region;
+
     return 0;
+}
+
+int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x) {
+    struct region_entry *unused;
+    return as_do_add_region(as, start, size, r, w, x, &unused);
+}
+
+int as_add_stack(struct addrspace *as) {
+    return as_do_add_region(as, PROCESS_STACK_TOP - STACK_SIZE + 1, STACK_SIZE , 1, 1, 0, &(as->stack_region));
+}
+
+int as_add_heap(struct addrspace *as) {
+    seL4_Word start = 0;
+    // struct region_entry *cur;
+    // /* Search for the end position of the last region */
+    // for (cur = as->region_head; cur != NULL; cur = cur->next) {
+    //     start = cur->start+cur->size;
+    // }
+    return as_do_add_region(as, start, HEAP_SIZE, 1, 1, 0, &(as->heap_region));
 }
