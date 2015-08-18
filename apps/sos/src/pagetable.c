@@ -35,6 +35,7 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
         if (proc->as->page_directory[tl_idx] == NULL) {
             return ENOMEM;
         }
+        memset(proc->as->page_directory[tl_idx], 0, sizeof(struct pt_entry)*(1 << SECOND_LEVEL_SIZE));
     }
     seL4_Word waste_of_memory;
     uint32_t frame_idx = frame_alloc(&waste_of_memory);
@@ -55,6 +56,7 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
     //printf("frame %u, cap %u, proc->vroot %u, vaddr %u\n", frame_idx, (uint32_t)ft[frame_idx].cap, (uint32_t)proc->vroot, (uint32_t)vaddr);
 
     //printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
+    /* TODO this cap needs to be saved so that we can unmap later */
     seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
     //printf("minted %u\n", (uint32_t)cap);
 
@@ -68,6 +70,7 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
     if (pt_cap) {
         proc->as->page_caps[tl_idx] = pt_cap;
     }
+    /* TODO need to also store pt_addr for ut_free later */
 
     proc->as->page_directory[tl_idx][sl_idx].frame = frame_idx;
     return 0;

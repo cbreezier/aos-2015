@@ -107,6 +107,12 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Send(reply_cap, reply);
 
         break;
+    case 1:
+        printf("SOS: Ending first process\n");
+        end_first_process();
+        printf("SOS: First process ended\n");
+        
+        break;
     case 2:
         // printf("length: %d\n", num_args);
         for (i = 0; i <= num_args / 4; i++) 
@@ -380,6 +386,39 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(tty_test_process.tcb_cap, 1, 0, 2, &context);
+}
+
+static void end_first_process(void) {
+    int err;
+    
+    /* Destroy tcb */
+    err = cspace_revoke_cap(cur_cspace, tty_test_process.tcb_cap);
+    conditional_panic(err, "unable to revoke tcb cap");
+
+    err = cspace_delete_cap(cur_cspace, tty_test_process.tcb_cap);
+    conditional_panic(err, "unable to delete tcb cap");
+
+    ut_free(tty_test_process.tcb_addr, seL4_TCBBits);
+
+    /* Destroy process ipc cap */
+    // TODO not sure how to do this without having a reference to user_ep_cap
+
+    /* Destroy process cspace */
+    err = cspace_destroy(tty_test_process.croot);
+    conditional_panic(err, "unable to destroy cspace");
+
+    /* Destroy page directory */
+    err = cspace_revoke_cap(cur_cspace, tty_test_process.vroot);
+    conditional_panic(err, "unable to revoke vroot");
+
+    err = cspace_delete_cap(cur_cspace, tty_test_process.vroot);
+    conditional_panic(err, "unable to delete vroot");
+    
+    ut_free(tty_test_process.vroot_addr, seL4_PageDirBits);
+
+    /* Destroy address space */
+    err = as_destroy(tty_test_process.as);
+    conditional_panic(err, "unable to destroy address space");
 }
 
 static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){

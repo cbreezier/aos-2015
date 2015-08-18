@@ -26,9 +26,50 @@ int as_init(struct addrspace **as) {
     if (new->page_caps == NULL) {
         return ENOMEM;
     }
+    memset(new->page_caps, 0, sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
 
     *as = new;
     return 0;
+}
+
+int as_destroy(struct addrspace *as) {
+    /* Free region list */
+    struct region_entry *cur;
+    struct region_entry *prev;
+    for (cur = as->region_head; cur != NULL; cur = cur->next) {
+        if (prev != NULL) {
+            free(prev);
+        }
+        prev = cur;
+    }
+
+    /*
+     * Free all the frames allocated in the page table
+     * as well as the page table itself
+     */
+    if (as->page_directory != NULL) {
+        for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
+            if (as->page_directory[l1] == NULL) {
+                continue;
+            }
+            for (size_t l2 = 0; l2 < (1 << SECOND_LEVEL_SIZE); ++l2) {
+                if (as->page_directory[l1][l2].frame == 0) {
+                    continue;
+                }
+                /* TODO unmap_page, frame_free */
+                pt_remove_page(/* TODO */);
+            }
+            free(as->page_directory[l1]);
+        }
+        free(as->page_directory);
+    }
+
+    /* Free the kernel PageTable where relevant */
+    for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
+        if (page_caps[l1]) {
+            /* TODO revoke, delete, ut_free */
+        }
+    }
 }
 
 static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x, struct region_entry **ret) {
