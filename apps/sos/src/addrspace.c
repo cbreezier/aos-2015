@@ -36,6 +36,7 @@ static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, 
 	if (as == NULL || invalid_location) {
 		return EINVAL;
 	}
+    printf("Adding region at 0x%08x, size 0x%08x\n", start, size);
 
 	// Round down starting vaddr
 	start = (start / PAGE_SIZE) * PAGE_SIZE;
@@ -93,10 +94,10 @@ int as_add_stack(struct addrspace *as) {
 
 int as_add_heap(struct addrspace *as) {
     seL4_Word start = 0;
-    // struct region_entry *cur;
-    // /* Search for the end position of the last region */
-    // for (cur = as->region_head; cur != NULL; cur = cur->next) {
-    //     start = cur->start+cur->size;
-    // }
+    struct region_entry *cur;
+    /* Search for the end position of the last region */
+    for (cur = as->region_head; cur != NULL; cur = cur->next) {
+        start = cur->start+cur->size;
+    }
     return as_do_add_region(as, start, HEAP_SIZE, 1, 1, 0, &(as->heap_region));
 }

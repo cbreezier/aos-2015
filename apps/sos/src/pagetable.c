@@ -4,14 +4,14 @@
 #include <frametable.h>
 #include <sel4/types_gen.h>
 
-int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr) {
+int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap) {
 
     vaddr = (vaddr / PAGE_SIZE) * PAGE_SIZE;
 
     struct region_entry *cur = NULL;
-    printf("vaddr is %u\n", vaddr);
+    //printf("vaddr is %u\n", vaddr);
     for (cur = proc->as->region_head; cur != NULL; cur = cur->next) {
-        printf("considering region starting %u size %d\n", cur->start, cur->size);
+        //printf("considering region starting %u size %d\n", cur->start, cur->size);
         if (cur->start <= vaddr && cur->start + cur->size > vaddr) 
             break;
     }
@@ -41,19 +41,25 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr) {
     if (frame_idx == 0) {
         return ENOMEM;
     }
-    *kaddr = frame_idx_to_addr(frame_idx);
+    if (kaddr != NULL) {
+        *kaddr = frame_idx_to_addr(frame_idx);
+    }
+
+    if (frame_cap != NULL) {
+        *frame_cap = ft[frame_idx].cap;
+    }
     
     seL4_ARM_PageTable pt_cap = 0;
 
-    /* Only map at the end to prevent mapping before error checking */
-    printf("frame %u, cap %u, proc->vroot %u, vaddr %u\n", frame_idx, (uint32_t)ft[frame_idx].cap, (uint32_t)proc->vroot, (uint32_t)vaddr);
+    ///* Only map at the end to prevent mapping before error checking */
+    //printf("frame %u, cap %u, proc->vroot %u, vaddr %u\n", frame_idx, (uint32_t)ft[frame_idx].cap, (uint32_t)proc->vroot, (uint32_t)vaddr);
 
-    printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
-    seL4_CPtr cap = cspace_mint_cap(proc->croot, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
-    printf("minted %u\n", (uint32_t)cap);
+    //printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
+    seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
+    //printf("minted %u\n", (uint32_t)cap);
 
     int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap);
-    printf("sos_map_page with error %u\n", err);
+    //printf("sos_map_page with error %u\n", err);
     if (err) {
         frame_free(frame_idx);
         return err;

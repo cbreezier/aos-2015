@@ -91,12 +91,12 @@ static int load_segment_into_vspace(sos_process_t *proc,
 
     unsigned long pos;
 
-    printf("adding region\n");
-    int err = as_add_region(proc->as, dst + PROCESS_SCRATCH, segment_size, 1, 1, 1);
+    //printf("adding region\n");
+    int err = as_add_region(proc->as, dst, segment_size, 1, 1, 1);
     if (err) {
         return err;
     }
-    printf("region added\n");
+    //printf("region added\n");
 
     /* We work a page at a time in the destination vspace. */
     pos = 0;
@@ -108,7 +108,7 @@ static int load_segment_into_vspace(sos_process_t *proc,
         int nbytes;
         //int err;
 
-        kdst   = dst + PROCESS_SCRATCH;
+        kdst   = dst;// + PROCESS_SCRATCH;
         //vpage  = PAGE_ALIGN(dst);
         //kvpage = PAGE_ALIGN(kdst);
 
@@ -138,14 +138,14 @@ static int load_segment_into_vspace(sos_process_t *proc,
 
         /* Now copy our data into the destination vspace. */
         seL4_Word kaddr;
-        err = pt_add_page(proc, kdst, &kaddr);
+        err = pt_add_page(proc, kdst, &kaddr, NULL);
         if (err) {
-            printf("error is %u\n", err);
+            //printf("error is %u\n", err);
             return err;
         }
         nbytes = PAGESIZE - (dst & PAGEMASK);
-        printf("copying %lu\n", pos);
-        printf("kaddr %u\n", kaddr);
+        //printf("copying %lu\n", pos);
+        //printf("kaddr %u\n", kaddr);
         if (pos < file_size){
             memcpy((void*)kaddr, (void*)src, MIN(nbytes, file_size - pos));
         }
@@ -157,7 +157,7 @@ static int load_segment_into_vspace(sos_process_t *proc,
         dst += nbytes;
         src += nbytes;
     }
-    printf("all copied and done\n");
+    //printf("all copied and done\n");
     return 0;
 }
 

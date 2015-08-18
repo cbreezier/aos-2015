@@ -111,8 +111,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
         // printf("length: %d\n", num_args);
         for (i = 0; i <= num_args / 4; i++) 
             buffer[i] = seL4_GetMR(i + 1);
-        // *((char *) buffer + num_args) = '\0';
-        // printf("buffer is: %s\n", buffer);
+        *((char *) buffer + num_args) = '\0';
+        printf("buffer is: %s\n", buffer);
         serial_send(serial, (char *) buffer, num_args);
 
         // Reply so that we can context switch back to caller
@@ -160,14 +160,23 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
-                    seL4_GetMR(0),
-                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
+            //dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+                    //seL4_GetMR(0),
+                    //seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
 
             if (badge == TTY_EP_BADGE) {
-                dprintf(0, "tty vm fault\n");
-                seL4_Word unused;
-                pt_add_page(&tty_test_process, seL4_GetMR(1), &unused);
+                //dprintf(0, "tty vm fault\n");
+                //printf("Adding page\n");
+                pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
+                //printf("Done adding page\n");
+
+                seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+
+                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                seL4_SetMR(0, 0);
+
+                seL4_Send(reply_cap, reply);
+                cspace_free_slot(cur_cspace, reply_cap);
             } else {
                 assert(!"Unable to handle vm faults");
             }
@@ -281,17 +290,21 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     tty_test_process.croot = cspace_create(1);
     assert(tty_test_process.croot != NULL);
 
-    /* Create an IPC buffer */
-    tty_test_process.ipc_buffer_addr = ut_alloc(seL4_PageBits);
-    conditional_panic(!tty_test_process.ipc_buffer_addr, "No memory for ipc buffer");
-    err =  cspace_ut_retype_addr(tty_test_process.ipc_buffer_addr,
-                                 seL4_ARM_SmallPageObject,
-                                 seL4_PageBits,
-                                 cur_cspace,
-                                 &tty_test_process.ipc_buffer_cap);
-    conditional_panic(err, "Unable to allocate page for IPC buffer");
     printf("adding IPC region\n");
     as_add_region(tty_test_process.as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
+
+    /* Create an IPC buffer */
+    err = pt_add_page(&tty_test_process, PROCESS_IPC_BUFFER, NULL, &tty_test_process.ipc_buffer_cap);
+    conditional_panic(err, "Unable to add page table page for ipc buffer\n");
+
+    // tty_test_process.ipc_buffer_addr = ut_alloc(seL4_PageBits);
+    // conditional_panic(!tty_test_process.ipc_buffer_addr, "No memory for ipc buffer");
+    // err =  cspace_ut_retype_addr(tty_test_process.ipc_buffer_addr,
+    //                              seL4_ARM_SmallPageObject,
+    //                              seL4_PageBits,
+    //                              cur_cspace,
+    //                              &tty_test_process.ipc_buffer_cap);
+    // conditional_panic(err, "Unable to allocate page for IPC buffer");
 
     printf("minting ep\n");
     /* Copy the fault endpoint to the user app to enable IPC */
@@ -332,10 +345,6 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     /* load the elf image */
     printf("elf load\n");
     err = elf_load(&tty_test_process, elf_base);
-    if (err) {
-        printf("elf load failed with %u\n", err);
-        return err;
-    }
     conditional_panic(err, "Failed to load elf image");
 
 

@@ -91,7 +91,7 @@ uint32_t frame_alloc(seL4_Word *vaddr) {
     int err = cspace_ut_retype_addr(ft[idx].seL4_id, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &(ft[idx].cap));
     conditional_panic(err, "Unable to alloc frame(retype)");
 
-    printf("frame alloc cap %u\n", (uint32_t)ft[idx].cap);
+    //printf("frame alloc cap %u\n", (uint32_t)ft[idx].cap);
     err = map_page(ft[idx].cap, seL4_CapInitThreadPD, *vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to alloc frame(map)");
 
