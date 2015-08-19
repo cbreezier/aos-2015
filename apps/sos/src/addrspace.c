@@ -97,16 +97,17 @@ int as_destroy(struct addrspace *as) {
 }
 
 static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x, struct region_entry **ret) {
-    bool invalid_location = (size == 0 || size == MEMORY_TOP || start < 0 || start > MEMORY_TOP - size - 1);
-    if (as == NULL || invalid_location) {
-        return EINVAL;
-    }
-    printf("Adding region at 0x%08x, size 0x%08x\n", start, size);
 
     // Round down starting vaddr
     start = (start / PAGE_SIZE) * PAGE_SIZE;
     // Round up size
     size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
+
+    bool invalid_location = (size == 0 || size == MEMORY_TOP || start < 0 || start > MEMORY_TOP - size - 1);
+    if (as == NULL || invalid_location) {
+        return EINVAL;
+    }
+    printf("Adding region at 0x%08x, size 0x%08x\n", start, size);
 
     struct region_entry *prev = NULL;
     struct region_entry *cur = as->region_head;
@@ -159,10 +160,82 @@ int as_add_stack(struct addrspace *as) {
 
 int as_add_heap(struct addrspace *as) {
     seL4_Word start = PROCESS_HEAP_START;
-//    struct region_entry *cur;
-//    /* Search for the end position of the last region */
-//    for (cur = as->region_head; cur != NULL; cur = cur->next) {
-//        start = cur->start+cur->size;
-//    }
     return as_do_add_region(as, start, PROCESS_HEAP_SIZE, 1, 1, 0, &(as->heap_region));
+}
+
+int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *insert_location) {
+    // Round down starting vaddr
+    min = (min / PAGE_SIZE) * PAGE_SIZE;
+    // Round up size
+    size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
+
+    printf("searching %u %u\n", min, size);
+    bool invalid_location = (size == 0 || size == MEMORY_TOP || min <= 0 || min > MEMORY_TOP - size - 1);
+    if (as == NULL || invalid_location) {
+        return EINVAL;
+    }
+
+    struct region_entry *prev = NULL;
+    struct region_entry *cur = as->region_head;
+
+    /* Cannot insert at 0 so start at the next page */
+    *insert_location = min;
+
+    bool found = false;
+    for (; cur != NULL; cur = cur->next) {
+        if (cur->start - *insert_location > size) {
+            found = true;
+            break;
+        }
+        prev = cur;
+        *insert_location = cur->start + cur->size;
+    }
+    if (!found) {
+        /* Case where we can add after the last region */
+        if (prev != NULL && prev->start + prev->size + size <= MEMORY_TOP) {
+            *insert_location = prev->start + prev->size;
+        } else {
+            return EFAULT;
+        }
+    }
+
+    // Found where to insert region to maintain sorted order
+    struct region_entry *new_region = malloc(sizeof(struct region_entry));
+    if (new_region == NULL) {
+        return ENOMEM;
+    }
+    new_region->start = *insert_location;
+    new_region->size = size;
+    new_region->r = r;
+    new_region->w = w;
+    new_region->x = x;
+    new_region->next = cur;
+
+    if (prev == NULL) {
+        as->region_head = new_region;
+    } else {
+        prev->next = new_region;
+    }
+
+    return 0;
+
+}
+
+int as_remove_region(struct addrspace *as, seL4_Word addr) {
+    if (as == NULL) return 0;
+    struct region_entry *prev = NULL;
+    struct region_entry *cur;
+
+    for (cur = as->region_head; cur != NULL; cur = cur->next) {
+        if (cur->start == addr) {
+            if (prev == NULL) {
+                as->region_head = cur->next;
+            } else {
+                prev->next = cur->next;
+            }
+            free(cur);
+            break;
+        }
+    }
+    return 0;
 }

@@ -45,4 +45,8 @@ int as_add_stack(struct addrspace *as);
 
 int as_add_heap(struct addrspace *as);
 
+int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *insert_location);
+
+int as_remove_region(struct addrspace *as, seL4_Word addr);
+
 #endif /* _ADDRSPACE_H_ */

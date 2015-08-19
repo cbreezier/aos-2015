@@ -28,6 +28,7 @@
 #include "network.h"
 #include "elf.h"
 #include "pagetable.h"
+#include "sos_syscall.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
@@ -38,6 +39,7 @@
 #define verbose 5
 #include <sys/debug.h>
 #include <sys/panic.h>
+#include <syscall.h>
 
 /* This is the index where a clients syscall enpoint will
  * be stored in the clients cspace. */
@@ -69,6 +71,7 @@ sos_process_t tty_test_process;
  * A dummy starting syscall
  */
 #define SOS_SYSCALL0 0
+#define SOS_MMAP2 192
 
 /* Serial handle */
 struct serial *serial;
@@ -129,6 +132,25 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Send(reply_cap, reply);
 
         break;
+    case SYS_mmap2:
+        if (badge == TTY_EP_BADGE) {
+            sos_mmap2(&tty_test_process, &reply);
+
+            seL4_Send(reply_cap, reply);
+        } else {
+            assert(!"Unrecognised process");
+        }
+        break;
+    case SYS_munmap:
+        if (badge == TTY_EP_BADGE) {
+            sos_munmap(&tty_test_process, &reply);
+
+            seL4_Send(reply_cap, reply);
+        } else {
+            assert(!"Unrecognised process");
+        }
+        break;
+
     default:
         printf("Unknown syscall %d\n", syscall_number);
         /* we don't want to reply to an unknown syscall */
