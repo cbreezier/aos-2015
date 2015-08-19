@@ -9,7 +9,6 @@
 
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
-#define HEAP_SIZE (0x10000000)
 
 int as_init(struct addrspace **as) {
     *as = NULL;
@@ -159,11 +158,11 @@ int as_add_stack(struct addrspace *as) {
 }
 
 int as_add_heap(struct addrspace *as) {
-    seL4_Word start = 0;
-    struct region_entry *cur;
-    /* Search for the end position of the last region */
-    for (cur = as->region_head; cur != NULL; cur = cur->next) {
-        start = cur->start+cur->size;
-    }
-    return as_do_add_region(as, start, HEAP_SIZE, 1, 1, 0, &(as->heap_region));
+    seL4_Word start = PROCESS_HEAP_START;
+//    struct region_entry *cur;
+//    /* Search for the end position of the last region */
+//    for (cur = as->region_head; cur != NULL; cur = cur->next) {
+//        start = cur->start+cur->size;
+//    }
+    return as_do_add_region(as, start, PROCESS_HEAP_SIZE, 1, 1, 0, &(as->heap_region));
 }

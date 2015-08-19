@@ -15,6 +15,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <assert.h>
+#include <vmem_layout.h>
 
 /*
  * Statically allocated morecore area.
@@ -33,18 +34,22 @@ static uintptr_t morecore_top = (uintptr_t) &morecore_area[MORECORE_AREA_BYTE_SI
    returns 0 if failure, returns newbrk if success.
 */
 
+static uintptr_t heap_base = PROCESS_HEAP_START;
+static uintptr_t heap_top = PROCESS_HEAP_START + PROCESS_HEAP_SIZE;
+
+static uintptr_t heap_cur = PROCESS_HEAP_START;
+
 long
 sys_brk(va_list ap)
 {
-
     uintptr_t ret;
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
     /*if the newbrk is 0, return the bottom of the heap*/
     if (!newbrk) {
-        ret = morecore_base;
-    } else if (newbrk < morecore_top && newbrk > (uintptr_t)&morecore_area[0]) {
-        ret = morecore_base = newbrk;
+        ret = heap_cur = heap_base;
+    } else if (newbrk < heap_top && newbrk >= heap_base) {
+        ret = heap_cur = newbrk;
     } else {
         ret = 0;
     }

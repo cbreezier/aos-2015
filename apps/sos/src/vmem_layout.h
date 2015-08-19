@@ -26,11 +26,14 @@
 
 /* Constants for how SOS will layout the address space of any
  * processes it loads up */
+#define PROCESS_HEAP_START  (0x10000000)
 #define PROCESS_STACK_TOP   (0x90000000)
 #define PROCESS_IPC_BUFFER  (0xA0000000)
 #define PROCESS_VMEM_START  (0xC0000000)
 
 #define PROCESS_SCRATCH     (0xD0000000)
+
+#define PROCESS_HEAP_SIZE   (0x10000000)
 
 
 #endif /* _MEM_LAYOUT_H_ */

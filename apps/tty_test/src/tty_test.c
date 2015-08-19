@@ -57,12 +57,14 @@ pt_test( void )
 
     /* stack test */
     do_pt_test(buf1);
+    printf("Stack test ok\n");
 
     /* heap test */
-//    buf2 = malloc(NPAGES * 4096);
-//    assert(buf2);
-//    do_pt_test(buf2);
-//    free(buf2);
+    buf2 = malloc(NPAGES * 4096);
+    assert(buf2);
+    do_pt_test(buf2);
+    free(buf2);
+    printf("Heap test ok\n");
 }
 
 // Block a thread forever
