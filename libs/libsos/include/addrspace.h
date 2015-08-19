@@ -22,6 +22,7 @@ struct region_entry {
 };
 
 struct pt_entry {
+    seL4_CPtr cap;
     uint32_t frame;
 };
 
@@ -31,7 +32,8 @@ struct addrspace {
     struct region_entry *heap_region;
 
     struct pt_entry **page_directory;
-    seL4_CPtr *page_caps;
+    seL4_CPtr *pt_caps;
+    seL4_Word *pt_addrs;
 };
 
 int as_init(struct addrspace **as);

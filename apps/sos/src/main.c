@@ -81,6 +81,8 @@ seL4_CPtr _sos_interrupt_ep_cap;
  */
 extern fhandle_t mnt_point;
 
+static void end_first_process();
+
 
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
@@ -117,8 +119,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
         // printf("length: %d\n", num_args);
         for (i = 0; i <= num_args / 4; i++) 
             buffer[i] = seL4_GetMR(i + 1);
-        *((char *) buffer + num_args) = '\0';
-        printf("buffer is: %s\n", buffer);
+        //*((char *) buffer + num_args) = '\0';
+        //printf("buffer is: %s\n", buffer);
         serial_send(serial, (char *) buffer, num_args);
 
         // Reply so that we can context switch back to caller
@@ -139,6 +141,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
 uint32_t a, b, c;
 bool removed = false;
+
+int nprints = 0;
 
 void syscall_loop(seL4_CPtr ep) {
 
@@ -166,14 +170,18 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            //dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
-                    //seL4_GetMR(0),
-                    //seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
+            if (nprints < 10) {
+                dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+                        seL4_GetMR(0),
+                        seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
+                ++nprints;
+            }   
 
             if (badge == TTY_EP_BADGE) {
                 //dprintf(0, "tty vm fault\n");
                 //printf("Adding page\n");
-                pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
+                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
+                conditional_panic(err, "failed to add page(vm fault)");
                 //printf("Done adding page\n");
 
                 seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -264,7 +272,6 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     //seL4_Word stack_addr;
     //seL4_CPtr stack_cap;
-    seL4_CPtr user_ep_cap;
 
     uint32_t pid = 101;
 
@@ -314,14 +321,14 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     printf("minting ep\n");
     /* Copy the fault endpoint to the user app to enable IPC */
-    user_ep_cap = cspace_mint_cap(tty_test_process.croot,
+    tty_test_process.user_ep_cap = cspace_mint_cap(tty_test_process.croot,
                                   cur_cspace,
                                   fault_ep,
                                   seL4_AllRights, 
                                   seL4_CapData_Badge_new(pid));
     /* should be the first slot in the space, hack I know */
-    assert(user_ep_cap == 1);
-    assert(user_ep_cap == USER_EP_CAP);
+    assert(tty_test_process.user_ep_cap == 1);
+    assert(tty_test_process.user_ep_cap == USER_EP_CAP);
 
     printf("tcb stuff\n");
     /* Create a new TCB object */
@@ -336,7 +343,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* Configure the TCB */
     printf("more tcb stuff\n");
-    err = seL4_TCB_Configure(tty_test_process.tcb_cap, user_ep_cap, TTY_PRIORITY,
+    err = seL4_TCB_Configure(tty_test_process.tcb_cap, tty_test_process.user_ep_cap, TTY_PRIORITY,
                              tty_test_process.croot->root_cnode, seL4_NilData,
                              tty_test_process.vroot, seL4_NilData, PROCESS_IPC_BUFFER,
                              tty_test_process.ipc_buffer_cap);
@@ -390,6 +397,10 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
 static void end_first_process(void) {
     int err;
+
+    /* Destroy address space */
+    err = as_destroy(tty_test_process.as);
+    conditional_panic(err, "unable to destroy address space");
     
     /* Destroy tcb */
     err = cspace_revoke_cap(cur_cspace, tty_test_process.tcb_cap);
@@ -401,7 +412,11 @@ static void end_first_process(void) {
     ut_free(tty_test_process.tcb_addr, seL4_TCBBits);
 
     /* Destroy process ipc cap */
-    // TODO not sure how to do this without having a reference to user_ep_cap
+    //err = cspace_revoke_cap(cur_cspace, tty_test_process.user_ep_cap);
+    //conditional_panic(err, "unable to revoke user ep cap");
+
+    //err = cspace_delete_cap(cur_cspace, tty_test_process.user_ep_cap);
+    //conditional_panic(err, "unable to delete user ep cap");
 
     /* Destroy process cspace */
     err = cspace_destroy(tty_test_process.croot);
@@ -415,10 +430,6 @@ static void end_first_process(void) {
     conditional_panic(err, "unable to delete vroot");
     
     ut_free(tty_test_process.vroot_addr, seL4_PageDirBits);
-
-    /* Destroy address space */
-    err = as_destroy(tty_test_process.as);
-    conditional_panic(err, "unable to destroy address space");
 }
 
 static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){

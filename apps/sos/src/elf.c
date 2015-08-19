@@ -104,13 +104,13 @@ static int load_segment_into_vspace(sos_process_t *proc,
         //seL4_Word paddr;
         //seL4_CPtr sos_cap;// tty_cap;
         //seL4_Word vpage, kvpage;
-        seL4_Word kdst;
         int nbytes;
         //int err;
 
-        kdst   = dst;// + PROCESS_SCRATCH;
+        //kdst   = dst;// + PROCESS_SCRATCH;
+        seL4_Word kdst = dst;
         //vpage  = PAGE_ALIGN(dst);
-        //kvpage = PAGE_ALIGN(kdst);
+        seL4_Word kvpage = PAGE_ALIGN(kdst);
 
         /* First we need to create a frame */
 //        paddr = ut_alloc(seL4_PageBits);
@@ -138,7 +138,8 @@ static int load_segment_into_vspace(sos_process_t *proc,
 
         /* Now copy our data into the destination vspace. */
         seL4_Word kaddr;
-        err = pt_add_page(proc, kdst, &kaddr, NULL);
+        seL4_CPtr sos_cap;
+        err = pt_add_page(proc, kvpage, &kaddr, &sos_cap);
         if (err) {
             //printf("error is %u\n", err);
             return err;
@@ -151,7 +152,7 @@ static int load_segment_into_vspace(sos_process_t *proc,
         }
 
         /* Not observable to I-cache yet so flush the frame */
-        //seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+        seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
 
         pos += nbytes;
         dst += nbytes;

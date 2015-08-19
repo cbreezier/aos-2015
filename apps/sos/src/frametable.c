@@ -6,6 +6,7 @@
 #include <sys/panic.h>
 #include <utils/mapping.h>
 #include <bits/errno.h>
+#include <string.h>
 
 #define ROUND_UP(n, b) (((((n) - 1ul) >> (b)) + 1ul) << (b))
 
@@ -95,6 +96,8 @@ uint32_t frame_alloc(seL4_Word *vaddr) {
     err = map_page(ft[idx].cap, seL4_CapInitThreadPD, *vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to alloc frame(map)");
 
+    memset((void*)*vaddr, 0, PAGE_SIZE);
+
     free_head = ft[idx].next_free;
 
     return idx;
@@ -117,11 +120,11 @@ int frame_free(uint32_t idx) {
 
     /* Remove all child capabilities */
     int err = cspace_revoke_cap(cur_cspace, ft[idx].cap);
-    conditional_panic(err, "unable to revoke cap(free");
+    conditional_panic(err, "unable to revoke cap(free)");
 
     /* Remove the capability itself */
     err = cspace_delete_cap(cur_cspace, ft[idx].cap);
-    conditional_panic(err, "unable to delete cap(free");
+    conditional_panic(err, "unable to delete cap(free)");
 
     ut_free(ft[idx].seL4_id, seL4_PageBits);
 

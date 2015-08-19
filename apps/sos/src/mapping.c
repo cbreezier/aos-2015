@@ -28,7 +28,7 @@ extern const seL4_BootInfo* _boot_info;
  * @return 0 on success
  */
 static int 
-_map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *ret_cap){
+_map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *ret_cap, seL4_Word *ret_addr){
     seL4_Word pt_addr;
     seL4_ARM_PageTable pt_cap;
     int err;
@@ -52,7 +52,8 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *
                                  pd, 
                                  vaddr, 
                                  seL4_ARM_Default_VMAttributes);
-    *ret_cap = pt_cap;
+    if (ret_cap != NULL) *ret_cap = pt_cap;
+    if (ret_addr != NULL) *ret_addr = pt_addr;
     return err;
 }
 
@@ -65,8 +66,7 @@ map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
     err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
     if(err == seL4_FailedLookup){
         /* Assume the error was because we have no page table */
-        seL4_ARM_PageTable unused;
-        err = _map_page_table(pd, vaddr, &unused);
+        err = _map_page_table(pd, vaddr, NULL, NULL);
         if(!err){
             /* Try the mapping again */
             err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
@@ -78,7 +78,7 @@ map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
 
 int 
 sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
-                seL4_CapRights rights, seL4_ARM_VMAttributes attr, seL4_ARM_PageTable *pt_cap){
+                seL4_CapRights rights, seL4_ARM_VMAttributes attr, seL4_ARM_PageTable *pt_cap, seL4_Word *pt_addr){
     int err;
 
     /* Attempt the mapping */
@@ -86,7 +86,7 @@ sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
     //printf("err = %u, %u\n", err, seL4_FailedLookup);
     if(err == seL4_FailedLookup){
         /* Assume the error was because we have no page table */
-        err = _map_page_table(pd, vaddr, pt_cap);
+        err = _map_page_table(pd, vaddr, pt_cap, pt_addr);
         //printf("err = %u\n", err);
         if(!err){
             /* Try the mapping again */

@@ -1,5 +1,10 @@
 #include <addrspace.h>
 #include <vmem_layout.h>
+#include <string.h>
+#include <stdlib.h>
+#include <pagetable.h>
+#include <sys/panic.h>
+#include <ut_manager/ut.h>
 
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
@@ -11,7 +16,7 @@ int as_init(struct addrspace **as) {
     if (new == NULL) {
         return ENOMEM;
     }
-    
+
     new->region_head = NULL;
     new->page_directory = malloc(sizeof(struct pt_entry*) * (1 << TOP_LEVEL_SIZE));
     if (new->page_directory == NULL) {
@@ -22,20 +27,28 @@ int as_init(struct addrspace **as) {
     }
 
     // Values of caps are default initialised - don't assume anything about their value
-    new->page_caps = malloc(sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
-    if (new->page_caps == NULL) {
+    new->pt_caps = malloc(sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
+    if (new->pt_caps == NULL) {
         return ENOMEM;
     }
-    memset(new->page_caps, 0, sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
+    memset(new->pt_caps, 0, sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
+
+    new->pt_addrs = malloc(sizeof(seL4_Word) * (1 << TOP_LEVEL_SIZE));
+    if (new->pt_addrs== NULL) {
+        return ENOMEM;
+    }
+    memset(new->pt_addrs, 0, sizeof(seL4_Word) * (1 << TOP_LEVEL_SIZE));
+
 
     *as = new;
     return 0;
 }
 
 int as_destroy(struct addrspace *as) {
+    if (as == NULL) return 0;
     /* Free region list */
     struct region_entry *cur;
-    struct region_entry *prev;
+    struct region_entry *prev = NULL;
     for (cur = as->region_head; cur != NULL; cur = cur->next) {
         if (prev != NULL) {
             free(prev);
@@ -56,8 +69,7 @@ int as_destroy(struct addrspace *as) {
                 if (as->page_directory[l1][l2].frame == 0) {
                     continue;
                 }
-                /* TODO unmap_page, frame_free */
-                pt_remove_page(/* TODO */);
+                pt_remove_page(&as->page_directory[l1][l2]);
             }
             free(as->page_directory[l1]);
         }
@@ -66,23 +78,30 @@ int as_destroy(struct addrspace *as) {
 
     /* Free the kernel PageTable where relevant */
     for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
-        if (page_caps[l1]) {
-            /* TODO revoke, delete, ut_free */
+        if (as->pt_caps[l1]) {
+            int err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
+            conditional_panic(err, "Unable to revoke cap(as_destroy)");
+
+            err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
+            conditional_panic(err, "Unable to delete cap(as_destroy)");
+
+            ut_free(as->pt_addrs[l1], seL4_PageTableBits);
         }
     }
+    return 0;
 }
 
 static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x, struct region_entry **ret) {
     bool invalid_location = (size == 0 || size == MEMORY_TOP || start < 0 || start > MEMORY_TOP - size - 1);
-	if (as == NULL || invalid_location) {
-		return EINVAL;
-	}
+    if (as == NULL || invalid_location) {
+        return EINVAL;
+    }
     printf("Adding region at 0x%08x, size 0x%08x\n", start, size);
 
-	// Round down starting vaddr
-	start = (start / PAGE_SIZE) * PAGE_SIZE;
-	// Round up size
-	size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
+    // Round down starting vaddr
+    start = (start / PAGE_SIZE) * PAGE_SIZE;
+    // Round up size
+    size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
 
     struct region_entry *prev = NULL;
     struct region_entry *cur = as->region_head;

@@ -68,6 +68,8 @@ typedef struct {
     seL4_Word ipc_buffer_addr;
     seL4_CPtr ipc_buffer_cap;
 
+    seL4_CPtr user_ep_cap;
+
     cspace_t *croot;
 
     struct addrspace *as;

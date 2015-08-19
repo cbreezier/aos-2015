@@ -3,6 +3,9 @@
 #include <sel4/types.h>
 #include <frametable.h>
 #include <sel4/types_gen.h>
+#include <string.h>
+#include <stdlib.h>
+#include <sys/panic.h>
 
 int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap) {
 
@@ -51,29 +54,43 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
     }
     
     seL4_ARM_PageTable pt_cap = 0;
+    seL4_Word pt_addr = 0;
 
     ///* Only map at the end to prevent mapping before error checking */
     //printf("frame %u, cap %u, proc->vroot %u, vaddr %u\n", frame_idx, (uint32_t)ft[frame_idx].cap, (uint32_t)proc->vroot, (uint32_t)vaddr);
 
     //printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
-    /* TODO this cap needs to be saved so that we can unmap later */
     seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
-    //printf("minted %u\n", (uint32_t)cap);
 
-    int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap);
+    int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     //printf("sos_map_page with error %u\n", err);
     if (err) {
         frame_free(frame_idx);
         return err;
     }
 
-    if (pt_cap) {
-        proc->as->page_caps[tl_idx] = pt_cap;
+    if (pt_cap && pt_addr) {
+        proc->as->pt_caps[tl_idx] = pt_cap;
+        proc->as->pt_addrs[tl_idx] = pt_addr;
     }
-    /* TODO need to also store pt_addr for ut_free later */
 
     proc->as->page_directory[tl_idx][sl_idx].frame = frame_idx;
+    proc->as->page_directory[tl_idx][sl_idx].cap = cap;
     return 0;
+}
+
+void pt_remove_page(struct pt_entry *pe) {
+    seL4_ARM_Page_Unmap(pe->cap);
+
+    /* Remove all child capabilities */
+    int err = cspace_revoke_cap(cur_cspace, pe->cap);
+    conditional_panic(err, "unable to revoke cap(free)");
+
+    /* Remove the capability itself */
+    err = cspace_delete_cap(cur_cspace, pe->cap);
+    conditional_panic(err, "unable to delete cap(free)");
+
+    frame_free(pe->frame);
 }
 
 struct pt_entry *vaddr_to_pt_entry(struct addrspace *as, seL4_Word vaddr) {
