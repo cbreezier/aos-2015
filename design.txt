@@ -1,0 +1,19 @@
+M3:
+    Address Space:
+        - Linked list of sorted regions
+        - Special pointers to stack and heap
+
+        - 10x10x12 page table, such that we can store
+        each level in exactly one page.
+            - Only the svaddr is stored per entry.
+
+        - pt_caps and pt_addrs also stored in exactly one page each.
+        These are used to delete kernel pt caps and ut_free, respectively.
+
+    - Each page is mapped twice - once for SOS and once for the user process.
+        - This allows copyin/copyout to be much easier.
+        - Caps for both of these mappings are stored inside the frame table.
+
+    - The page directory and page tables are stored in frames provided by the frametable.
+
+

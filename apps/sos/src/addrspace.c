@@ -5,6 +5,7 @@
 #include <pagetable.h>
 #include <sys/panic.h>
 #include <ut_manager/ut.h>
+#include <frametable.h>
 
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
@@ -18,26 +19,31 @@ int as_init(struct addrspace **as) {
     }
 
     new->region_head = NULL;
-    new->page_directory = malloc(sizeof(struct pt_entry*) * (1 << TOP_LEVEL_SIZE));
+    assert(PAGE_SIZE == sizeof(struct pt_entry*)*(1 << TOP_LEVEL_SIZE));
+    new->page_directory = (struct pt_entry**)frame_alloc(1, 0);
     if (new->page_directory == NULL) {
         return ENOMEM;
     }
-    for (int i = 0; i < (1 << TOP_LEVEL_SIZE); ++i) {
-        new->page_directory[i] = NULL;
-    }
+    memset(new->page_directory, 0, PAGE_SIZE);
 
-    // Values of caps are default initialised - don't assume anything about their value
-    new->pt_caps = malloc(sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
-    if (new->pt_caps == NULL) {
+    /* 
+     * Allocating only 1 frame under the assumption that the top_level_size is 10
+     * ie there's exactly one frame necessary to store the pagetable caps and addrs
+     */
+    assert(PAGE_SIZE == sizeof(seL4_CPtr)*(1 << TOP_LEVEL_SIZE));
+    assert(PAGE_SIZE == sizeof(seL4_Word)*(1 << TOP_LEVEL_SIZE));
+    new->pt_caps = (seL4_CPtr*)frame_alloc(1, 0);
+    if (new->pt_caps == 0) {
         return ENOMEM;
     }
-    memset(new->pt_caps, 0, sizeof(seL4_CPtr) * (1 << TOP_LEVEL_SIZE));
+    memset(new->pt_caps, 0, PAGE_SIZE);
 
-    new->pt_addrs = malloc(sizeof(seL4_Word) * (1 << TOP_LEVEL_SIZE));
-    if (new->pt_addrs== NULL) {
+    new->pt_addrs = (seL4_Word *)frame_alloc(1, 0);
+    if (new->pt_addrs == 0) {
         return ENOMEM;
     }
-    memset(new->pt_addrs, 0, sizeof(seL4_Word) * (1 << TOP_LEVEL_SIZE));
+    memset(new->pt_addrs, 0, PAGE_SIZE);
+
 
 
     *as = new;
@@ -71,9 +77,9 @@ int as_destroy(struct addrspace *as) {
                 }
                 pt_remove_page(&as->page_directory[l1][l2]);
             }
-            free(as->page_directory[l1]);
+            frame_free((seL4_Word)as->page_directory[l1]);
         }
-        free(as->page_directory);
+        frame_free((seL4_Word)as->page_directory);
     }
 
     /* Free the kernel PageTable where relevant */

@@ -8,8 +8,8 @@
 #include <bits/limits.h>
 
 
-#define TOP_LEVEL_SIZE 12
-#define SECOND_LEVEL_SIZE 8
+#define TOP_LEVEL_SIZE 10
+#define SECOND_LEVEL_SIZE 10
 #define OFFSET_SIZE 12
 
 struct region_entry {
@@ -22,8 +22,7 @@ struct region_entry {
 };
 
 struct pt_entry {
-    seL4_CPtr cap;
-    uint32_t frame;
+    seL4_Word frame;
 };
 
 struct addrspace {

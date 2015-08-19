@@ -522,8 +522,7 @@ static void test0() {
     /* Allocate 10 pages and make sure you can touch them all */
     for (int i = 0; i < 10; i++) {
         /* Allocate a page */
-        seL4_Word vaddr;
-        frame_alloc(&vaddr);
+        seL4_Word vaddr = frame_alloc(1, 1);
         assert(vaddr);
 
         /* Test you can touch the page */
@@ -541,8 +540,7 @@ static void test1() {
      *    and doesn't crash */
     for (int i = 0;; ++i) {
         /* Allocate a page */
-        seL4_Word vaddr;
-        frame_alloc(&vaddr);
+        seL4_Word vaddr = frame_alloc(1, 1);
         if (!vaddr) {
             printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
             break;
@@ -562,8 +560,7 @@ static void test2() {
      *     This loop should never finish */
     for (int i = 0;; i++) {
         /* Allocate a page */
-        seL4_Word vaddr;
-        uint32_t page = frame_alloc(&vaddr);
+        seL4_Word vaddr = frame_alloc(1, 1);
         assert(vaddr != 0);
 
         /* Test you can touch the page */
@@ -572,7 +569,7 @@ static void test2() {
 
         if (i % 10000 == 0) printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
 
-        frame_free(page);
+        frame_free(vaddr);
     }
     printf("test2 done\n");
 }

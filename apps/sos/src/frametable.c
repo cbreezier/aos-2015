@@ -55,55 +55,62 @@ void frametable_init() {
         err = map_page(cap, seL4_CapInitThreadPD, low_addr + PAGE_SIZE*i, seL4_AllRights, seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Unable to init frametable(map)");
 
-        ft[i].seL4_id = id;
+        ft[i].paddr = id;
         ft[i].cap = cap;
         ft[i].next_free = 0;
         ft[i].is_freeable = 0;
-        ft[i].is_swapable = 0;
+        ft[i].is_swappable = 0;
     }
 
     /* Default initialise all frames which can be given away to users */
     for (uint32_t i = frametable_frames_required; i < num_frames; ++i) {
-        ft[i].seL4_id = 0;
+        ft[i].paddr = 0;
         ft[i].cap = 0;
 
         ft[i].next_free = (i == num_frames - 1) ? 0 : i+1;
         ft[i].is_freeable = 1;
-        ft[i].is_swapable = 1;
+        ft[i].is_swappable = 1;
     }
 }
 
-uint32_t frame_alloc(seL4_Word *vaddr) {
+seL4_Word frame_alloc(bool freeable, bool swappable) {
     if (free_head == 0) {
-        *vaddr = 0;
         return 0;
     }
 
     int idx = free_head;
 
-    ft[idx].seL4_id = ut_alloc(seL4_PageBits);
-    if (!ft[idx].seL4_id) {
-        *vaddr = 0;
+    ft[idx].paddr = ut_alloc(seL4_PageBits);
+    if (!ft[idx].paddr) {
         return 0;
     }
 
-    *vaddr = low_addr + PAGE_SIZE*idx;
+    seL4_Word vaddr = low_addr + PAGE_SIZE*idx;
 
-    int err = cspace_ut_retype_addr(ft[idx].seL4_id, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &(ft[idx].cap));
+    int err = cspace_ut_retype_addr(ft[idx].paddr, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &(ft[idx].cap));
     conditional_panic(err, "Unable to alloc frame(retype)");
 
     //printf("frame alloc cap %u\n", (uint32_t)ft[idx].cap);
-    err = map_page(ft[idx].cap, seL4_CapInitThreadPD, *vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
+    err = map_page(ft[idx].cap, seL4_CapInitThreadPD, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to alloc frame(map)");
 
-    memset((void*)*vaddr, 0, PAGE_SIZE);
+    memset((void*)vaddr, 0, PAGE_SIZE);
 
     free_head = ft[idx].next_free;
+    
+    ft[idx].is_freeable = freeable;
+    ft[idx].is_swappable = swappable;
 
-    return idx;
+    return vaddr;
 }
 
-int frame_free(uint32_t idx) {
+int frame_free(seL4_Word vaddr) {
+    if (vaddr < low_addr) {
+        return EFAULT;
+    }
+
+    uint32_t idx = vaddr_to_frame_idx(vaddr);
+
     if (!idx || !ft[idx].is_freeable) {
         return EFAULT; 
     }
@@ -126,11 +133,17 @@ int frame_free(uint32_t idx) {
     err = cspace_delete_cap(cur_cspace, ft[idx].cap);
     conditional_panic(err, "unable to delete cap(free)");
 
-    ut_free(ft[idx].seL4_id, seL4_PageBits);
+    ut_free(ft[idx].paddr, seL4_PageBits);
 
     return 0;
 }
 
-seL4_Word frame_idx_to_addr(uint32_t idx) {
+uint32_t vaddr_to_frame_idx(seL4_Word vaddr) {
+    if (vaddr < low_addr) return 0;
+
+    return (vaddr - low_addr) / PAGE_SIZE;
+}
+
+seL4_Word frame_idx_to_vaddr(uint32_t idx) {
     return low_addr + PAGE_SIZE*idx;
 }

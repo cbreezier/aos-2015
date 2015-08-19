@@ -28,6 +28,43 @@
 
 #include "ttyout.h"
 
+
+#define NPAGES 27
+
+/* called from pt_test */
+static void
+do_pt_test( char *buf )
+{
+    int i;
+
+    /* set */
+    for(i = 0; i < NPAGES; i ++)
+	buf[i * 4096] = i;
+
+    /* check */
+    for(i = 0; i < NPAGES; i ++)
+	assert(buf[i * 4096] == i);
+}
+
+static void
+pt_test( void )
+{
+    /* need a decent sized stack */
+    char buf1[NPAGES * 4096], *buf2 = NULL;
+
+    /* check the stack is above phys mem */
+    assert((void *) buf1 > (void *) 0x20000000);
+
+    /* stack test */
+    do_pt_test(buf1);
+
+    /* heap test */
+//    buf2 = malloc(NPAGES * 4096);
+//    assert(buf2);
+//    do_pt_test(buf2);
+//    free(buf2);
+}
+
 // Block a thread forever
 // we do this by making an unimplemented system call.
 static void
@@ -39,6 +76,9 @@ thread_block(void){
 }
 
 int main(void){
+    pt_test();
+    printf("done pt test\n");
+
     /* initialise communication */
     ttyout_init();
 

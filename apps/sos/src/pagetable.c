@@ -34,19 +34,22 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
     seL4_Word sl_idx = (vaddr << TOP_LEVEL_SIZE) >> (TOP_LEVEL_SIZE + OFFSET_SIZE);
 
     if (proc->as->page_directory[tl_idx] == NULL) {
-        proc->as->page_directory[tl_idx] = malloc(sizeof(struct pt_entry)*(1 << SECOND_LEVEL_SIZE));
+        assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
+        proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc(1, 0);
         if (proc->as->page_directory[tl_idx] == NULL) {
             return ENOMEM;
         }
-        memset(proc->as->page_directory[tl_idx], 0, sizeof(struct pt_entry)*(1 << SECOND_LEVEL_SIZE));
+        memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
     }
-    seL4_Word waste_of_memory;
-    uint32_t frame_idx = frame_alloc(&waste_of_memory);
+    seL4_Word svaddr = frame_alloc(1, 1);
+//    seL4_Word waste_of_memory;
+//    uint32_t frame_idx = frame_alloc(&waste_of_memory);
+    uint32_t frame_idx = vaddr_to_frame_idx(svaddr);
     if (frame_idx == 0) {
         return ENOMEM;
     }
     if (kaddr != NULL) {
-        *kaddr = frame_idx_to_addr(frame_idx);
+        *kaddr = frame_idx_to_vaddr(frame_idx);
     }
 
     if (frame_cap != NULL) {
@@ -65,7 +68,7 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
     int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     //printf("sos_map_page with error %u\n", err);
     if (err) {
-        frame_free(frame_idx);
+        frame_free(svaddr);
         return err;
     }
 
@@ -74,20 +77,22 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
         proc->as->pt_addrs[tl_idx] = pt_addr;
     }
 
-    proc->as->page_directory[tl_idx][sl_idx].frame = frame_idx;
-    proc->as->page_directory[tl_idx][sl_idx].cap = cap;
+    ft[frame_idx].user_cap = cap;
+
+    proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
     return 0;
 }
 
 void pt_remove_page(struct pt_entry *pe) {
-    seL4_ARM_Page_Unmap(pe->cap);
+    seL4_CPtr user_cap = ft[vaddr_to_frame_idx(pe->frame)].user_cap;
+    seL4_ARM_Page_Unmap(user_cap);
 
     /* Remove all child capabilities */
-    int err = cspace_revoke_cap(cur_cspace, pe->cap);
+    int err = cspace_revoke_cap(cur_cspace, user_cap);
     conditional_panic(err, "unable to revoke cap(free)");
 
     /* Remove the capability itself */
-    err = cspace_delete_cap(cur_cspace, pe->cap);
+    err = cspace_delete_cap(cur_cspace, user_cap);
     conditional_panic(err, "unable to delete cap(free)");
 
     frame_free(pe->frame);
