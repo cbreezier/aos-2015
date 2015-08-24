@@ -75,6 +75,7 @@ int as_destroy(struct addrspace *as) {
                     continue;
                 }
                 pt_remove_page(&as->page_directory[l1][l2]);
+                as->page_directory[l1][l2].frame = 0;
             }
             frame_free((seL4_Word)as->page_directory[l1]);
         }
@@ -226,6 +227,9 @@ int as_remove_region(struct addrspace *as, seL4_Word addr) {
     struct region_entry *prev = NULL;
     struct region_entry *cur;
 
+    addr = (addr / PAGE_SIZE) * PAGE_SIZE;
+    size_t size = 0;
+    /* Remove from region list */
     for (cur = as->region_head; cur != NULL; cur = cur->next) {
         if (cur->start == addr) {
             if (prev == NULL) {
@@ -233,9 +237,41 @@ int as_remove_region(struct addrspace *as, seL4_Word addr) {
             } else {
                 prev->next = cur->next;
             }
+            size = cur->size;
             free(cur);
             break;
         }
     }
+
+    /* Unmap memory associated with the region */
+    if (size != 0 && as->page_directory != NULL) {
+        /* Top level index begin */
+        seL4_Word tl_idx_b = addr >> (SECOND_LEVEL_SIZE + OFFSET_SIZE);
+        /* Second level index begin */
+        seL4_Word sl_idx_b = (addr << TOP_LEVEL_SIZE) >> (TOP_LEVEL_SIZE + OFFSET_SIZE);
+
+        addr += size;
+
+        /* Top level index end */
+        seL4_Word tl_idx_e = addr >> (SECOND_LEVEL_SIZE + OFFSET_SIZE);
+        /* Second level index end */
+        seL4_Word sl_idx_e = (addr << TOP_LEVEL_SIZE) >> (TOP_LEVEL_SIZE + OFFSET_SIZE);
+
+        for (seL4_Word tl_idx = tl_idx_b; tl_idx <= tl_idx_e; ++tl_idx) {
+            if (as->page_directory[tl_idx] == NULL) {
+                continue;
+            }
+            seL4_Word sl_idx = (tl_idx == tl_idx_b) ? sl_idx_b : 0;
+            seL4_Word sl_idx_to = (tl_idx == tl_idx_e) ? sl_idx_e : ((1 << SECOND_LEVEL_SIZE) - 1);
+            for (; sl_idx <= sl_idx_to; ++sl_idx) {
+                if (as->page_directory[tl_idx][sl_idx].frame == 0) {
+                    continue;
+                }
+                pt_remove_page(&as->page_directory[tl_idx][sl_idx]);
+                as->page_directory[tl_idx][sl_idx].frame = 0;
+            }
+        }
+    }
+
     return 0;
 }

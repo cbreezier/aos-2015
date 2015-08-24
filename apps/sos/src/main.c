@@ -596,6 +596,75 @@ static void test2() {
     printf("test2 done\n");
 }
 
+
+/* MOVE TO THE TOP */
+
+#define NUM_SOS_THREADS 20
+
+#define STACK_SIZE 4096
+
+struct sos_thread {
+    uint32_t tcb_addr;
+    seL4_TCB tcb_cap;
+
+    seL4_Word ipc_addr;
+    seL4_CPtr ipc_cap;
+
+    seL4_Word stack_top;
+
+    uint32_t next_free;
+} sos_threads[NUM_SOS_THREADS];
+
+uint32_t free_head, free_tail;
+
+
+void threads_init() {
+    free_head = 0;
+    free_tail = NUM_SOS_THREADS - 1;
+
+    for (size_t i = 0; i < NUM_SOS_THREADS; ++i) {
+        struct sos_thread thread;
+
+        /* Init IPC buffer */
+        thread.ipc_addr = ut_alloc(seL4_PageBits);
+        conditional_panic(!thread.ipc_addr, "Can't create IPC buffer - SOS thread");
+        int err = cspace_ut_retype_addr(thread.ipc_addr,
+                                        seL4_ARM_SmallPageObject,
+                                        seL4_PageBits,
+                                        cur_cspace,
+                                        &thread.ipc_cap);
+        conditional_panic(err, "Failed to retype thread IPC - SOS thread");
+
+
+        /* Create TCB */
+        thread.tcb_addr = ut_alloc(seL4_TCBBits);
+        err = cspace_ut_retype_addr(thread.tcb_addr,
+                                        seL4_TCBObject,
+                                        seL4_TCBBits,
+                                        cur_cspace,
+                                        &thread.tcb_addr); 
+        conditional_panic(err, "Failed to create thread TCB - SOS thread");
+
+        err = seL4_TCB_Configure(thread.tcb_cap,
+                                 _sos_interrupt_ep_cap, /* Should never be triggered */
+                                 0, /* Priority */
+                                 cur_cspace->root_cnode,
+                                 cur_cspace->guard,
+                                 seL4_CapInitThreadVSpace,
+                                 seL4_NilData,
+                                 thread.ipc_addr,
+                                 thread.ipc_cap);
+        conditional_panic(err, "Failed to configure thread TCB - SOS thread");
+
+        /* Allocate stack memory */
+        thread.stack_top = (seL4_Word)malloc(STACK_SIZE) + STACK_SIZE - 1;
+
+        thread.next_free = (i == NUM_SOS_THREADS - 1) ? 0 : i + 1;
+        
+        sos_threads[i] = thread; 
+    }
+}
+
 /*
  * Main entry point - called by crt.
  */
@@ -604,6 +673,9 @@ int main(void) {
     dprintf(0, "\nSOS Starting...\n");
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
+
+    /* Allocate all SOS threads */
+    threads_init();
 
     frametable_init();
 
@@ -618,6 +690,7 @@ int main(void) {
 //    setup_tick_timer(0, &t1);
 //    setup_tick_timer(0, &t2);
 //    setup_tick_timer(0, &t3);
+
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
