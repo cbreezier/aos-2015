@@ -1,6 +1,7 @@
 #include "sos_syscall.h"
 #include <sys/mman.h>
 #include <vmem_layout.h>
+#include <clock/clock.h>
 
 void sos_mmap2(sos_process_t *proc, seL4_MessageInfo_t *reply) {
     void *addr = (void*)seL4_GetMR(1); 
@@ -32,4 +33,16 @@ void sos_munmap(sos_process_t *proc, seL4_MessageInfo_t *reply) {
 
     int err = as_remove_region(proc->as, (seL4_Word)addr);
     seL4_SetMR(0, err);
+}
+
+void sos_time_stamp(sos_process_t *proc, seL4_MessageInfo_t *reply) {
+    int64_t timestamp = time_stamp();
+
+    int err = 0;
+    if (timestamp < 0) {
+        err = EFAULT;
+    }
+
+    seL4_SetMR(0, err);
+    seL4_SetMR(1, timestamp);
 }
