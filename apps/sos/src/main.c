@@ -180,6 +180,7 @@ void syscall_loop(seL4_CPtr ep) {
 
         // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
+        printf("I am thread with local thingo %x\n", &message);
         label = seL4_MessageInfo_get_label(message);
         if(badge & IRQ_EP_BADGE){
             /* Interrupt */
@@ -327,6 +328,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     printf("adding IPC region\n");
     as_add_region(tty_test_process.as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
+    printf("Added IPC region\n");
 
     /* Create an IPC buffer */
     err = pt_add_page(&tty_test_process, PROCESS_IPC_BUFFER, NULL, &tty_test_process.ipc_buffer_cap);
@@ -615,14 +617,24 @@ struct sos_thread {
     uint32_t next_free;
 } sos_threads[NUM_SOS_THREADS];
 
-uint32_t free_head, free_tail;
+uint32_t thread_free_head, thread_free_tail;
 
+
+int sos_thread_entrypoint() {
+    int local;
+    printf("entering %x\n", &local);
+    syscall_loop(_sos_ipc_ep_cap);
+
+    /* Never reached */
+    return 0;
+}
 
 void threads_init() {
-    free_head = 0;
-    free_tail = NUM_SOS_THREADS - 1;
+    thread_free_head = 0;
+    thread_free_tail = NUM_SOS_THREADS - 1;
 
     for (size_t i = 0; i < NUM_SOS_THREADS; ++i) {
+        printf("Initialising thread %d\n", i);
         struct sos_thread thread;
 
         /* Init IPC buffer */
@@ -642,14 +654,15 @@ void threads_init() {
                                         seL4_TCBObject,
                                         seL4_TCBBits,
                                         cur_cspace,
-                                        &thread.tcb_addr); 
+                                        &thread.tcb_cap); 
         conditional_panic(err, "Failed to create thread TCB - SOS thread");
 
+
         err = seL4_TCB_Configure(thread.tcb_cap,
-                                 _sos_interrupt_ep_cap, /* Should never be triggered */
-                                 0, /* Priority */
+                                 _sos_interrupt_ep_cap, 
+                                 255, /* Priority */
                                  cur_cspace->root_cnode,
-                                 cur_cspace->guard,
+                                 seL4_NilData,
                                  seL4_CapInitThreadVSpace,
                                  seL4_NilData,
                                  thread.ipc_addr,
@@ -657,13 +670,23 @@ void threads_init() {
         conditional_panic(err, "Failed to configure thread TCB - SOS thread");
 
         /* Allocate stack memory */
-        thread.stack_top = (seL4_Word)malloc(STACK_SIZE) + STACK_SIZE - 1;
+        thread.stack_top = frame_alloc(0, 0);//(seL4_Word)malloc(STACK_SIZE) + STACK_SIZE - 1;
+        thread.stack_top += PAGE_SIZE - sizeof(seL4_Word);
 
         thread.next_free = (i == NUM_SOS_THREADS - 1) ? 0 : i + 1;
+
+        seL4_UserContext context;
+        memset(&context, 0, sizeof(context));
+        context.pc = (seL4_Word)sos_thread_entrypoint;
+        context.sp = (seL4_Word)thread.stack_top;
+        printf("  pc %x sp %x\n", context.pc, context.sp);
+
+        seL4_TCB_WriteRegisters(thread.tcb_cap, 1, 0, 2, &context);
         
         sos_threads[i] = thread; 
     }
 }
+
 
 /*
  * Main entry point - called by crt.
@@ -674,10 +697,11 @@ int main(void) {
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
+    frametable_init();
+
     /* Allocate all SOS threads */
     threads_init();
 
-    frametable_init();
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
@@ -703,9 +727,11 @@ int main(void) {
     //test0();
     //test1();
     //test2();
+    //
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
+    while (1);
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */
