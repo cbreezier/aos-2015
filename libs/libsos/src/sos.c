@@ -15,6 +15,11 @@
 #include <sos.h>
 
 #include <sel4/sel4.h>
+#include <sel4/types.h>
+#include <sel4/constants.h>
+#include <syscall.h>
+
+#define SYSCALL_ENDPOINT_SLOT (1)
 
 int sos_sys_open(const char *path, fmode_t mode) {
     assert(!"You need to implement this");
@@ -36,7 +41,16 @@ void sos_sys_usleep(int msec) {
 }
 
 int64_t sos_sys_time_stamp(void) {
-    assert(!"You need to implement this");
-    return -1;
+    // assert(!"You need to implement this");
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1*4);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_clock_gettime);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
+    return seL4_GetMR(1);
 }
 
