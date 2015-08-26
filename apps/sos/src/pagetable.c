@@ -52,6 +52,8 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
         *kaddr = frame_idx_to_vaddr(frame_idx);
     }
 
+    sync_acquire(ft_lock);
+
     if (frame_cap != NULL) {
         *frame_cap = ft[frame_idx].cap;
     }
@@ -64,11 +66,13 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
 
     //printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
     seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
+    //printf("minted %u\n", cap);
 
     int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     //printf("sos_map_page with error %u\n", err);
     if (err) {
         frame_free(svaddr);
+        sync_release(ft_lock);
         return err;
     }
 
@@ -79,11 +83,15 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
 
     ft[frame_idx].user_cap = cap;
 
+    sync_release(ft_lock);
+
     proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
+
     return 0;
 }
 
 void pt_remove_page(struct pt_entry *pe) {
+    sync_acquire(ft_lock);
     seL4_CPtr user_cap = ft[vaddr_to_frame_idx(pe->frame)].user_cap;
     seL4_ARM_Page_Unmap(user_cap);
 
@@ -96,6 +104,7 @@ void pt_remove_page(struct pt_entry *pe) {
     conditional_panic(err, "unable to delete cap(free)");
 
     frame_free(pe->frame);
+    sync_release(ft_lock);
 }
 
 struct pt_entry *vaddr_to_pt_entry(struct addrspace *as, seL4_Word vaddr) {

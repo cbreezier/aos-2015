@@ -21,7 +21,6 @@
  */
 
 
-
 uint32_t free_head, free_tail;
 
 seL4_Word low_addr, hi_addr, num_frames;
@@ -71,6 +70,8 @@ void frametable_init() {
         ft[i].is_freeable = 1;
         ft[i].is_swappable = 1;
     }
+    ft_lock = sync_create_mutex();
+    conditional_panic(!ft_lock, "Unable to create ft lock");
 }
 
 seL4_Word frame_alloc(bool freeable, bool swappable) {
@@ -78,10 +79,13 @@ seL4_Word frame_alloc(bool freeable, bool swappable) {
         return 0;
     }
 
-    int idx = free_head;
+    sync_acquire(ft_lock);
 
+    int idx = free_head;
+    
     ft[idx].paddr = ut_alloc(seL4_PageBits);
     if (!ft[idx].paddr) {
+        sync_release(ft_lock);
         return 0;
     }
 
@@ -101,6 +105,9 @@ seL4_Word frame_alloc(bool freeable, bool swappable) {
     ft[idx].is_freeable = freeable;
     ft[idx].is_swappable = swappable;
 
+    sync_release(ft_lock);
+
+
     return vaddr;
 }
 
@@ -111,7 +118,9 @@ int frame_free(seL4_Word vaddr) {
 
     uint32_t idx = vaddr_to_frame_idx(vaddr);
 
+    sync_acquire(ft_lock);
     if (!idx || !ft[idx].is_freeable) {
+        sync_release(ft_lock);
         return EFAULT; 
     }
 
@@ -121,6 +130,7 @@ int frame_free(seL4_Word vaddr) {
         ft[free_tail].next_free = idx;
     }
     free_tail = idx;
+
     ft[idx].next_free = 0;
 
     seL4_ARM_Page_Unmap(ft[idx].cap);
@@ -134,6 +144,9 @@ int frame_free(seL4_Word vaddr) {
     conditional_panic(err, "unable to delete cap(free)");
 
     ut_free(ft[idx].paddr, seL4_PageBits);
+
+    sync_release(ft_lock);
+
 
     return 0;
 }

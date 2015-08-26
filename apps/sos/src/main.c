@@ -73,6 +73,12 @@ sos_process_t tty_test_process;
 #define SOS_SYSCALL0 0
 #define SOS_MMAP2 192
 
+
+#define NUM_SYSCALLS 378
+typedef void (*sos_syscall_t)(sos_process_t *proc, seL4_CPtr reply_cap, int num_args);
+
+sos_syscall_t syscall_jt[NUM_SYSCALLS];
+
 /* Serial handle */
 struct serial *serial;
 
@@ -127,17 +133,14 @@ void sync_free_ep(void *ep) {
     ut_free(to_free->ep_addr, seL4_EndpointBits);
 }
 
+void unknown_syscall(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    printf("Unknown syscall %d\n", seL4_GetMR(0)); 
+}
 
-void handle_syscall(seL4_Word badge, int num_args) {
+void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word syscall_number;
-    seL4_CPtr reply_cap;
-
 
     syscall_number = seL4_GetMR(0);
-
-    /* Save the caller */
-    reply_cap = cspace_save_reply_cap(cur_cspace);
-    assert(reply_cap != CSPACE_NULL);
 
     /* Process system call */
     seL4_MessageInfo_t reply;
@@ -173,54 +176,48 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Send(reply_cap, reply);
 
         break;
-    case SYS_mmap2:
-        if (badge == TTY_EP_BADGE) {
-            sos_mmap2(&tty_test_process, &reply);
-
-            seL4_Send(reply_cap, reply);
-        } else {
-            assert(!"Unrecognised process");
-        }
-        break;
-    case SYS_munmap:
-        if (badge == TTY_EP_BADGE) {
-            sos_munmap(&tty_test_process, &reply);
-
-            seL4_Send(reply_cap, reply);
-        } else {
-            assert(!"Unrecognised process");
-        }
-        break;
-    case SYS_nanosleep:
-        if (badge == TTY_EP_BADGE) {
-            sos_nanosleep(reply_cap);
-        } else {
-            assert(!"Unrecognised process");
-        }
-        break;
-    case SYS_clock_gettime:
-        if (badge == TTY_EP_BADGE) {
-            sos_clock_gettime(reply_cap); 
-        } else {
-            assert(!"Unrecgonised process");
-        }
-
-        break;
-
     default:
-        printf("Unknown syscall %d\n", syscall_number);
-        /* we don't want to reply to an unknown syscall */
-
+        if (syscall_number >= NUM_SYSCALLS) {
+            unknown_syscall(NULL, 0, 0);   
+        } else {
+            syscall_jt[syscall_number](&tty_test_process, reply_cap, num_args);
+        }
+        break;
+//    case SYS_mmap2:
+//        if (badge == TTY_EP_BADGE) {
+//            sos_mmap2(&tty_test_process, &reply);
+//
+//            seL4_Send(reply_cap, reply);
+//        } else {
+//            assert(!"Unrecognised process");
+//        }
+//        break;
+//    case SYS_munmap:
+//        if (badge == TTY_EP_BADGE) {
+//            sos_munmap(&tty_test_process, &reply);
+//
+//            seL4_Send(reply_cap, reply);
+//        } else {
+//            assert(!"Unrecognised process");
+//        }
+//        break;
+//    case SYS_nanosleep:
+//        if (badge == TTY_EP_BADGE) {
+//            sos_nanosleep(reply_cap);
+//        } else {
+//            assert(!"Unrecognised process");
+//        }
+//        break;
+//    case SYS_clock_gettime:
+//        if (badge == TTY_EP_BADGE) {
+//            sos_clock_gettime(reply_cap); 
+//        } else {
+//            assert(!"Unrecgonised process");
+//        }
+//
+//        break;
     }
-
-    /* Free the saved reply cap */
-    cspace_free_slot(cur_cspace, reply_cap);
 }
-
-uint32_t a, b, c;
-bool removed = false;
-
-int nprints = 0;
 
 void syscall_loop(seL4_CPtr ep) {
 
@@ -237,6 +234,8 @@ void syscall_loop(seL4_CPtr ep) {
         // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
+
+
         if(badge & IRQ_EP_BADGE){
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
@@ -248,21 +247,17 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            if (1 /*nprints < 10*/) {
-                dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
-                        seL4_GetMR(0),
-                        seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
-                ++nprints;
-            }   
+            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+                    seL4_GetMR(0),
+                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
 
             if (badge == TTY_EP_BADGE) {
-                //dprintf(0, "tty vm fault\n");
-                //printf("Adding page\n");
-                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
-                conditional_panic(err, "failed to add page(vm fault)");
-                //printf("Done adding page\n");
 
                 seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+                assert(reply_cap != CSPACE_NULL);
+                //dprintf(0, "tty vm fault\n");
+                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
+                conditional_panic(err, "failed to add page(vm fault)");
 
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
                 seL4_SetMR(0, 0);
@@ -274,7 +269,11 @@ void syscall_loop(seL4_CPtr ep) {
             }
         }else if(label == seL4_NoFault) {
             /* System call */
-            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
+            seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+            assert(reply_cap != CSPACE_NULL);
+
+            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply_cap);
+            cspace_free_slot(cur_cspace, reply_cap);
 
         }else{
             printf("Rootserver got an unknown message\n");
@@ -577,8 +576,15 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
     /* Initialiase other system compenents here */
-
     _sos_ipc_init(ipc_ep, async_ep);
+
+    for (uint32_t i = 0; i < NUM_SYSCALLS; ++i) {
+        syscall_jt[i] = unknown_syscall;
+    }
+    syscall_jt[SYS_mmap2] = sos_mmap2;
+    syscall_jt[SYS_munmap] = sos_munmap;
+    syscall_jt[SYS_nanosleep] = sos_nanosleep;
+    syscall_jt[SYS_clock_gettime] = sos_clock_gettime;
 }
 
 static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
@@ -593,7 +599,7 @@ void setup_tick_timer(uint32_t id, void *data) {
     timestamp_t diff = t - last_time;
     last_time = t;
     printf("Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
-    a = register_timer(*((uint64_t*) data), setup_tick_timer, data);
+    register_timer(*((uint64_t*) data), setup_tick_timer, data);
 }
 
 static void test0() {
@@ -677,7 +683,7 @@ uint32_t thread_free_head, thread_free_tail;
 
 int sos_thread_entrypoint() {
     int local;
-    printf("entering %x\n", &local);
+    printf("entering %p\n", &local);
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Never reached */

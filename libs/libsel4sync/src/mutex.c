@@ -21,18 +21,14 @@ sync_create_mutex() {
     if (!mutex)
         return NULL;
 
-    printf("sync new ep\n");
     mutex->ep = sync_new_ep(&mutex->mapping, MUTEX_MAGIC);
-    printf("done\n");
     if(mutex->ep == NULL){
         free(mutex);
         return NULL;
     }
 
-    printf("sync releasing\n");
     // Prime the endpoint
     sync_release(mutex);
-    printf("done2\n");
     return mutex;
 }
 
@@ -56,9 +52,11 @@ sync_acquire(sync_mutex_t mutex) {
         return;
     }
 
+    //printf("acquiring for %d\n", get_thread_id());
     seL4_Wait(mutex->mapping, &badge);
     assert(badge == MUTEX_MAGIC);
     mutex->holder = get_thread_id();
+    //printf("acquired for %d\n", mutex->holder);
 }
 
 void

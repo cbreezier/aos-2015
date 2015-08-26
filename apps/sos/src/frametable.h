@@ -2,6 +2,7 @@
 #define _FRAMETABLE_H_
 
 #include <sos.h>
+#include <sync/mutex.h>
 
 struct ft_entry {
     seL4_Word paddr;
@@ -13,6 +14,8 @@ struct ft_entry {
     uint32_t is_freeable : 1;
     uint32_t is_swappable : 1;
 } *ft;
+
+sync_mutex_t ft_lock;
 
 void frametable_init();
 

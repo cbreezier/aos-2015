@@ -150,10 +150,8 @@ int start_timer(seL4_CPtr interrupt_ep) {
 
     overflow_offset = 0;
 
-    printf("Creating mutex\n");
 
     timer_lock = sync_create_mutex();
-    printf("Created mutex %p\n", timer_lock);
     if (timer_lock == NULL) {
         return EFAULT;
     }
