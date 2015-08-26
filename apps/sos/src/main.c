@@ -86,6 +86,47 @@ extern fhandle_t mnt_point;
 
 static void end_first_process();
 
+struct mutex_ep {
+    seL4_CPtr unminted;
+    uint32_t ep_addr;
+};
+
+void* sync_new_ep(seL4_CPtr* ep, int badge) {
+
+    struct mutex_ep *ret = malloc(sizeof(struct mutex_ep));
+    if (!ret) {
+        return NULL;
+    }   
+
+    ret->ep_addr = ut_alloc(seL4_EndpointBits);
+    if (ret->ep_addr == 0) {
+        free(ret);
+        return NULL;
+    }
+
+    int err = cspace_ut_retype_addr(ret->ep_addr, seL4_AsyncEndpointObject, seL4_EndpointBits, cur_cspace, &ret->unminted);
+    if (err) {
+        free(ret);
+        return NULL;
+    }
+
+    *ep = cspace_mint_cap(cur_cspace, cur_cspace, ret->unminted, seL4_AllRights, seL4_CapData_Badge_new(badge));
+
+    return (void*)ret;
+}
+
+void sync_free_ep(void *ep) {
+    struct mutex_ep *to_free = (struct mutex_ep*)ep;
+
+    int err = cspace_revoke_cap(cur_cspace, to_free->unminted);
+    conditional_panic(err, "Unable to revoke cap(sync_free_eP)");
+
+    err = cspace_delete_cap(cur_cspace, to_free->unminted);
+    conditional_panic(err, "Unable to delete cap(sync_free_eP)");
+
+    ut_free(to_free->ep_addr, seL4_EndpointBits);
+}
+
 
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
@@ -150,6 +191,21 @@ void handle_syscall(seL4_Word badge, int num_args) {
             assert(!"Unrecognised process");
         }
         break;
+    case SYS_nanosleep:
+        if (badge == TTY_EP_BADGE) {
+            sos_nanosleep(reply_cap);
+        } else {
+            assert(!"Unrecognised process");
+        }
+        break;
+    case SYS_clock_gettime:
+        if (badge == TTY_EP_BADGE) {
+            sos_clock_gettime(reply_cap); 
+        } else {
+            assert(!"Unrecgonised process");
+        }
+
+        break;
 
     default:
         printf("Unknown syscall %d\n", syscall_number);
@@ -180,7 +236,6 @@ void syscall_loop(seL4_CPtr ep) {
 
         // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
-        printf("I am thread with local thingo %x\n", &message);
         label = seL4_MessageInfo_get_label(message);
         if(badge & IRQ_EP_BADGE){
             /* Interrupt */
@@ -634,23 +689,20 @@ void threads_init() {
     thread_free_tail = NUM_SOS_THREADS - 1;
 
     for (size_t i = 0; i < NUM_SOS_THREADS; ++i) {
-        printf("Initialising thread %d\n", i);
         struct sos_thread thread;
 
         /* Init IPC buffer */
-        thread.ipc_addr = ut_alloc(seL4_PageBits);
+        thread.ipc_addr = frame_alloc(1, 1);
         conditional_panic(!thread.ipc_addr, "Can't create IPC buffer - SOS thread");
-        int err = cspace_ut_retype_addr(thread.ipc_addr,
-                                        seL4_ARM_SmallPageObject,
-                                        seL4_PageBits,
-                                        cur_cspace,
-                                        &thread.ipc_cap);
-        conditional_panic(err, "Failed to retype thread IPC - SOS thread");
+        uint32_t frame_idx = vaddr_to_frame_idx(thread.ipc_addr);
+        conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");
+        thread.ipc_cap = ft[frame_idx].cap;
+
 
 
         /* Create TCB */
         thread.tcb_addr = ut_alloc(seL4_TCBBits);
-        err = cspace_ut_retype_addr(thread.tcb_addr,
+        int err = cspace_ut_retype_addr(thread.tcb_addr,
                                         seL4_TCBObject,
                                         seL4_TCBBits,
                                         cur_cspace,
@@ -662,7 +714,7 @@ void threads_init() {
                                  _sos_interrupt_ep_cap, 
                                  255, /* Priority */
                                  cur_cspace->root_cnode,
-                                 seL4_NilData,
+                                 cur_cspace->guard,
                                  seL4_CapInitThreadVSpace,
                                  seL4_NilData,
                                  thread.ipc_addr,
@@ -679,7 +731,6 @@ void threads_init() {
         memset(&context, 0, sizeof(context));
         context.pc = (seL4_Word)sos_thread_entrypoint;
         context.sp = (seL4_Word)thread.stack_top;
-        printf("  pc %x sp %x\n", context.pc, context.sp);
 
         seL4_TCB_WriteRegisters(thread.tcb_cap, 1, 0, 2, &context);
         
@@ -731,7 +782,6 @@ int main(void) {
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
-    while (1);
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */

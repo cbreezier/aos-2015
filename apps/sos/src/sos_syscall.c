@@ -35,14 +35,36 @@ void sos_munmap(sos_process_t *proc, seL4_MessageInfo_t *reply) {
     seL4_SetMR(0, err);
 }
 
-void sos_time_stamp(sos_process_t *proc, seL4_MessageInfo_t *reply) {
-    int64_t timestamp = time_stamp();
+static void reply_user(uint32_t id, void *data) {
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
-    int err = 0;
-    if (timestamp < 0) {
-        err = EFAULT;
+    seL4_SetMR(0, 0);
+
+    seL4_Send(*((seL4_CPtr*)data), reply);
+
+    free((seL4_CPtr*)data);
+}   
+
+void sos_nanosleep(seL4_CPtr reply_cap) {
+    uint64_t delay = (uint64_t)seL4_GetMR(1);
+    seL4_CPtr *data = malloc(sizeof(seL4_Word));
+    int err = register_timer(delay, reply_user, (void*)data);
+    if (err == 0) {
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+        seL4_SetMR(0, EFAULT);
+
+        seL4_Send(reply_cap, reply);
     }
+}
 
-    seL4_SetMR(0, err);
+void sos_clock_gettime(seL4_CPtr reply_cap) {
+    uint64_t timestamp = time_stamp();
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2*4);
+
+    seL4_SetMR(0, 0);
     seL4_SetMR(1, timestamp);
+
+    seL4_Send(reply_cap, reply);
 }

@@ -36,12 +36,15 @@ int sos_sys_write(int file, const char *buf, size_t nbyte) {
     return -1;
 }
 
-void sos_sys_usleep(int msec) {
-    assert(!"You need to implement this");
+void sos_sys_usleep(int usec) {
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_nanosleep);
+    seL4_SetMR(1, (seL4_Word)usec);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
 }
 
 int64_t sos_sys_time_stamp(void) {
-    // assert(!"You need to implement this");
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1*4);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_clock_gettime);

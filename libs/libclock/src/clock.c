@@ -8,6 +8,8 @@
 
 #include <utils/number_allocator.h>
 
+#include <sync/mutex.h>
+
 #define GPT_IRQ 87
 #define EPIT1_IRQ 88
 #define EPIT2_IRQ 89
@@ -42,6 +44,8 @@ struct list_node {
 
     struct list_node *next;
 } *head;
+
+sync_mutex_t timer_lock;
 
 
 static struct clock_irq {
@@ -146,7 +150,20 @@ int start_timer(seL4_CPtr interrupt_ep) {
 
     overflow_offset = 0;
 
+    printf("Creating mutex\n");
+
+    timer_lock = sync_create_mutex();
+    printf("Created mutex %p\n", timer_lock);
+    if (timer_lock == NULL) {
+        return EFAULT;
+    }
+
     allocator = init_allocator(time_stamp());
+    if (allocator == NULL) {
+        return EFAULT;
+    }
+
+    printf("Finished initialising timer\n");
 
     return 0;
 }
@@ -185,7 +202,9 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     node->data = data;
     node->id = allocator_get_num(allocator);
     node->delay = delay;
-    
+
+    sync_acquire(timer_lock);
+
     epit_clocks[0]->cr &= ~(BIT(EN));
 
     uint64_t current_us = 0;
@@ -266,11 +285,18 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
             head->next->delay -= delay;
         }
     }
-    return node->id;
+    int node_id = node->id;
+    
+    sync_release(timer_lock);
+
+    return node_id;
 }
 
 int remove_timer(uint32_t id) {
     if (head == NULL) return 0;
+
+    sync_acquire(timer_lock);
+
     if (head->id == id) {
     
         epit_clocks[0]->cr &= ~(BIT(EN));
@@ -290,6 +316,7 @@ int remove_timer(uint32_t id) {
         if (head->next == NULL) {
             allocator_release_num(allocator, head->id); 
             free(head);
+            sync_release(timer_lock);
             return 0;
         }
         if (head->delay > MAX_US_EPIT) {
@@ -322,17 +349,23 @@ int remove_timer(uint32_t id) {
             prev->next = cur->next;
         }
     }
+
+    sync_release(timer_lock);
     return 0;
 }
 
 int timer_interrupt(void) {
+    sync_acquire(timer_lock);
     /*
      * Check which timer actually generated the interrupt.
      * The status register of that timer will be set.
      */
     if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
-        if (head == NULL) return 0;
+        if (head == NULL) {
+            sync_release(timer_lock);
+            return 0;
+        }
 
         /*
          * Timer isn't finished - just one loop of the EPIT
@@ -366,6 +399,7 @@ int timer_interrupt(void) {
         int err = seL4_IRQHandler_Ack(clock_irqs[1].cap);
         assert(!err);
     }
+    sync_release(timer_lock);
     return 0;
 }
 
@@ -384,7 +418,8 @@ timestamp_t time_stamp(void) {
      * Use value obtained before checking the status register,
      * incase it has ticked inbetween checking and returning
      */
-    return clock_counter_to_us(overflow_offset * (1ull << 32) + (1ull << 32) - epit1_cnr - 1);
+    timestamp_t ret = clock_counter_to_us(overflow_offset * (1ull << 32) + (1ull << 32) - epit1_cnr - 1);
+    return ret;
 }
 
 int stop_timer(void) {
@@ -398,6 +433,8 @@ int stop_timer(void) {
     free((struct epit_clocks*)epit_clocks[1]);
 
     destroy_allocator(allocator);
+
+    sync_destroy_mutex(timer_lock);
 
     struct list_node *prev;
     struct list_node *cur = head;

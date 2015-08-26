@@ -1,5 +1,6 @@
 #include <utils/number_allocator.h>
 #include <stdlib.h>
+#include <sync/mutex.h>
 
 #define DEFAULT_SEED 1000000009
 
@@ -10,8 +11,10 @@ struct allocation {
     struct allocation *right;
 };
 
+sync_mutex_t allocator_lock;
+
 /* Returns the new root of the subtree after insertion */
-struct allocation *insert_num(struct allocation *node, uint32_t num, bool *success) {
+static struct allocation *insert_num(struct allocation *node, uint32_t num, bool *success) {
     if (node == NULL) {
         node = malloc(sizeof(struct allocation));
         if (node == NULL) {
@@ -22,28 +25,26 @@ struct allocation *insert_num(struct allocation *node, uint32_t num, bool *succe
         node->left = NULL;
         node->right = NULL;
         *success = true;
-        return node;
     } else if (num == node->num) {
         *success = false;
-        return node;
     } else if (num > node->num) {
         node->right = insert_num(node->right, num, success);
-        return node;
     } else if (num < node->num) {
         node->left = insert_num(node->left, num, success);
-        return node;
+    } else {
+        *success = false;
+        node = NULL;
     }
     
-    *success = false;
-    return NULL;
+    return node;
 }
 
-uint32_t min(uint32_t a, uint32_t b) {
+static uint32_t min(uint32_t a, uint32_t b) {
     return a < b ? a : b;
 }
 
 /* Returns the minimum value within a subtree */
-uint32_t tree_min(struct allocation *node) {
+static uint32_t tree_min(struct allocation *node) {
     if (node == NULL) {
         return -1;
     }
@@ -51,10 +52,13 @@ uint32_t tree_min(struct allocation *node) {
 }
 
 /* Returns the new root of the subtree after removal */
-struct allocation *remove_num(struct allocation *node, uint32_t num) {
+static struct allocation *remove_num(struct allocation *node, uint32_t num) {
     if (node == NULL) {
         return NULL;
-    } else if (num == node->num) {
+    }
+    
+    struct allocation *to_return = NULL;
+    if (num == node->num) {
         if (node->left == NULL && node->right == NULL) {
             free(node);
             return NULL;
@@ -74,19 +78,18 @@ struct allocation *remove_num(struct allocation *node, uint32_t num) {
         }
 
         free(node);
-        return to_return;
     } else if (num > node->num) {
         node->right = remove_num(node->right, num);
-        return node;
+        to_return = node;
     } else if (num < node->num) {
         node->left = remove_num(node->left, num);
-        return node;
+        to_return = node;
     }
 
-    return NULL;
+    return to_return;
 }
 
-void destroy_allocations(struct allocation *node) {
+static void destroy_allocations(struct allocation *node) {
     if (node == NULL) return;
 
     destroy_allocations(node->left);
@@ -95,7 +98,7 @@ void destroy_allocations(struct allocation *node) {
 }
 
 /* XORShift PRNG */
-uint32_t gen_random(struct number_allocator *na) {
+static uint32_t gen_random(struct number_allocator *na) {
     na->seed ^= (na->seed << 13);
     na->seed ^= (na->seed >> 17);
     na->seed ^= (na->seed <<  5);
@@ -116,6 +119,12 @@ struct number_allocator *init_allocator(uint32_t seed) {
     }
     na->seed = seed;
 
+    allocator_lock = sync_create_mutex();
+    if (allocator_lock == NULL) {
+        free(na);
+        return NULL;
+    }
+
     return na;
 }
 
@@ -126,19 +135,24 @@ struct number_allocator *init_allocator(uint32_t seed) {
 uint32_t allocator_get_num(struct number_allocator *na) {
     uint32_t num;
     bool success = false;
+    sync_acquire(allocator_lock);
     do {
         num = gen_random(na);
         na->root = insert_num(na->root, num, &success);
     } while (!success);
+    sync_release(allocator_lock);
 
     return num;
 }
 
 void allocator_release_num(struct number_allocator *na, uint32_t num) {
+    sync_acquire(allocator_lock);
     na->root = remove_num(na->root, num);
+    sync_release(allocator_lock);
 }
 
 void destroy_allocator(struct number_allocator *na) {
     destroy_allocations(na->root);
     free(na);
+    sync_destroy_mutex(allocator_lock);
 }

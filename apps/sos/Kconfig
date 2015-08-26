@@ -1,4 +1,5 @@
-#
+
+
 # Copyright 2014, NICTA
 #
 # This software may be distributed and modified according to the terms of
@@ -25,6 +26,7 @@ menuconfig APP_SOS
     select LIB_SOS
     select LIB_PLATSUPPORT
     select LIB_UTILS
+    select LIB_SEL4SYNC
     default y
     help
         Simple Operating System (aka AOS implementation)
