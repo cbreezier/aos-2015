@@ -145,7 +145,6 @@ static int load_segment_into_vspace(sos_process_t *proc,
             return err;
         }
         nbytes = PAGESIZE - (dst & PAGEMASK);
-        printf("nbytes = %d\n", nbytes);
         //printf("copying %lu\n", pos);
         //printf("kaddr %u\n", kaddr);
         if (pos < file_size){

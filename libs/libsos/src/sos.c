@@ -69,7 +69,7 @@ int sos_sys_read(int file, char *buf, size_t nbyte) {
 int sos_sys_write(int file, const char *buf, size_t nbyte) {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4*4);
     seL4_SetTag(tag);
-    seL4_SetMR(0, SYS_read);
+    seL4_SetMR(0, SYS_write);
     seL4_SetMR(1, (seL4_Word)file);
     seL4_SetMR(2, (seL4_Word)buf);
     seL4_SetMR(3, (seL4_Word)nbyte);
@@ -141,48 +141,48 @@ pid_t sos_process_wait(pid_t pid){while(true);return 0;}
  * to exit. Returns the pid of the process which exited.
  */
 
-static size_t sos_debug_print(const void *vData, size_t count) {
-    size_t i;
-    const char *realdata = vData;
-    for (i = 0; i < count; i++)
-        seL4_DebugPutChar(realdata[i]);
-    return count;
-}
-
-size_t sos_serial_write(const seL4_Word *data, size_t len) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, len + 1);
-    seL4_SetTag(tag);
-    seL4_SetMR(0, 2); // syscall 2 is what our protocol will use to write things
-
-    size_t i;
-    for (i = 0; i <= len / 4; i++) {
-        seL4_SetMR(i + 1, data[i]);
-    }
-
-    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
-
-    return len;
-}
-
-size_t min(size_t a, size_t b) {
-    return a < b ? a : b;
-}
-
-size_t sos_write(void *vData, size_t count) {
-    size_t written = 0;
-    size_t chunk_size = (seL4_MsgMaxLength - 1) * sizeof(seL4_Word);
-    while (written < count) {
-        size_t len = min(count - written, chunk_size);
-        sos_debug_print(vData + written, len);
-        written += len;
-        //written += sos_serial_write(vData + written, len);
-    }
-
-    return written;
-}
-
-size_t sos_read(void *vData, size_t count) {
-    //implement this to use your syscall
-    return 0;
-}
-
+//static size_t sos_debug_print(const void *vData, size_t count) {
+//    size_t i;
+//    const char *realdata = vData;
+//    for (i = 0; i < count; i++)
+//        seL4_DebugPutChar(realdata[i]);
+//    return count;
+//}
+//
+//size_t sos_serial_write(const seL4_Word *data, size_t len) {
+//    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, len + 1);
+//    seL4_SetTag(tag);
+//    seL4_SetMR(0, 2); // syscall 2 is what our protocol will use to write things
+//
+//    size_t i;
+//    for (i = 0; i <= len / 4; i++) {
+//        seL4_SetMR(i + 1, data[i]);
+//    }
+//
+//    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+//
+//    return len;
+//}
+//
+//size_t min(size_t a, size_t b) {
+//    return a < b ? a : b;
+//}
+//
+//size_t sos_write(void *vData, size_t count) {
+//    size_t written = 0;
+//    size_t chunk_size = (seL4_MsgMaxLength - 1) * sizeof(seL4_Word);
+//    while (written < count) {
+//        size_t len = min(count - written, chunk_size);
+//        sos_debug_print(vData + written, len);
+//        written += len;
+//        //written += sos_serial_write(vData + written, len);
+//    }
+//
+//    return written;
+//}
+//
+//size_t sos_read(void *vData, size_t count) {
+//    //implement this to use your syscall
+//    return 0;
+//}
+//

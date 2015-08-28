@@ -16,6 +16,7 @@ sync_mutex_t serial_lock;
 sync_mutex_t has_bytes_lock;
 
 void serial_callback_handler(struct serial *serial, char c) {
+    printf("received char %c\n", c);
     sync_acquire(serial_lock);
     if (buf_size >= MAX_BUFF_SIZE) {
         sync_release(serial_lock);

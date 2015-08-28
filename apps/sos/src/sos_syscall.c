@@ -250,7 +250,9 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         err = ENOMEM;
         goto sos_read_end;
     }
+    printf("going to read\n");
     nread = file->read(file, fd_entry->offset, sos_buffer, nbytes);
+    printf("done with read\n");
     err = copyout(proc, buf, sos_buffer, nread);
     if (err) {
         goto sos_read_end;

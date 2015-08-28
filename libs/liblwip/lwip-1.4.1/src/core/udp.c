@@ -88,6 +88,8 @@ udp_init(void)
 #if LWIP_RANDOMIZE_INITIAL_LOCAL_PORTS && defined(LWIP_RAND)
   udp_port = UDP_ENSURE_LOCAL_PORT_RANGE(LWIP_RAND());
 #endif /* LWIP_RANDOMIZE_INITIAL_LOCAL_PORTS && defined(LWIP_RAND) */
+  uint32_t udp_port_u = udp_port & 0x0000FFFF;
+  printf("udp port = %u\n", udp_port_u);
 }
 
 /**

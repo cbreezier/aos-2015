@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <sel4/sel4.h>
 
@@ -93,32 +94,40 @@ thread_block(void){
 }
 
 int main(void){
-    pt_test();
+    //pt_test();
     printf("done pt test\n");
 
     /* initialise communication */
     ttyout_init();
 
-    struct timespec ts;
-    clock_gettime(0, &ts);
-    printf("before: %lus %luns\n", ts.tv_sec, ts.tv_nsec);
+    //struct timespec ts;
+    //clock_gettime(0, &ts);
+    //printf("before: %lus %luns\n", ts.tv_sec, ts.tv_nsec);
 
-    //usleep(2000000);
+    ////usleep(2000000);
 
-    clock_gettime(0, &ts);
-    printf("after : %lus %luns\n", ts.tv_sec, ts.tv_nsec);
+    //clock_gettime(0, &ts);
+    //printf("after : %lus %luns\n", ts.tv_sec, ts.tv_nsec);
 
-    while(true);
-    printf("AKsAJSASH %d\n", 1);
-    printf("pc %x\n", 0 | (int32_t)fopen);
-    //FILE *fd = fopen("console", "w");
-    //fprintf(fd, "testing\n");
+    //printf("AKsAJSASH %d\n", 1);
+    //printf("pc %x\n", 0 | (int32_t)fopen);
+    int fd = open("console", O_WRONLY);
+    printf("fd = %d\n", fd);
+    char buf[100] = "hello!\n";
+    int nwritten = write(fd, buf, sizeof(buf));
+    assert(nwritten == sizeof(buf));
+
+    //int fd2 = open("console", O_RDONLY);
+    while (read(fd, &buf, 10) == 10) {
+        buf[10] = '\0';
+        printf("%s", buf);
+    }
 
     do {
         printf("task:\tHello world, I'm\ttty_test!\n");
 
-        clock_gettime(0, &ts);
-        printf("end: %lus %luns\n", ts.tv_sec, ts.tv_nsec);
+        //clock_gettime(0, &ts);
+        //printf("end: %lus %luns\n", ts.tv_sec, ts.tv_nsec);
 
         thread_block();
         // sleep(1);	// Implement this as a syscall
