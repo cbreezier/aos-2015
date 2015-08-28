@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <sel4/sel4.h>
 #include <cspace/cspace.h>
+#include <limits.h>
+#include <file.h>
 
 #include <addrspace.h>
 
@@ -73,6 +75,9 @@ typedef struct {
     cspace_t *croot;
 
     struct addrspace *as;
+
+    struct fd_entry proc_files[OPEN_FILE_MAX];
+    int files_head_free, files_tail_free;
 } sos_process_t;
 
 /* I/O system calls */

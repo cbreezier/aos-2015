@@ -383,6 +383,7 @@ int timer_interrupt(void) {
              * the callback registers a new timer
              */
             if (head != NULL) {
+                printf("rescheduling\n");
                 reschedule(head->delay);
             }
             to_free->callback(to_free->id, to_free->data);

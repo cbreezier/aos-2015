@@ -5,6 +5,13 @@
 
 typedef struct sync_mutex_* sync_mutex_t;
 
+struct sync_mutex_ {
+    void* ep;
+    seL4_CPtr mapping;
+
+    uint32_t holder;
+};
+
 sync_mutex_t sync_create_mutex();
 void sync_destroy_mutex(sync_mutex_t mutex);
 void sync_acquire(sync_mutex_t mutex);

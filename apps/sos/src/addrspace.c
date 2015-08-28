@@ -275,3 +275,13 @@ int as_remove_region(struct addrspace *as, seL4_Word addr) {
 
     return 0;
 }
+
+struct region_entry *as_get_region(struct addrspace *as, void *vaddr) {
+    struct region_entry *region;
+    for (region = as->region_head; region != NULL; region = region->next) {
+        if ((seL4_Word)vaddr >= region->start && (seL4_Word)vaddr < region->start + region->size) {
+            return region;
+        }
+    }
+    return NULL;
+}

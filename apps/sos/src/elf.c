@@ -28,13 +28,13 @@
 /* Minimum of two values. */
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
-#define PAGESIZE              (1 << (seL4_PageBits))
+#ifndef PAGESIZE
+    #define PAGESIZE              (1 << (seL4_PageBits))
+#endif
 #define PAGEMASK              ((PAGESIZE) - 1)
 #define PAGE_ALIGN(addr)      ((addr) & ~(PAGEMASK))
 #define IS_PAGESIZE_ALIGNED(addr) !((addr) &  (PAGEMASK))
 
-
-extern seL4_ARM_PageDirectory dest_as;
 
 /*
  * Convert ELF permissions into seL4 permissions.
@@ -139,16 +139,17 @@ static int load_segment_into_vspace(sos_process_t *proc,
         /* Now copy our data into the destination vspace. */
         seL4_Word kaddr;
         seL4_CPtr sos_cap;
-        err = pt_add_page(proc, kvpage, &kaddr, &sos_cap);
+        err = pt_add_page(proc, kvpage, &kaddr, &sos_cap, permissions);
         if (err) {
             //printf("error is %u\n", err);
             return err;
         }
         nbytes = PAGESIZE - (dst & PAGEMASK);
+        printf("nbytes = %d\n", nbytes);
         //printf("copying %lu\n", pos);
         //printf("kaddr %u\n", kaddr);
         if (pos < file_size){
-            memcpy((void*)kaddr, (void*)src, MIN(nbytes, file_size - pos));
+            memcpy((void*)kaddr + (PAGE_SIZE - nbytes), (void*)src, MIN(nbytes, file_size - pos));
         }
 
         /* Not observable to I-cache yet so flush the frame */

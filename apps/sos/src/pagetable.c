@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <sys/panic.h>
 
-int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap) {
+int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap, unsigned long permissions) {
 
     vaddr = (vaddr / PAGE_SIZE) * PAGE_SIZE;
 
@@ -65,10 +65,12 @@ int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPt
     //printf("frame %u, cap %u, proc->vroot %u, vaddr %u\n", frame_idx, (uint32_t)ft[frame_idx].cap, (uint32_t)proc->vroot, (uint32_t)vaddr);
 
     //printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
-    seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
+    //seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
+    seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
     //printf("minted %u\n", cap);
 
-    int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
+    //int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
+    int err = sos_map_page(cap, proc->vroot, vaddr, permissions, cap_attr, &pt_cap, &pt_addr);
     //printf("sos_map_page with error %u\n", err);
     if (err) {
         frame_free(svaddr);

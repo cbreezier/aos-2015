@@ -22,6 +22,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 
 #include <sel4/sel4.h>
 
@@ -60,7 +62,7 @@ pt_test( void )
     printf("Stack test ok\n");
 
     /* heap test */
-    buf2 = malloc(1500000);
+    buf2 = malloc(100000);
     printf("%p\n", buf2);
     assert(buf2);
     do_pt_test(buf2);
@@ -71,7 +73,7 @@ pt_test( void )
     assert(buf2);
     do_pt_test(buf2);
 
-    char *buf3 = malloc(1500000);
+    char *buf3 = malloc(100000);
     do_pt_test(buf3);
     printf("%p\n", buf3);
     free(buf3);
@@ -97,8 +99,27 @@ int main(void){
     /* initialise communication */
     ttyout_init();
 
+    struct timespec ts;
+    clock_gettime(0, &ts);
+    printf("before: %lus %luns\n", ts.tv_sec, ts.tv_nsec);
+
+    //usleep(2000000);
+
+    clock_gettime(0, &ts);
+    printf("after : %lus %luns\n", ts.tv_sec, ts.tv_nsec);
+
+    while(true);
+    printf("AKsAJSASH %d\n", 1);
+    printf("pc %x\n", 0 | (int32_t)fopen);
+    //FILE *fd = fopen("console", "w");
+    //fprintf(fd, "testing\n");
+
     do {
         printf("task:\tHello world, I'm\ttty_test!\n");
+
+        clock_gettime(0, &ts);
+        printf("end: %lus %luns\n", ts.tv_sec, ts.tv_nsec);
+
         thread_block();
         // sleep(1);	// Implement this as a syscall
     } while(1);

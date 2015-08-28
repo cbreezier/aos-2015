@@ -18,7 +18,6 @@
 #include <cpio/cpio.h>
 #include <nfs/nfs.h>
 #include <elf/elf.h>
-#include <serial/serial.h>
 #include <clock/clock.h>
 #include <utils/number_allocator.h>
 #include <sos.h>
@@ -29,6 +28,8 @@
 #include "elf.h"
 #include "pagetable.h"
 #include "sos_syscall.h"
+#include "file.h"
+#include "console.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
@@ -78,9 +79,6 @@ sos_process_t tty_test_process;
 typedef void (*sos_syscall_t)(sos_process_t *proc, seL4_CPtr reply_cap, int num_args);
 
 sos_syscall_t syscall_jt[NUM_SYSCALLS];
-
-/* Serial handle */
-struct serial *serial;
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -135,16 +133,20 @@ void sync_free_ep(void *ep) {
 
 void unknown_syscall(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     printf("Unknown syscall %d\n", seL4_GetMR(0)); 
+
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word syscall_number;
 
     syscall_number = seL4_GetMR(0);
+    
+    printf("syscall %u\n", syscall_number);
 
     /* Process system call */
     seL4_MessageInfo_t reply;
-    seL4_Word buffer[350];
+    //seL4_Word buffer[350];
     size_t i;
 
     switch (syscall_number) {
@@ -155,25 +157,31 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         seL4_SetMR(0, 0);
         seL4_Send(reply_cap, reply);
 
+        cspace_free_slot(cur_cspace, reply_cap);
+
         break;
     case 1:
         printf("SOS: Ending first process\n");
         end_first_process();
         printf("SOS: First process ended\n");
+
+        cspace_free_slot(cur_cspace, reply_cap);
         
         break;
     case 2:
         // printf("length: %d\n", num_args);
-        for (i = 0; i <= num_args / 4; i++) 
-            buffer[i] = seL4_GetMR(i + 1);
+        //for (i = 0; i <= num_args / 4; i++) 
+        //    buffer[i] = seL4_GetMR(i + 1);
         //*((char *) buffer + num_args) = '\0';
         //printf("buffer is: %s\n", buffer);
-        serial_send(serial, (char *) buffer, num_args);
+        //serial_send(serial, (char *) buffer, num_args);
 
         // Reply so that we can context switch back to caller
         reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, 0);
         seL4_Send(reply_cap, reply);
+        
+        cspace_free_slot(cur_cspace, reply_cap);
 
         break;
     default:
@@ -183,39 +191,6 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
             syscall_jt[syscall_number](&tty_test_process, reply_cap, num_args);
         }
         break;
-//    case SYS_mmap2:
-//        if (badge == TTY_EP_BADGE) {
-//            sos_mmap2(&tty_test_process, &reply);
-//
-//            seL4_Send(reply_cap, reply);
-//        } else {
-//            assert(!"Unrecognised process");
-//        }
-//        break;
-//    case SYS_munmap:
-//        if (badge == TTY_EP_BADGE) {
-//            sos_munmap(&tty_test_process, &reply);
-//
-//            seL4_Send(reply_cap, reply);
-//        } else {
-//            assert(!"Unrecognised process");
-//        }
-//        break;
-//    case SYS_nanosleep:
-//        if (badge == TTY_EP_BADGE) {
-//            sos_nanosleep(reply_cap);
-//        } else {
-//            assert(!"Unrecognised process");
-//        }
-//        break;
-//    case SYS_clock_gettime:
-//        if (badge == TTY_EP_BADGE) {
-//            sos_clock_gettime(reply_cap); 
-//        } else {
-//            assert(!"Unrecgonised process");
-//        }
-//
-//        break;
     }
 }
 
@@ -226,17 +201,13 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word label;
         seL4_MessageInfo_t message;
 
-//        if (time_stamp() > 12000000 && !removed) {
-//            remove_timer(a);
-//            removed = true;
-//        }
-
-        // int *p1 = 0xb0016004, *p2 = 0xb0017004;
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
 
 
+
         if(badge & IRQ_EP_BADGE){
+
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
                 timer_interrupt();
@@ -255,8 +226,7 @@ void syscall_loop(seL4_CPtr ep) {
 
                 seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
                 assert(reply_cap != CSPACE_NULL);
-                //dprintf(0, "tty vm fault\n");
-                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
+                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL, seL4_AllRights);
                 conditional_panic(err, "failed to add page(vm fault)");
 
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -273,7 +243,6 @@ void syscall_loop(seL4_CPtr ep) {
             assert(reply_cap != CSPACE_NULL);
 
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply_cap);
-            cspace_free_slot(cur_cspace, reply_cap);
 
         }else{
             printf("Rootserver got an unknown message\n");
@@ -385,7 +354,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     printf("Added IPC region\n");
 
     /* Create an IPC buffer */
-    err = pt_add_page(&tty_test_process, PROCESS_IPC_BUFFER, NULL, &tty_test_process.ipc_buffer_cap);
+    err = pt_add_page(&tty_test_process, PROCESS_IPC_BUFFER, NULL, &tty_test_process.ipc_buffer_cap, seL4_AllRights);
     conditional_panic(err, "Unable to add page table page for ipc buffer\n");
 
     // tty_test_process.ipc_buffer_addr = ut_alloc(seL4_PageBits);
@@ -464,6 +433,20 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     //                PROCESS_IPC_BUFFER,
     //                seL4_AllRights, seL4_ARM_Default_VMAttributes);
     // conditional_panic(err, "Unable to map IPC buffer for user app");
+
+    /* File descriptor table stuff */
+    for (int i = 0; i < OPEN_FILE_MAX; ++i) {
+        tty_test_process.proc_files[i].used = false;
+        tty_test_process.proc_files[i].offset = 0;
+        tty_test_process.proc_files[i].open_file_idx = 0;
+        tty_test_process.proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? 0 : i + 1;
+    }
+    /* Invalid fd - reserved for stdin, stdout, stderr */
+    tty_test_process.proc_files[0].next_free = 0;
+    tty_test_process.proc_files[1].next_free = 0;
+    tty_test_process.proc_files[2].next_free = 0;
+    tty_test_process.files_head_free = 3;
+    tty_test_process.files_tail_free = OPEN_FILE_MAX - 1;
 
     /* Start the new process */
     printf("almost done!\n");
@@ -585,6 +568,11 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     syscall_jt[SYS_munmap] = sos_munmap;
     syscall_jt[SYS_nanosleep] = sos_nanosleep;
     syscall_jt[SYS_clock_gettime] = sos_clock_gettime;
+    syscall_jt[SYS_brk] = sos_brk;
+    syscall_jt[SYS_open] = sos_open;
+    syscall_jt[SYS_close] = sos_close;
+    syscall_jt[SYS_read] = sos_read;
+    syscall_jt[SYS_write] = sos_write;
 }
 
 static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
@@ -602,62 +590,62 @@ void setup_tick_timer(uint32_t id, void *data) {
     register_timer(*((uint64_t*) data), setup_tick_timer, data);
 }
 
-static void test0() {
-    printf("Starting test0\n");
-    /* Allocate 10 pages and make sure you can touch them all */
-    for (int i = 0; i < 10; i++) {
-        /* Allocate a page */
-        seL4_Word vaddr = frame_alloc(1, 1);
-        assert(vaddr);
-
-        /* Test you can touch the page */
-        *((int*)vaddr) = 0x37;
-        assert(*((int*)vaddr) == 0x37);
-
-        printf("Page #%d allocated at %p\n",  i, (void *) vaddr);
-    }
-    printf("test0 done\n");
-}
-
-static void test1() {
-    printf("Starting test1\n");
-    /* Test that you eventually run out of memory gracefully,
-     *    and doesn't crash */
-    for (int i = 0;; ++i) {
-        /* Allocate a page */
-        seL4_Word vaddr = frame_alloc(1, 1);
-        if (!vaddr) {
-            printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
-            break;
-        }
-
-
-        /* Test you can touch the page */
-        *((int*)vaddr) = 0x37;
-        assert(*((int*)vaddr) == 0x37);
-    }
-    printf("test1 done\n");
-}
-
-static void test2() {
-    printf("Starting test2\n");
-    /* Test that you never run out of memory if you always free frames. 
-     *     This loop should never finish */
-    for (int i = 0;; i++) {
-        /* Allocate a page */
-        seL4_Word vaddr = frame_alloc(1, 1);
-        assert(vaddr != 0);
-
-        /* Test you can touch the page */
-        *((int*)vaddr) = 0x37;
-        assert(*((int*)vaddr) == 0x37);
-
-        if (i % 10000 == 0) printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
-
-        frame_free(vaddr);
-    }
-    printf("test2 done\n");
-}
+//static void test0() {
+//    printf("Starting test0\n");
+//    /* Allocate 10 pages and make sure you can touch them all */
+//    for (int i = 0; i < 10; i++) {
+//        /* Allocate a page */
+//        seL4_Word vaddr = frame_alloc(1, 1);
+//        assert(vaddr);
+//
+//        /* Test you can touch the page */
+//        *((int*)vaddr) = 0x37;
+//        assert(*((int*)vaddr) == 0x37);
+//
+//        printf("Page #%d allocated at %p\n",  i, (void *) vaddr);
+//    }
+//    printf("test0 done\n");
+//}
+//
+//static void test1() {
+//    printf("Starting test1\n");
+//    /* Test that you eventually run out of memory gracefully,
+//     *    and doesn't crash */
+//    for (int i = 0;; ++i) {
+//        /* Allocate a page */
+//        seL4_Word vaddr = frame_alloc(1, 1);
+//        if (!vaddr) {
+//            printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
+//            break;
+//        }
+//
+//
+//        /* Test you can touch the page */
+//        *((int*)vaddr) = 0x37;
+//        assert(*((int*)vaddr) == 0x37);
+//    }
+//    printf("test1 done\n");
+//}
+//
+//static void test2() {
+//    printf("Starting test2\n");
+//    /* Test that you never run out of memory if you always free frames. 
+//     *     This loop should never finish */
+//    for (int i = 0;; i++) {
+//        /* Allocate a page */
+//        seL4_Word vaddr = frame_alloc(1, 1);
+//        assert(vaddr != 0);
+//
+//        /* Test you can touch the page */
+//        *((int*)vaddr) = 0x37;
+//        assert(*((int*)vaddr) == 0x37);
+//
+//        if (i % 10000 == 0) printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
+//
+//        frame_free(vaddr);
+//    }
+//    printf("test2 done\n");
+//}
 
 
 /* MOVE TO THE TOP */
@@ -674,12 +662,7 @@ struct sos_thread {
     seL4_CPtr ipc_cap;
 
     seL4_Word stack_top;
-
-    uint32_t next_free;
 } sos_threads[NUM_SOS_THREADS];
-
-uint32_t thread_free_head, thread_free_tail;
-
 
 int sos_thread_entrypoint() {
     int local;
@@ -691,9 +674,6 @@ int sos_thread_entrypoint() {
 }
 
 void threads_init() {
-    thread_free_head = 0;
-    thread_free_tail = NUM_SOS_THREADS - 1;
-
     for (size_t i = 0; i < NUM_SOS_THREADS; ++i) {
         struct sos_thread thread;
 
@@ -731,8 +711,6 @@ void threads_init() {
         thread.stack_top = frame_alloc(0, 0);//(seL4_Word)malloc(STACK_SIZE) + STACK_SIZE - 1;
         thread.stack_top += PAGE_SIZE - sizeof(seL4_Word);
 
-        thread.next_free = (i == NUM_SOS_THREADS - 1) ? 0 : i + 1;
-
         seL4_UserContext context;
         memset(&context, 0, sizeof(context));
         context.pc = (seL4_Word)sos_thread_entrypoint;
@@ -757,11 +735,17 @@ int main(void) {
     frametable_init();
 
     /* Allocate all SOS threads */
-    threads_init();
+    //threads_init();
 
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    /* Init open file table */
+    open_files_init();
+
+    /* Initialise console */
+    console_init();
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
@@ -777,9 +761,6 @@ int main(void) {
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
     printf("tty test pid = %d\n", tty_test_process.pid);
-
-    /* Initialise serial */
-    serial = serial_init();
 
     //test0();
     //test1();

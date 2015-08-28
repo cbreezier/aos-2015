@@ -66,7 +66,8 @@ size_t sos_write(void *vData, size_t count) {
     while (written < count) {
         size_t len = min(count - written, chunk_size);
         sos_debug_print(vData + written, len);
-        written += sos_serial_write(vData + written, len);
+        written += len;
+        //written += sos_serial_write(vData + written, len);
     }
 
     return written;

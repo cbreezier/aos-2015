@@ -50,12 +50,29 @@ sys_brk(va_list ap)
 {
     uintptr_t ret;
     uintptr_t newbrk = va_arg(ap, uintptr_t);
+    //printf("newbrk = %u, heap_base = %u, heap_top = %u, heap_cur = %u\n", newbrk, heap_base, heap_top, heap_cur);
 
     /*if the newbrk is 0, return the bottom of the heap*/
     if (!newbrk) {
         ret = heap_cur = heap_base;
     } else if (newbrk < heap_top && newbrk >= heap_base) {
         ret = heap_cur = newbrk;
+    } else if (newbrk >= heap_top) {
+        seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
+        seL4_SetTag(tag);
+        seL4_SetMR(0, SYS_brk);
+
+        seL4_SetMR(1, newbrk);
+
+        seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+        seL4_Word err = seL4_GetMR(0);
+        if (err) {
+            ret = 0;
+        } else {
+            ret = heap_cur = heap_top = seL4_GetMR(1);
+        }
+   
     } else {
         ret = 0;
     }

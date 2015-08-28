@@ -6,13 +6,6 @@
 
 #define MUTEX_MAGIC 0x5EED
 
-struct sync_mutex_ {
-    void* ep;
-    seL4_CPtr mapping;
-
-    uint32_t holder;
-};
-
 sync_mutex_t
 sync_create_mutex() {
     sync_mutex_t mutex;

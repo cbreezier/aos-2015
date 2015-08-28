@@ -49,4 +49,9 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
 
 int as_remove_region(struct addrspace *as, seL4_Word addr);
 
+/* Returns the region that a virtual address lies within
+ * NULL if not within a valid region
+ */
+struct region_entry *as_get_region(struct addrspace *as, void *vaddr);
+
 #endif /* _ADDRSPACE_H_ */

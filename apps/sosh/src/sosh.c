@@ -249,6 +249,7 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         {"time", second_time}, {"mtime", micro_time} };
 
 int main(void) {
+    printf("Starting sosh\n");
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;

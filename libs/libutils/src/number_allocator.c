@@ -70,7 +70,6 @@ static struct allocation *remove_num(struct allocation *node, uint32_t num) {
             return node;
         }
 
-        struct allocation *to_return = NULL;
         if (node->left != NULL) {
             to_return = node->left;
         } else if (node->right != NULL) {
