@@ -24,7 +24,7 @@
 /* Your OS header file */
 #include <sos.h>
 
-#define BUF_SIZ   128
+#define BUF_SIZ   8
 #define MAX_ARGS   32
 
 static int in;
@@ -206,7 +206,7 @@ static int second_sleep(int argc,char *argv[]) {
         printf("Usage %s seconds\n", argv[0]);
         return 1;
     }
-    sleep(atoi(argv[0]));
+    sleep(atoi(argv[1]));
     return 0;
 }
 
@@ -249,7 +249,6 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         {"time", second_time}, {"mtime", micro_time} };
 
 int main(void) {
-    printf("Starting sosh\n");
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
@@ -275,6 +274,7 @@ int main(void) {
             /* Make sure to flush so anything is visible while waiting for user input */
             fflush(stdout);
             r = read(in, bp, BUF_SIZ - 1 + buf - bp);
+            printf("read %s\n", bp);
             if (r < 0) {
                 printf("Console read failed!\n");
                 done = 1;

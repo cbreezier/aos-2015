@@ -119,10 +119,10 @@ int main(void){
 
     //int fd2 = open("console", O_RDONLY);
     int nread;
-    while (nread = read(fd, &buf, 10)) {
-        assert(nread == 10);
+    while (nread = read(fd, &buf, 8)) {
+        assert(nread == 8);
         printf("in loop, nread = %d\n", nread);
-        buf[10] = '\0';
+        buf[8] = '\0';
         printf("%s\n", buf);
     }
 

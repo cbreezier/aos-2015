@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <console.h>
+#include <syscall.h>
 
 void sos_mmap2(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
@@ -251,6 +252,7 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_read_end;
     }
     nread = file->read(file, fd_entry->offset, sos_buffer, nbytes);
+    printf("nread = %u\n", (seL4_Word)nread);
     err = copyout(proc, buf, sos_buffer, nread);
     if (err) {
         goto sos_read_end;
@@ -258,10 +260,10 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
 sos_read_end:
     sync_release(open_files_lock);
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2*4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
 
     seL4_SetMR(0, err);
-    seL4_SetMR(1, (seL4_Word)nread);
+    seL4_SetMR(1, nread);
 
     seL4_Send(reply_cap, reply);
 

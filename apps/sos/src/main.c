@@ -144,7 +144,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     
     /* Process system call */
     seL4_MessageInfo_t reply;
-    //seL4_Word buffer[350];
+    seL4_Word buffer[350];
     size_t i;
 
     switch (syscall_number) {
@@ -168,11 +168,11 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         break;
     case 2:
         // printf("length: %d\n", num_args);
-        //for (i = 0; i <= num_args / 4; i++) 
-        //    buffer[i] = seL4_GetMR(i + 1);
-        //*((char *) buffer + num_args) = '\0';
+        for (i = 0; i <= num_args / 4; i++) 
+            buffer[i] = seL4_GetMR(i + 1);
+        *((char *) buffer + num_args) = '\0';
         //printf("buffer is: %s\n", buffer);
-        //serial_send(serial, (char *) buffer, num_args);
+        console_write(NULL, 0, buffer, num_args);
 
         // Reply so that we can context switch back to caller
         reply = seL4_MessageInfo_new(0, 0, 0, 1);
