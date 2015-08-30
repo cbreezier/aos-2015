@@ -118,9 +118,12 @@ int main(void){
     assert(nwritten == sizeof(buf));
 
     //int fd2 = open("console", O_RDONLY);
-    while (read(fd, &buf, 10) == 10) {
+    int nread;
+    while (nread = read(fd, &buf, 10)) {
+        assert(nread == 10);
+        printf("in loop, nread = %d\n", nread);
         buf[10] = '\0';
-        printf("%s", buf);
+        printf("%s\n", buf);
     }
 
     do {

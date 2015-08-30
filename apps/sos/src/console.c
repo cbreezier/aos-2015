@@ -16,7 +16,6 @@ sync_mutex_t serial_lock;
 sync_mutex_t has_bytes_lock;
 
 void serial_callback_handler(struct serial *serial, char c) {
-    printf("received char %c\n", c);
     sync_acquire(serial_lock);
     if (buf_size >= MAX_BUFF_SIZE) {
         sync_release(serial_lock);
@@ -39,7 +38,6 @@ void serial_callback_handler(struct serial *serial, char c) {
 }
 
 void console_init() {
-    printf("CONSOLE INIT STARTING\n");
     serial = serial_init();
     conditional_panic(!serial, "Cannot initialise serial device");
     int err = serial_register_handler(serial, serial_callback_handler);
@@ -55,7 +53,6 @@ void console_init() {
     has_notified = true;
 
     buf_pos = 0;
-    printf("CONSOLE INIT DONE\n");
 }
 
 static int min(int a, int b) {
@@ -76,24 +73,25 @@ static void read_buf(void *dest, size_t nbytes) {
 }
 
 int console_read(struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
-    while (nbytes > 0) {
-        if (buf_size < nbytes) {
-            size_t to_copy = min(nbytes, MAX_BUFF_SIZE);
+    size_t nbytes_left = nbytes;
+    while (nbytes_left > 0) {
+        if (buf_size < nbytes_left) {
+            size_t to_copy = min(nbytes_left, MAX_BUFF_SIZE);
             reader_required_bytes = to_copy;
             has_notified = false;
             sync_acquire(has_bytes_lock);
             
             read_buf(dest, to_copy);
-            nbytes -= to_copy;
+            nbytes_left -= to_copy;
 
             has_bytes_lock->holder = 0;
         } else {
-            read_buf(dest, nbytes);
-            nbytes = 0;
+            read_buf(dest, nbytes_left);
+            nbytes_left = 0;
         }
     }
          
-    return 0;
+    return nbytes;
 }
 
 int console_write(struct file_t *file, uint32_t offset, void *src, size_t nbytes) {

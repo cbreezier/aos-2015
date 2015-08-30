@@ -60,9 +60,11 @@ int sos_sys_read(int file, char *buf, size_t nbyte) {
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
 
     long err = seL4_GetMR(0);
+    printf("err = %d\n", (int)err);
     if (err) {
         return -err;
     }
+    printf("read = %u\n", seL4_GetMR(1));
     return seL4_GetMR(1);
 }
 

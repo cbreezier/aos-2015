@@ -36,7 +36,6 @@ static void
 serial_recv_handler(void *vSerial, struct udp_pcb *unused0, 
                     struct pbuf *p, struct ip_addr *unused1, u16_t unused2)
 {
-    printf("received handler\n");
     struct serial *serial = (struct serial *) vSerial;
     if (serial && serial->fHandler) {
         struct pbuf *q;

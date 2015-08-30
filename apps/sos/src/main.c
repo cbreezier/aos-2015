@@ -142,8 +142,6 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
 
     syscall_number = seL4_GetMR(0);
     
-    printf("syscall %u\n", syscall_number);
-
     /* Process system call */
     seL4_MessageInfo_t reply;
     //seL4_Word buffer[350];
@@ -203,8 +201,6 @@ void syscall_loop(seL4_CPtr ep) {
 
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-
-
 
         if(badge & IRQ_EP_BADGE){
 
@@ -735,7 +731,7 @@ int main(void) {
     frametable_init();
 
     /* Allocate all SOS threads */
-    //threads_init();
+    threads_init();
 
 
     /* Initialise the network hardware */
