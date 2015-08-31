@@ -134,10 +134,11 @@ int frame_free(seL4_Word vaddr) {
 
     ft[idx].next_free = 0;
 
-    seL4_ARM_Page_Unmap(ft[idx].cap);
+    int err = seL4_ARM_Page_Unmap(ft[idx].cap);
+    conditional_panic(err, "Unable to unmap page(free)");
 
     /* Remove all child capabilities */
-    int err = cspace_revoke_cap(cur_cspace, ft[idx].cap);
+    err = cspace_revoke_cap(cur_cspace, ft[idx].cap);
     conditional_panic(err, "unable to revoke cap(free)");
 
     /* Remove the capability itself */
@@ -160,4 +161,23 @@ uint32_t vaddr_to_frame_idx(seL4_Word vaddr) {
 
 seL4_Word frame_idx_to_vaddr(uint32_t idx) {
     return low_addr + PAGE_SIZE*idx;
+}
+
+int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_VMAttributes attr) {
+    uint32_t idx = vaddr_to_frame_idx(svaddr);
+
+    sync_acquire(ft_lock);
+    if (!idx) {
+        sync_release(ft_lock);
+        return EFAULT;
+    }
+
+    int err = seL4_ARM_Page_Unmap(ft[idx].cap);
+    conditional_panic(err, "Unable to unmap page(change permissions)");
+
+    
+    err = map_page(ft[idx].cap, seL4_CapInitThreadPD, svaddr, rights, attr);
+    sync_release(ft_lock);
+
+    return err;
 }

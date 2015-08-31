@@ -58,7 +58,7 @@ sys_brk(va_list ap)
     } else if (newbrk < heap_top && newbrk >= heap_base) {
         ret = heap_cur = newbrk;
     } else if (newbrk >= heap_top) {
-        seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
+        seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
         seL4_SetTag(tag);
         seL4_SetMR(0, SYS_brk);
 
@@ -92,7 +92,7 @@ sys_mmap2(va_list ap)
     int fd = va_arg(ap, int);
     off_t offset = va_arg(ap, off_t);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 7*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 7);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_mmap2);
 
@@ -116,7 +116,7 @@ long sys_munmap(va_list ap) {
     void *addr = va_arg(ap, void*);
     size_t length = va_arg(ap, size_t);
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_munmap);
 

@@ -37,4 +37,7 @@ uint32_t vaddr_to_frame_idx(seL4_Word vaddr);
 /* Given a frametable index, returns an SOS addr */
 seL4_Word frame_idx_to_vaddr(uint32_t idx);
 
+/* Given a vaddr, and permissions, change the frame's permissions */
+int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_VMAttributes attr);
+
 #endif /* _FRAMETABLE_H_ */

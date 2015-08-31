@@ -43,7 +43,7 @@ int as_destroy(struct addrspace *as);
 
 int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x);
 
-int as_add_stack(struct addrspace *as);
+int as_add_stack(sos_process_t *proc);
 
 int as_add_heap(struct addrspace *as);
 

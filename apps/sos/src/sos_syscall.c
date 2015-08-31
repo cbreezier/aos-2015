@@ -27,7 +27,7 @@ void sos_mmap2(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     int err = as_search_add_region(proc->as, PROCESS_VMEM_START, length, prot & PROT_WRITE, prot & PROT_READ, prot & PROT_EXEC, &insert_location);
 
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 8);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
     seL4_SetMR(0, err);
     seL4_SetMR(1, insert_location);
 
@@ -46,7 +46,7 @@ void sos_munmap(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = as_remove_region(proc->as, (seL4_Word)addr);
     seL4_SetMR(0, err);
 
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
     seL4_Send(reply_cap, reply);
 
@@ -81,7 +81,7 @@ void sos_nanosleep(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         err = register_timer(delay, reply_user, (void*)data);
     }
     if (data == NULL || err == 0) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 4);
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
         seL4_SetMR(0, EFAULT);
 
@@ -99,7 +99,7 @@ void sos_clock_gettime(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     uint64_t timestamp = time_stamp();
 
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 3*4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 3);
 
     seL4_SetMR(0, 0);
     seL4_SetMR(1, (seL4_Word)(timestamp & 0x00000000FFFFFFFF));
@@ -126,7 +126,7 @@ void sos_brk(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         error = 0;
     }
 
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2*4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, error);
     seL4_SetMR(1, new_top_align);
@@ -186,7 +186,6 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->files_head_free = proc->proc_files[fd].next_free;
 
     proc->proc_files[fd].offset = 0;
-    printf("mode = %d\n", mode);
     proc->proc_files[fd].stats.st_fmode = mode;
     /* TODO M5: Other file stats (type, size, ctime, atime) */
 
@@ -212,7 +211,7 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     
 sos_open_end:
     sync_release(open_files_lock);
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2*4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
     seL4_SetMR(1, (seL4_Word)fd);
@@ -304,7 +303,7 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
 sos_read_end:
     sync_release(open_files_lock);
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
 
     seL4_SetMR(0, err);
     seL4_SetMR(1, nread);
@@ -358,7 +357,7 @@ void sos_write(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
 sos_write_end:
     sync_release(open_files_lock);
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2*4);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
     seL4_SetMR(1, (seL4_Word)nwrite);

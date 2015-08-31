@@ -45,7 +45,7 @@ static int mode_to_sos(fmode_t mode) {
 }
 
 int sos_sys_open(const char *path, fmode_t mode) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_open);
     seL4_SetMR(1, (seL4_Word)path);
@@ -60,7 +60,7 @@ int sos_sys_open(const char *path, fmode_t mode) {
 }
 
 int sos_sys_close(int file) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_close);
     seL4_SetMR(1, (seL4_Word)file);
@@ -74,7 +74,7 @@ int sos_sys_close(int file) {
 }
 
 int sos_sys_read(int file, char *buf, size_t nbyte) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_read);
     seL4_SetMR(1, (seL4_Word)file);
@@ -92,7 +92,7 @@ int sos_sys_read(int file, char *buf, size_t nbyte) {
 }
 
 int sos_sys_write(int file, const char *buf, size_t nbyte) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_write);
     seL4_SetMR(1, (seL4_Word)file);
@@ -116,7 +116,7 @@ void sos_sys_usleep(int usec) {
 }
 
 int64_t sos_sys_time_stamp(void) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_clock_gettime);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
@@ -196,13 +196,14 @@ static size_t sos_debug_print(const void *vData, size_t count) {
 }
 
 size_t sos_serial_write(const seL4_Word *data, size_t len) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, len + 1);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, (len+3)/4 + 2);
     seL4_SetTag(tag);
     seL4_SetMR(0, 2); // syscall 2 is what our protocol will use to write things
+    seL4_SetMR(1, len);
 
     size_t i;
     for (i = 0; i <= len / 4; i++) {
-        seL4_SetMR(i + 1, data[i]);
+        seL4_SetMR(i + 2, data[i]);
     }
     
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
@@ -216,7 +217,7 @@ size_t min(size_t a, size_t b) {
 
 size_t sos_write(void *vData, size_t count) {
     size_t written = 0;
-    size_t chunk_size = (seL4_MsgMaxLength - 1) * sizeof(seL4_Word);
+    size_t chunk_size = (seL4_MsgMaxLength - 2) * sizeof(seL4_Word);
     while (written < count) {
         size_t len = min(count - written, chunk_size);
 //        sos_debug_print(vData + written, len);

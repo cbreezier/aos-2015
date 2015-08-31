@@ -167,8 +167,9 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         
         break;
     case 2:
-        for (i = 0; i <= num_args / 4; i++) 
-            buffer[i] = seL4_GetMR(i + 1);
+        num_args = seL4_GetMR(1);
+        for (i = 0; i <= num_args; i++) 
+            buffer[i] = seL4_GetMR(i + 2);
         *((char *) buffer + num_args) = '\0';
         console_write(NULL, 0, buffer, num_args);
 
@@ -406,7 +407,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     /* Define stack */
     printf("adding heap and stack regions\n");
     as_add_heap(tty_test_process.as);
-    as_add_stack(tty_test_process.as);
+    as_add_stack(&tty_test_process);
 //    stack_addr = ut_alloc(seL4_PageBits);
 //    conditional_panic(!stack_addr, "No memory for stack");
 //    err =  cspace_ut_retype_addr(stack_addr,
@@ -644,9 +645,9 @@ void setup_tick_timer(uint32_t id, void *data) {
 
 /* MOVE TO THE TOP */
 
-#define NUM_SOS_THREADS 20
+#define NUM_SOS_THREADS 32
 
-#define STACK_SIZE 4096
+#define STACK_NUM_FRAMES 100
 
 struct sos_thread {
     uint32_t tcb_addr;
@@ -702,9 +703,20 @@ void threads_init() {
                                  thread.ipc_cap);
         conditional_panic(err, "Failed to configure thread TCB - SOS thread");
 
+        /* Allocate stack guard */
+        thread.stack_top = frame_alloc(0, 0);
+        conditional_panic(err, "Cannot allocate guard page 1");
+        err = frame_change_permissions(thread.stack_top, 0, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+        conditional_panic(err, "Cannot allocate guard page 2");
         /* Allocate stack memory */
-        thread.stack_top = frame_alloc(0, 0);//(seL4_Word)malloc(STACK_SIZE) + STACK_SIZE - 1;
-        thread.stack_top += PAGE_SIZE;// - sizeof(seL4_Word);
+        for (int i = 0; i < STACK_NUM_FRAMES; ++i) {
+            seL4_Word next_frame = frame_alloc(0, 0);
+            conditional_panic(!next_frame, "No memory for thread stack");
+            assert(next_frame == thread.stack_top + PAGE_SIZE);
+            thread.stack_top = next_frame;
+        }
+        thread.stack_top += PAGE_SIZE;
+        
         printf("stack top = %x\n", thread.stack_top);
 
         seL4_UserContext context;

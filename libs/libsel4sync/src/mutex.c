@@ -32,8 +32,7 @@ sync_destroy_mutex(sync_mutex_t mutex) {
 }
 
 static uint32_t get_thread_id() {
-    seL4_Word unused;
-    return (int)(&unused) / PAGE_SIZE;
+    return (uint32_t)seL4_GetIPCBuffer();
 }
 
 void

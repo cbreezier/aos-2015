@@ -20,7 +20,7 @@
 #include <limits.h>
 #include <file.h>
 
-#include <addrspace.h>
+//#include <addrspace.h>
 
 /* System calls for SOS */
 
@@ -34,6 +34,8 @@
 #define N_NAME 32
 
 typedef int pid_t;
+
+struct addrspace;
 
 typedef struct {
     pid_t     pid;
