@@ -7,6 +7,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* file modes */
+#define FM_EXEC  1
+#define FM_WRITE 2
+#define FM_READ  4
+typedef int fmode_t;
+
+/* stat file types */
+#define ST_FILE 1   /* plain file */
+#define ST_SPECIAL 2    /* special (console) file */
+typedef int st_type_t;
+
+
+typedef struct {
+    st_type_t st_type;    /* file type */
+    fmode_t   st_fmode;   /* access mode */
+    unsigned  st_size;    /* file size in bytes */
+    long      st_ctime;   /* file creation time (ms since booting) */
+    long      st_atime;   /* file last access (open) time (ms since booting) */
+} sos_stat_t;
+
+
 struct file_t;
 
 typedef unsigned int size_t;
@@ -15,10 +36,6 @@ typedef int (*read_type)(struct file_t *file, uint32_t offset, void *dest, size_
 typedef int (*write_type)(struct file_t *file, uint32_t offset, void *src, size_t nbytes);
 
 struct file_t {
-    /* Function Pointers
-     
-     */
-
     read_type read;
     write_type write;
 
@@ -37,6 +54,8 @@ struct fd_entry {
     bool used;
     uint32_t offset;
     size_t open_file_idx;
+
+    sos_stat_t stats;
 
     int next_free;
 };

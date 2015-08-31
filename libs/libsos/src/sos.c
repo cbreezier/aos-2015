@@ -15,6 +15,7 @@
 #include <sos.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <fcntl.h>
 
 #include <sel4/sel4.h>
 #include <sel4/types.h>
@@ -23,12 +24,32 @@
 
 #define SYSCALL_ENDPOINT_SLOT (1)
 
+static int mode_to_sos(fmode_t mode) {
+    int ret = 0;
+    switch (mode) {
+        case O_RDONLY:
+            ret |= FM_READ;
+            break;
+
+        case O_WRONLY:
+            ret |= FM_WRITE;
+            break;
+
+        case O_RDWR:
+            ret |= FM_READ;
+            ret |= FM_WRITE;
+        default:
+            break;
+    }
+    return ret;
+}
+
 int sos_sys_open(const char *path, fmode_t mode) {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3*4);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_open);
     seL4_SetMR(1, (seL4_Word)path);
-    seL4_SetMR(2, (seL4_Word)mode);
+    seL4_SetMR(2, (seL4_Word)mode_to_sos(mode));
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
 
     long err = seL4_GetMR(0);
@@ -110,37 +131,58 @@ int64_t sos_sys_time_stamp(void) {
     return timestamp;
 }
 
-int sos_getdirent(int pos, char *name, size_t nbyte){return 0;}
+int sos_getdirent(int pos, char *name, size_t nbyte) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
  * Returns number of bytes returned, zero if "pos" is next free entry,
  * -1 if error (non-existent entry).
  */
 
-int sos_stat(const char *path, sos_stat_t *buf){return 0;}
+int sos_stat(const char *path, sos_stat_t *buf) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Returns information about file "path" through "buf".
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 
-pid_t sos_process_create(const char *path){return 0;}
+pid_t sos_process_create(const char *path) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting
  * file).
  */
 
-int sos_process_delete(pid_t pid){return 0;}
+int sos_process_delete(pid_t pid) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Delete process (and close all its file descriptors).
  * Returns 0 if successful, -1 otherwise (invalid process).
  */
 
-pid_t sos_my_id(void){return 0;}
+pid_t sos_my_id(void) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Returns ID of caller's process. */
 
-int sos_process_status(sos_process_t *processes, unsigned max){return 0;}
+int sos_process_status(sos_process_t *processes, unsigned max) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Returns through "processes" status of active processes (at most "max"),
  * returns number of process descriptors actually returned.
  */
 
-pid_t sos_process_wait(pid_t pid){return 0;}
+pid_t sos_process_wait(pid_t pid) {
+    printf("System call not implemented!\n");
+    return 0;
+}
 /* Wait for process "pid" to exit. If "pid" is -1, wait for any process
  * to exit. Returns the pid of the process which exited.
  */

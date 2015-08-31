@@ -155,9 +155,7 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_open_end;
     }
 
-    /* TODO M5: SUPPORT FLAGS */
     int mode = (int) seL4_GetMR(2);
-    (void)mode;
 
     int open_entry = -1;
     int existing_location = -1;
@@ -188,6 +186,9 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->files_head_free = proc->proc_files[fd].next_free;
 
     proc->proc_files[fd].offset = 0;
+    printf("mode = %d\n", mode);
+    proc->proc_files[fd].stats.st_fmode = mode;
+    /* TODO M5: Other file stats (type, size, ctime, atime) */
 
     if (existing_location == -1) {
         proc->proc_files[fd].open_file_idx = open_entry;
@@ -196,9 +197,13 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         open_files[open_entry].ref_count = 1;
         strcpy(open_files[open_entry].file_obj.name, path);
         /* Set function pointers */
-        assert(strcmp(path, "console") == 0);
-        open_files[open_entry].file_obj.read = console_read;
-        open_files[open_entry].file_obj.write = console_write;
+        if (strcmp(path, "console") == 0) {
+            open_files[open_entry].file_obj.read = console_read;
+            open_files[open_entry].file_obj.write = console_write;
+            proc->proc_files[fd].stats.st_type = ST_FILE;
+        } else {
+            assert(!"File system not implemented");
+        }
     } else {
         proc->proc_files[fd].open_file_idx = existing_location;
 
@@ -221,6 +226,41 @@ sos_open_end:
 
 void sos_close(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
+
+    int err = 0;
+    int fd = seL4_GetMR(1);
+
+    sync_acquire(open_files_lock);
+
+    struct fd_entry *fd_entry = &proc->proc_files[fd];
+    if (!fd_entry->used) {
+        err = EBADF;
+        goto sos_close_end;
+    }
+
+    fd_entry->used = false;
+
+    open_files[fd_entry->open_file_idx].ref_count--;
+
+    /* Add fd back to available fds */
+    if (proc->files_head_free == 0) {
+        proc->files_head_free = fd;
+    } else {
+        proc->proc_files[proc->files_tail_free].next_free = proc->files_head_free;
+    }
+    proc->files_tail_free = fd;
+
+    proc->proc_files[fd].next_free = 0;
+
+sos_close_end:
+    sync_release(open_files_lock);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    seL4_SetMR(0, err);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
@@ -236,6 +276,11 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     sync_acquire(open_files_lock);
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
+        err = EBADF;
+        goto sos_read_end;
+    }
+    
+    if (!(fd_entry->stats.st_fmode & FM_READ)) {
         err = EBADF;
         goto sos_read_end;
     }
@@ -287,6 +332,12 @@ void sos_write(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         err = EBADF;
         goto sos_write_end;
     }
+
+    if (!(proc->proc_files[fd].stats.st_fmode & FM_WRITE)) {
+        err = EBADF;
+        goto sos_write_end;
+    }
+
 
     struct file_entry *fe = &open_files[fd_entry->open_file_idx];
     if (fe->ref_count == 0) {
