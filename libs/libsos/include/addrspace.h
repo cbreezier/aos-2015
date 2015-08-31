@@ -6,6 +6,8 @@
 #include <sel4/types.h>
 #include <bits/errno.h>
 #include <bits/limits.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 
 #define TOP_LEVEL_SIZE 10

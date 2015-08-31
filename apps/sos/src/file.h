@@ -1,10 +1,15 @@
 #ifndef _FILE_H_
 #define _FILE_H_
 
+#include <sel4/sel4.h>
 #include <limits.h>
 #include <sync/mutex.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 struct file_t;
+
+typedef unsigned int size_t;
 
 typedef int (*read_type)(struct file_t *file, uint32_t offset, void *dest, size_t nbytes);
 typedef int (*write_type)(struct file_t *file, uint32_t offset, void *src, size_t nbytes);

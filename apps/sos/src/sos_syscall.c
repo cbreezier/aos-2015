@@ -71,9 +71,9 @@ void sos_nanosleep(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) proc;
     (void) num_args;
 
-    uint64_t delay = 0ull | seL4_GetMR(1);
+    uint64_t delay = (uint64_t) seL4_GetMR(1);
     delay *= 1000ull;
-    //uint64_t delay = 0 & seL4_GetMR(1);
+
     seL4_CPtr *data = malloc(sizeof(seL4_CPtr));
     uint32_t err = 0;
     if (data != NULL) {
@@ -252,7 +252,6 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_read_end;
     }
     nread = file->read(file, fd_entry->offset, sos_buffer, nbytes);
-    printf("nread = %u\n", (seL4_Word)nread);
     err = copyout(proc, buf, sos_buffer, nread);
     if (err) {
         goto sos_read_end;
@@ -264,7 +263,7 @@ sos_read_end:
 
     seL4_SetMR(0, err);
     seL4_SetMR(1, nread);
-
+    
     seL4_Send(reply_cap, reply);
 
     cspace_free_slot(cur_cspace, reply_cap);

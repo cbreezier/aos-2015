@@ -3,6 +3,10 @@
 #define _NUMBER_ALLOCATOR_H_
 
 #include <sel4/sel4.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+
 
 struct allocation;
 struct number_allocator {

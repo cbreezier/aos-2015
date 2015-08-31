@@ -11,6 +11,8 @@
 #ifndef __LIBSEL4_SEL4_H
 #define __LIBSEL4_SEL4_H
 
+#include <bits/alltypes.h>
+
 #include <sel4/types.h>
 
 #include <sel4/arch/syscalls.h>
@@ -19,5 +21,8 @@
 #include <interfaces/sel4_client.h>
 
 #include <sel4/bootinfo.h>
+#include <stdint.h>
+#include <stdbool.h>
+
 
 #endif // __LIBSEL4_SEL4_H

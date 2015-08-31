@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sos.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #include <sel4/sel4.h>
 #include <sel4/types.h>
@@ -61,16 +63,9 @@ int sos_sys_read(int file, char *buf, size_t nbyte) {
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
 
     long err = seL4_GetMR(0);
-    printf("err = %d\n", (int)err);
+    int ret = seL4_GetMR(1);
     if (err) {
         return -err;
-    }
-    int ret = seL4_GetMR(1);
-    printf("MR %d - %u\n", 1, ret);
-    int j = 0;
-    printf("read = %u %d\n", ret, ret);
-    for (int i = j; i < 10; ++i) {
-        printf("MR %d - %u\n", i, seL4_GetMR(i));
     }
     return ret;
 }
@@ -92,7 +87,7 @@ int sos_sys_write(int file, const char *buf, size_t nbyte) {
 }
 
 void sos_sys_usleep(int usec) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2*4);
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
     seL4_SetTag(tag);
     seL4_SetMR(0, SYS_nanosleep);
     seL4_SetMR(1, (seL4_Word)usec);
@@ -115,37 +110,37 @@ int64_t sos_sys_time_stamp(void) {
     return timestamp;
 }
 
-int sos_getdirent(int pos, char *name, size_t nbyte){while(true);return 0;}
+int sos_getdirent(int pos, char *name, size_t nbyte){return 0;}
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
  * Returns number of bytes returned, zero if "pos" is next free entry,
  * -1 if error (non-existent entry).
  */
 
-int sos_stat(const char *path, sos_stat_t *buf){while(true);return 0;}
+int sos_stat(const char *path, sos_stat_t *buf){return 0;}
 /* Returns information about file "path" through "buf".
  * Returns 0 if successful, -1 otherwise (invalid name).
  */
 
-pid_t sos_process_create(const char *path){while(true);return 0;}
+pid_t sos_process_create(const char *path){return 0;}
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting
  * file).
  */
 
-int sos_process_delete(pid_t pid){while(true);return 0;}
+int sos_process_delete(pid_t pid){return 0;}
 /* Delete process (and close all its file descriptors).
  * Returns 0 if successful, -1 otherwise (invalid process).
  */
 
-pid_t sos_my_id(void){while(true);return 0;}
+pid_t sos_my_id(void){return 0;}
 /* Returns ID of caller's process. */
 
-int sos_process_status(sos_process_t *processes, unsigned max){while(true);return 0;}
+int sos_process_status(sos_process_t *processes, unsigned max){return 0;}
 /* Returns through "processes" status of active processes (at most "max"),
  * returns number of process descriptors actually returned.
  */
 
-pid_t sos_process_wait(pid_t pid){while(true);return 0;}
+pid_t sos_process_wait(pid_t pid){return 0;}
 /* Wait for process "pid" to exit. If "pid" is -1, wait for any process
  * to exit. Returns the pid of the process which exited.
  */
@@ -168,8 +163,6 @@ size_t sos_serial_write(const seL4_Word *data, size_t len) {
         seL4_SetMR(i + 1, data[i]);
     }
     
-
-
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
 
     return len;
@@ -184,8 +177,8 @@ size_t sos_write(void *vData, size_t count) {
     size_t chunk_size = (seL4_MsgMaxLength - 1) * sizeof(seL4_Word);
     while (written < count) {
         size_t len = min(count - written, chunk_size);
-        //sos_debug_print(vData + written, len);
-        //written += len;
+//        sos_debug_print(vData + written, len);
+//        written += len;
         written += sos_serial_write(vData + written, len);
     }
 

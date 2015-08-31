@@ -144,12 +144,10 @@ int start_timer(seL4_CPtr interrupt_ep) {
     epit_clocks[1]->cr &= ~(BIT(IOVW));
 
 
-    /* Enable */
-    epit_clocks[0]->cr |= BIT(EN);
+    /* Enable EPIT 2 - Keep EPIT 1 disabled until a timer is registered */
     epit_clocks[1]->cr |= BIT(EN);
 
     overflow_offset = 0;
-
 
     timer_lock = sync_create_mutex();
     if (timer_lock == NULL) {
@@ -190,6 +188,7 @@ static void reschedule(uint64_t delay) {
     uint32_t clock_counter = us_to_clock_counter(delay);
     epit_clocks[0]->lr = clock_counter;
     epit_clocks[0]->cr &= ~(BIT(IOVW));
+    epit_clocks[0]->cr |= BIT(EN);
 }
 
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
@@ -361,6 +360,9 @@ int timer_interrupt(void) {
     if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
         if (head == NULL) {
+            assert(!"Timer interrupt with no queued timers");
+            //int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
+            //assert(!err);
             sync_release(timer_lock);
             return 0;
         }
@@ -383,8 +385,9 @@ int timer_interrupt(void) {
              * the callback registers a new timer
              */
             if (head != NULL) {
-                printf("rescheduling\n");
                 reschedule(head->delay);
+            } else {
+                epit_clocks[0]->cr &= ~(BIT(EN));
             }
             to_free->callback(to_free->id, to_free->data);
             allocator_release_num(allocator, to_free->id);
@@ -392,7 +395,9 @@ int timer_interrupt(void) {
         }
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
         assert(!err);
-    } else if (epit_clocks[1]->sr) {
+    }
+    if (epit_clocks[1]->sr) {
+    
         epit_clocks[1]->sr = 0xFFFFFFFF;
         overflow_offset++;
         int err = seL4_IRQHandler_Ack(clock_irqs[1].cap);

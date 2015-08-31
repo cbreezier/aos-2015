@@ -17,7 +17,7 @@ static int docopyin(sos_process_t *proc, void *dest, void *src, size_t nbytes, b
             }
         }
         ((char*)dest)[i] = *((char*)svaddr);
-        if (((char*)dest)[i] == '\0' && is_string) {
+        if (is_string && ((char*)dest)[i] == '\0') {
             break;
         }
     }

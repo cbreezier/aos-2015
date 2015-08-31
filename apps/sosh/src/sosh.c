@@ -24,7 +24,7 @@
 /* Your OS header file */
 #include <sos.h>
 
-#define BUF_SIZ   8
+#define BUF_SIZ   128
 #define MAX_ARGS   32
 
 static int in;
@@ -274,7 +274,6 @@ int main(void) {
             /* Make sure to flush so anything is visible while waiting for user input */
             fflush(stdout);
             r = read(in, bp, BUF_SIZ - 1 + buf - bp);
-            printf("read %s\n", bp);
             if (r < 0) {
                 printf("Console read failed!\n");
                 done = 1;

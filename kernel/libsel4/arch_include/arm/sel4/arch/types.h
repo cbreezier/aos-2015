@@ -11,7 +11,9 @@
 #ifndef __LIBSEL4_ARCH_TYPES_H
 #define __LIBSEL4_ARCH_TYPES_H
 
-#include <sel4/simple_types.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <assert.h>
 
 #define seL4_WordBits 32
 

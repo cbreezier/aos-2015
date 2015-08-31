@@ -167,11 +167,9 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         
         break;
     case 2:
-        // printf("length: %d\n", num_args);
         for (i = 0; i <= num_args / 4; i++) 
             buffer[i] = seL4_GetMR(i + 1);
         *((char *) buffer + num_args) = '\0';
-        //printf("buffer is: %s\n", buffer);
         console_write(NULL, 0, buffer, num_args);
 
         // Reply so that we can context switch back to caller
@@ -675,6 +673,7 @@ void threads_init() {
 
         /* Init IPC buffer */
         thread.ipc_addr = frame_alloc(1, 1);
+        printf("ipc addr = %x\n", thread.ipc_addr);
         conditional_panic(!thread.ipc_addr, "Can't create IPC buffer - SOS thread");
         uint32_t frame_idx = vaddr_to_frame_idx(thread.ipc_addr);
         conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");
@@ -705,7 +704,8 @@ void threads_init() {
 
         /* Allocate stack memory */
         thread.stack_top = frame_alloc(0, 0);//(seL4_Word)malloc(STACK_SIZE) + STACK_SIZE - 1;
-        thread.stack_top += PAGE_SIZE - sizeof(seL4_Word);
+        thread.stack_top += PAGE_SIZE;// - sizeof(seL4_Word);
+        printf("stack top = %x\n", thread.stack_top);
 
         seL4_UserContext context;
         memset(&context, 0, sizeof(context));

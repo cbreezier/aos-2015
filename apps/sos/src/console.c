@@ -10,15 +10,16 @@ uint32_t buf_size;
 
 uint32_t reader_required_bytes;
 bool has_notified;
-sync_mutex_t serial_lock;
+sync_mutex_t read_serial_lock;
+sync_mutex_t write_serial_lock;
 
 /* More of a notifying semaphore */
 sync_mutex_t has_bytes_lock;
 
 void serial_callback_handler(struct serial *serial, char c) {
-    sync_acquire(serial_lock);
+    sync_acquire(read_serial_lock);
     if (buf_size >= MAX_BUFF_SIZE) {
-        sync_release(serial_lock);
+        sync_release(read_serial_lock);
         /* Dropped chars */
         return;
     }
@@ -35,7 +36,7 @@ void serial_callback_handler(struct serial *serial, char c) {
         has_notified = true;
         sync_release(has_bytes_lock);
     }
-    sync_release(serial_lock);
+    sync_release(read_serial_lock);
 
 }
 
@@ -45,8 +46,10 @@ void console_init() {
     int err = serial_register_handler(serial, serial_callback_handler);
     conditional_panic(err, "Cannot initialise callback handler - serial device");
 
-    serial_lock = sync_create_mutex();
-    conditional_panic(!serial_lock, "Cannot initialise serial device - serial lock");
+    read_serial_lock = sync_create_mutex();
+    conditional_panic(!read_serial_lock, "Cannot initialise serial device - read serial lock");
+    write_serial_lock = sync_create_mutex();
+    conditional_panic(!write_serial_lock, "Cannot initialise serial device - write serial lock");
 
     has_bytes_lock = sync_create_mutex();
     conditional_panic(!has_bytes_lock, "Cannot initialise serial device - has bytes lock");
@@ -63,7 +66,7 @@ static int min(int a, int b) {
 
 static int read_buf(void *dest, size_t nbytes, bool *read_newline) {
     int num_read = 0;
-    sync_acquire(serial_lock);
+    sync_acquire(read_serial_lock);
     assert(buf_size >= 1 && "Not enough bytes to read from");
     for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size) {
         if (buf_pos >= MAX_BUFF_SIZE) {
@@ -73,11 +76,13 @@ static int read_buf(void *dest, size_t nbytes, bool *read_newline) {
         num_read++;
         if (buf[buf_pos] == '\n') {
             *read_newline = true;
+            ++buf_pos;
+            --buf_size;
             break;
         }
     }
     reader_required_bytes = 0;
-    sync_release(serial_lock);
+    sync_release(read_serial_lock);
     return num_read;
 }
 
@@ -90,18 +95,20 @@ int console_read(struct file_t *file, uint32_t offset, void *dest, size_t nbytes
             reader_required_bytes = to_copy;
             has_notified = false;
             sync_acquire(has_bytes_lock);
+            has_bytes_lock->holder = 0;
             
             nbytes_left -= read_buf(dest, to_copy, &read_newline);
 
-            has_bytes_lock->holder = 0;
         } else {
             nbytes_left -= read_buf(dest, nbytes_left, &read_newline);
         }
     }
-    printf("nbytes = %u, nbytes_left = %u\n", nbytes, nbytes_left);         
     return nbytes - nbytes_left;
 }
 
 int console_write(struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
-    return serial_send(serial, (char *)src, (int)nbytes);
+    sync_acquire(write_serial_lock);
+    int err = serial_send(serial, (char *)src, (int)nbytes);
+    sync_release(write_serial_lock);
+    return err;
 }

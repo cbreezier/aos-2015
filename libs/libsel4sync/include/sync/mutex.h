@@ -2,6 +2,7 @@
 #define _SYNC_MUTEX_H_
 
 #include <sel4/sel4.h>
+#include <stdint.h>
 
 typedef struct sync_mutex_* sync_mutex_t;
 
