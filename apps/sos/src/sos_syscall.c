@@ -8,6 +8,7 @@
 #include <string.h>
 #include <console.h>
 #include <syscall.h>
+#include <thread.h>
 
 void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
@@ -53,18 +54,8 @@ void sos_munmap(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-void reply_user(uint32_t id, void *data) {
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-
-    seL4_SetMR(0, 0);
-
-    seL4_CPtr reply_cap = *((seL4_CPtr*)data);
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
-
-    free((seL4_CPtr*)data);
-
+void sos_nanosleep_notify(uint32_t id, void *data) {
+    seL4_Notify(*((seL4_CPtr*)data), 0);
 }   
 
 void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
@@ -77,20 +68,22 @@ void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     seL4_CPtr *data = malloc(sizeof(seL4_CPtr));
     uint32_t err = 0;
     if (data != NULL) {
-        *data = reply_cap;
-        err = register_timer(delay, reply_user, (void*)data);
+        seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
+        *data = async_ep;
+        err = register_timer(delay, sos_nanosleep_notify, (void*)data);
+        seL4_Wait(async_ep, NULL);
+    } else {
+        err = ENOMEM;
     }
-    if (data == NULL || err == 0) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
-        seL4_SetMR(0, EFAULT);
+    seL4_SetMR(0, err);
 
-        seL4_Send(reply_cap, reply);
-    
-        cspace_free_slot(cur_cspace, reply_cap);
+    seL4_Send(reply_cap, reply);
 
-        free(data);
-    }
+    cspace_free_slot(cur_cspace, reply_cap);
+
+    free(data);
 }
 
 void sos_clock_gettime(process_t *proc, seL4_CPtr reply_cap, int num_args) {

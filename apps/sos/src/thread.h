@@ -14,8 +14,14 @@ struct sos_thread {
     seL4_CPtr ipc_cap;
 
     seL4_Word stack_top;
+
+    /* Used for notifying the thread when it is waiting on an async callback */
+    seL4_CPtr wakeup_async_ep;
+    uint32_t wakeup_ep_addr;
 } sos_threads[NUM_SOS_THREADS];
 
 void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap);
+
+struct sos_thread *get_cur_thread();
 
 #endif /* _THREAD_H_ */

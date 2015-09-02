@@ -6,8 +6,29 @@
 #include <stdio.h>
 #include <ut_manager/ut.h>
 #include <bits/limits.h>
+#include <bits/errno.h>
+
+seL4_Word low_ipc_addr = 0, high_ipc_addr = 0;
+seL4_Word ipc_addr_diff = 0;
+
+static int create_ep(seL4_CPtr *ep, uint32_t *ep_addr) {
+    *ep_addr = ut_alloc(seL4_EndpointBits);
+    if (*ep_addr == 0) {
+        return ENOMEM;
+    }
+
+    int err = cspace_ut_retype_addr(*ep_addr, seL4_AsyncEndpointObject, seL4_EndpointBits, cur_cspace, ep);
+    if (err) {
+        return err;
+    }
+    return 0;
+}
 
 void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
+    /* Create extra notification endpoint for main SOS thread */
+
+    int err = create_ep(&sos_threads[0].wakeup_async_ep, &sos_threads[0].wakeup_ep_addr);
+    conditional_panic(err, "Cannot create thread 0 ep");
     for (size_t i = 1; i < NUM_SOS_THREADS; ++i) {
         struct sos_thread thread;
 
@@ -23,7 +44,7 @@ void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
 
         /* Create TCB */
         thread.tcb_addr = ut_alloc(seL4_TCBBits);
-        int err = cspace_ut_retype_addr(thread.tcb_addr,
+        err = cspace_ut_retype_addr(thread.tcb_addr,
                                         seL4_TCBObject,
                                         seL4_TCBBits,
                                         cur_cspace,
@@ -65,6 +86,33 @@ void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
         seL4_TCB_WriteRegisters(thread.tcb_cap, 1, 0, 2, &context);
         
         sos_threads[i] = thread; 
+        
+        /* Get differences between ipc addrs */
+        if (low_ipc_addr) {
+            if (!ipc_addr_diff) {
+                ipc_addr_diff = thread.ipc_addr - low_ipc_addr;
+            } else {
+                assert(thread.ipc_addr - high_ipc_addr == ipc_addr_diff);
+            }
+        } else {
+            low_ipc_addr = thread.ipc_addr;
+        }
+        high_ipc_addr = thread.ipc_addr;
+        high_ipc_addr = thread.ipc_addr;
+
+        err = create_ep(&sos_threads[i].wakeup_async_ep, &sos_threads[i].wakeup_ep_addr);
+        conditional_panic(err, "Cannot create thread 0 ep");
+
     }
 }
 
+struct sos_thread *get_cur_thread() {
+    seL4_Word ipc_buf_addr = (seL4_Word)seL4_GetIPCBuffer();
+    int idx = -1;
+    if (ipc_buf_addr < low_ipc_addr || ipc_buf_addr > high_ipc_addr) {
+        idx = 0;
+    } else {
+        idx = (ipc_buf_addr - low_ipc_addr) / ipc_addr_diff;
+    }
+    return &sos_threads[idx];
+}
