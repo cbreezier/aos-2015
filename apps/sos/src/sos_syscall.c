@@ -9,7 +9,7 @@
 #include <console.h>
 #include <syscall.h>
 
-void sos_mmap2(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
     size_t length = (size_t)seL4_GetMR(2); 
     int prot = (int)seL4_GetMR(3); 
@@ -36,7 +36,7 @@ void sos_mmap2(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-void sos_munmap(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_munmap(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
     size_t length = (size_t)seL4_GetMR(2); 
 
@@ -67,7 +67,7 @@ void reply_user(uint32_t id, void *data) {
 
 }   
 
-void sos_nanosleep(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) proc;
     (void) num_args;
 
@@ -93,7 +93,7 @@ void sos_nanosleep(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 }
 
-void sos_clock_gettime(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_clock_gettime(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) proc;
     (void) num_args;
 
@@ -110,7 +110,7 @@ void sos_clock_gettime(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-void sos_brk(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_brk(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
     
     seL4_Word new_top = seL4_GetMR(1);        
@@ -136,7 +136,7 @@ void sos_brk(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -187,7 +187,7 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->files_head_free = proc->proc_files[fd].next_free;
 
     proc->proc_files[fd].offset = 0;
-    proc->proc_files[fd].stats.st_fmode = mode;
+    proc->proc_files[fd].mode = mode;
     /* TODO M5: Other file stats (type, size, ctime, atime) */
 
     if (existing_location == -1) {
@@ -200,7 +200,6 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         if (strcmp(path, "console") == 0) {
             open_files[open_entry].file_obj.read = console_read;
             open_files[open_entry].file_obj.write = console_write;
-            proc->proc_files[fd].stats.st_type = ST_FILE;
         } else {
             assert(!"File system not implemented");
         }
@@ -224,7 +223,7 @@ sos_open_end:
     free(path);
 }
 
-void sos_close(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -263,7 +262,7 @@ sos_close_end:
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
     int fd = (int) seL4_GetMR(1);
     void *buf = (void*) seL4_GetMR(2);
@@ -280,7 +279,7 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_read_end;
     }
     
-    if (!(fd_entry->stats.st_fmode & FM_READ)) {
+    if (!(fd_entry->mode & FM_READ)) {
         err = EBADF;
         goto sos_read_end;
     }
@@ -297,6 +296,7 @@ void sos_read(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_read_end;
     }
     nread = file->read(file, fd_entry->offset, sos_buffer, nbytes);
+    fd_entry->offset += nread;
     err = copyout(proc, buf, sos_buffer, nread);
     if (err) {
         goto sos_read_end;
@@ -316,7 +316,7 @@ sos_read_end:
     free(sos_buffer);
 }
 
-void sos_write(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
     int fd = (int) seL4_GetMR(1);
     void *buf = (void*) seL4_GetMR(2);
@@ -333,7 +333,7 @@ void sos_write(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_write_end;
     }
 
-    if (!(proc->proc_files[fd].stats.st_fmode & FM_WRITE)) {
+    if (!(proc->proc_files[fd].mode & FM_WRITE)) {
         err = EBADF;
         goto sos_write_end;
     }
@@ -355,6 +355,7 @@ void sos_write(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_write_end;
     }
     nwrite = file->write(file, fd_entry->offset, sos_buffer, nbytes);
+    fd_entry->offset += nwrite;
 
 sos_write_end:
     sync_release(open_files_lock);

@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <sys/panic.h>
 
-int pt_add_page(sos_process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap, unsigned long permissions) {
+int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap, unsigned long permissions) {
 
     vaddr = (vaddr / PAGE_SIZE) * PAGE_SIZE;
 

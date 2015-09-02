@@ -6,7 +6,7 @@ static inline int min(int a, int b) {
     return a < b ? a : b;
 }
 
-static int docopy(sos_process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
+static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
     /* Check that the entire user buffer lies within a valid region */
     struct region_entry *path_region = as_get_region(proc->as, usr);
     if (path_region == NULL) {
@@ -79,20 +79,20 @@ static int docopy(sos_process_t *proc, void *usr, void *sos, size_t nbytes, bool
     return 0;
 }
 
-int copyin(sos_process_t *proc, void *dest, void *src, size_t nbytes) {
+int copyin(process_t *proc, void *dest, void *src, size_t nbytes) {
     return docopy(proc, src, dest, nbytes, false, false);
 }
 
-int copyinstring(sos_process_t *proc, void *dest, void *src, size_t nbytes) {
+int copyinstring(process_t *proc, void *dest, void *src, size_t nbytes) {
     return docopy(proc, src, dest, nbytes, true, false);
 }
 
 
-int copyout(sos_process_t *proc, void *dest, void *src, size_t nbytes) {
+int copyout(process_t *proc, void *dest, void *src, size_t nbytes) {
     return docopy(proc, dest, src, nbytes, false, true);
 }
 
-int copyoutstring(sos_process_t *proc, void *dest, void *src, size_t nbytes) {
+int copyoutstring(process_t *proc, void *dest, void *src, size_t nbytes) {
     return docopy(proc, dest, src, nbytes, true, true);
 }
 

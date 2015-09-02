@@ -3,7 +3,7 @@
 
 #include <addrspace.h>
 
-int pt_add_page(sos_process_t *proc, seL4_Word addr, seL4_Word *kaddr, seL4_CPtr *frame_cap, unsigned long permissions);
+int pt_add_page(process_t *proc, seL4_Word addr, seL4_Word *kaddr, seL4_CPtr *frame_cap, unsigned long permissions);
 
 void pt_remove_page(struct pt_entry *pe);
 

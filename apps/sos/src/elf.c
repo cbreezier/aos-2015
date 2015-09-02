@@ -56,7 +56,7 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
  * Inject data into the given vspace.
  * TODO: Don't keep these pages mapped in
  */
-static int load_segment_into_vspace(sos_process_t *proc,
+static int load_segment_into_vspace(process_t *proc,
                                     char *src, unsigned long segment_size,
                                     unsigned long file_size, unsigned long dst,
                                     unsigned long permissions) {
@@ -162,7 +162,7 @@ static int load_segment_into_vspace(sos_process_t *proc,
     return 0;
 }
 
-int elf_load(sos_process_t *proc, char *elf_file) {
+int elf_load(process_t *proc, char *elf_file) {
 
     int num_headers;
     int err;

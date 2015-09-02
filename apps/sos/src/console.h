@@ -2,11 +2,11 @@
 #define _CONSOLE_H_
 
 #include <serial/serial.h>
-#include <sos.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <sel4/sel4.h>
 #include <sel4/types.h>
+#include "file.h"
 
 struct serial *serial;
 

@@ -1,13 +1,13 @@
 #ifndef _ADDRSPACE_H_
 #define _ADDRSPACE_H_
 
-#include <sos.h>
 #include <stdlib.h>
 #include <sel4/types.h>
 #include <bits/errno.h>
 #include <bits/limits.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "proc.h"
 
 
 #define TOP_LEVEL_SIZE 10
@@ -43,7 +43,7 @@ int as_destroy(struct addrspace *as);
 
 int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x);
 
-int as_add_stack(sos_process_t *proc);
+int as_add_stack(process_t *proc);
 
 int as_add_heap(struct addrspace *as);
 

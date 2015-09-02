@@ -155,7 +155,7 @@ int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bo
     return as_do_add_region(as, start, size, r, w, x, &unused);
 }
 
-int as_add_stack(sos_process_t *proc) {
+int as_add_stack(process_t *proc) {
     int err = as_do_add_region(proc->as, PROCESS_STACK_TOP - STACK_SIZE, STACK_SIZE , 1, 1, 0, &(proc->as->stack_region));
     if (err) {
         return err;

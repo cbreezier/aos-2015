@@ -20,15 +20,16 @@
 #include <elf/elf.h>
 #include <clock/clock.h>
 #include <utils/number_allocator.h>
-#include <sos.h>
+//#include <sos.h>
 
-
+#include "proc.h"
+#include "thread.h"
+#include "file.h"
 #include "frametable.h"
 #include "network.h"
 #include "elf.h"
 #include "pagetable.h"
 #include "sos_syscall.h"
-#include "file.h"
 #include "console.h"
 
 #include "ut_manager/ut.h"
@@ -65,7 +66,7 @@ extern char _cpio_archive[];
 
 const seL4_BootInfo* _boot_info;
 
-sos_process_t tty_test_process;
+process_t tty_test_process;
 
 
 /*
@@ -76,7 +77,7 @@ sos_process_t tty_test_process;
 
 
 #define NUM_SYSCALLS 378
-typedef void (*sos_syscall_t)(sos_process_t *proc, seL4_CPtr reply_cap, int num_args);
+typedef void (*sos_syscall_t)(process_t *proc, seL4_CPtr reply_cap, int num_args);
 
 sos_syscall_t syscall_jt[NUM_SYSCALLS];
 
@@ -131,7 +132,7 @@ void sync_free_ep(void *ep) {
     ut_free(to_free->ep_addr, seL4_EndpointBits);
 }
 
-void unknown_syscall(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
+void unknown_syscall(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     printf("Unknown syscall %d\n", seL4_GetMR(0)); 
 
     cspace_free_slot(cur_cspace, reply_cap);
@@ -642,92 +643,11 @@ void setup_tick_timer(uint32_t id, void *data) {
 //    printf("test2 done\n");
 //}
 
-
-/* MOVE TO THE TOP */
-
-#define NUM_SOS_THREADS 32
-
-#define STACK_NUM_FRAMES 100
-
-struct sos_thread {
-    uint32_t tcb_addr;
-    seL4_TCB tcb_cap;
-
-    seL4_Word ipc_addr;
-    seL4_CPtr ipc_cap;
-
-    seL4_Word stack_top;
-} sos_threads[NUM_SOS_THREADS];
-
-int sos_thread_entrypoint() {
-    int local;
-    printf("entering %p\n", &local);
+void sos_thread_entrypoint() {
+    printf("Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
     syscall_loop(_sos_ipc_ep_cap);
 
-    /* Never reached */
-    return 0;
-}
-
-void threads_init() {
-    for (size_t i = 0; i < NUM_SOS_THREADS; ++i) {
-        struct sos_thread thread;
-
-        /* Init IPC buffer */
-        thread.ipc_addr = frame_alloc(1, 1);
-        printf("ipc addr = %x\n", thread.ipc_addr);
-        conditional_panic(!thread.ipc_addr, "Can't create IPC buffer - SOS thread");
-        uint32_t frame_idx = vaddr_to_frame_idx(thread.ipc_addr);
-        conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");
-        thread.ipc_cap = ft[frame_idx].cap;
-
-
-
-        /* Create TCB */
-        thread.tcb_addr = ut_alloc(seL4_TCBBits);
-        int err = cspace_ut_retype_addr(thread.tcb_addr,
-                                        seL4_TCBObject,
-                                        seL4_TCBBits,
-                                        cur_cspace,
-                                        &thread.tcb_cap); 
-        conditional_panic(err, "Failed to create thread TCB - SOS thread");
-
-
-        err = seL4_TCB_Configure(thread.tcb_cap,
-                                 _sos_interrupt_ep_cap, 
-                                 255, /* Priority */
-                                 cur_cspace->root_cnode,
-                                 cur_cspace->guard,
-                                 seL4_CapInitThreadVSpace,
-                                 seL4_NilData,
-                                 thread.ipc_addr,
-                                 thread.ipc_cap);
-        conditional_panic(err, "Failed to configure thread TCB - SOS thread");
-
-        /* Allocate stack guard */
-        thread.stack_top = frame_alloc(0, 0);
-        conditional_panic(err, "Cannot allocate guard page 1");
-        err = frame_change_permissions(thread.stack_top, 0, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
-        conditional_panic(err, "Cannot allocate guard page 2");
-        /* Allocate stack memory */
-        for (int i = 0; i < STACK_NUM_FRAMES; ++i) {
-            seL4_Word next_frame = frame_alloc(0, 0);
-            conditional_panic(!next_frame, "No memory for thread stack");
-            assert(next_frame == thread.stack_top + PAGE_SIZE);
-            thread.stack_top = next_frame;
-        }
-        thread.stack_top += PAGE_SIZE;
-        
-        printf("stack top = %x\n", thread.stack_top);
-
-        seL4_UserContext context;
-        memset(&context, 0, sizeof(context));
-        context.pc = (seL4_Word)sos_thread_entrypoint;
-        context.sp = (seL4_Word)thread.stack_top;
-
-        seL4_TCB_WriteRegisters(thread.tcb_cap, 1, 0, 2, &context);
-        
-        sos_threads[i] = thread; 
-    }
+    assert(!"SOS thread has exited");
 }
 
 
@@ -743,7 +663,7 @@ int main(void) {
     frametable_init();
 
     /* Allocate all SOS threads */
-    threads_init();
+    threads_init(sos_thread_entrypoint, _sos_interrupt_ep_cap);
 
 
     /* Initialise the network hardware */
@@ -777,6 +697,7 @@ int main(void) {
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
+    printf("Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */

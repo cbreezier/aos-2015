@@ -1,7 +1,6 @@
 #ifndef _FRAMETABLE_H_
 #define _FRAMETABLE_H_
 
-#include <sos.h>
 #include <sync/mutex.h>
 
 struct ft_entry {

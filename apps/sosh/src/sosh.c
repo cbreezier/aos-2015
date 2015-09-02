@@ -254,14 +254,20 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
-    in = open("console", O_RDONLY);
+    in = open("console", O_RDWR);
     assert(in >= 0);
 
     bp = buf;
     done = 0;
     new = 1;
+    
+//    char *buf2 = malloc(2*4096);
+//    read(in, buf2 + 4096 + 30, 4096);
+//
+//    printf("buf2 = %s\n", buf2 + 4096 + 30);
 
     printf("\n[SOS Starting]\n");
+
 
     while (!done) {
         if (new) {

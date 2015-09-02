@@ -1,7 +1,7 @@
 #ifndef _FILE_H_
 #define _FILE_H_
 
-#include <sel4/sel4.h>
+#include <nfs/nfs.h>
 #include <limits.h>
 #include <sync/mutex.h>
 #include <stdint.h>
@@ -55,7 +55,7 @@ struct fd_entry {
     uint32_t offset;
     size_t open_file_idx;
 
-    sos_stat_t stats;
+    fmode_t mode;
 
     int next_free;
 };

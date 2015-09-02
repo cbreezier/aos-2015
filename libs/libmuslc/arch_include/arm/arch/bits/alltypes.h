@@ -1,7 +1,7 @@
 /* @LICENSE(MUSLC_MIT) */
 
 #if defined(__NEED_size_t) && !defined(__DEFINED_size_t)
-typedef unsigned size_t;
+typedef unsigned int size_t;
 #define __DEFINED_size_t
 #endif
 
@@ -177,10 +177,14 @@ typedef int suseconds_t;
 #define __DEFINED_suseconds_t
 #endif
 
-#if defined(__NEED_struct_timeval) && !defined(__DEFINED_struct_timeval)
-struct timeval { time_t tv_sec; int tv_usec; };
-#define __DEFINED_struct_timeval
+//#if defined(__NEED_struct_timeval) && !defined(__DEFINED_struct_timeval)
+typedef unsigned int uint32_t;
+#ifndef _timeval_t_
+typedef struct timeval { uint32_t tv_sec; uint32_t tv_usec; }timeval_t;
+#define _timeval_t_
 #endif
+//#define __DEFINED_struct_timeval
+//#endif
 
 #if defined(__NEED_struct_timespec) && !defined(__DEFINED_struct_timespec)
 struct timespec { time_t tv_sec; long tv_nsec; };

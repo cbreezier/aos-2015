@@ -50,6 +50,7 @@
 
 #include <stdint.h>
 #include <lwip/ip_addr.h>
+#include <bits/alltypes.h>
 
 /// The size in bytes of the opaque file handle.
 #define FHSIZE       32
@@ -164,12 +165,15 @@ typedef enum ftype {
  * since midnight January 1, 1970, Greenwich Mean Time.  It is used
  * to pass time and date information.
  */
-typedef struct timeval {
-/// The seconds portion of the time value.
-    uint32_t seconds; 
-/// The micro seconds portion of the time value.
-    uint32_t useconds;
-} timeval_t;
+//typedef struct timeval {
+///// The seconds portion of the time value.
+//    uint32_t seconds; 
+///// The micro seconds portion of the time value.
+//    uint32_t useconds;
+//} timeval_t;
+//
+#define seconds tv_sec
+#define useconds tv_usec
 
 
 /**

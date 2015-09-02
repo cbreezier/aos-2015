@@ -18,9 +18,7 @@
 #include <sel4/sel4.h>
 #include <cspace/cspace.h>
 #include <limits.h>
-#include <file.h>
-
-//#include <addrspace.h>
+#include <fcntl.h>
 
 /* System calls for SOS */
 
@@ -33,9 +31,27 @@
 #define MAX_IO_BUF 0x1000
 #define N_NAME 32
 
-typedef int pid_t;
+/* file modes */
+#define FM_EXEC  1
+#define FM_WRITE 2
+#define FM_READ  4
+typedef int fmode_t;
 
-struct addrspace;
+/* stat file types */
+#define ST_FILE 1   /* plain file */
+#define ST_SPECIAL 2    /* special (console) file */
+typedef int st_type_t;
+
+
+typedef struct {
+    st_type_t st_type;    /* file type */
+    fmode_t   st_fmode;   /* access mode */
+    unsigned  st_size;    /* file size in bytes */
+    long      st_ctime;   /* file creation time (ms since booting) */
+    long      st_atime;   /* file last access (open) time (ms since booting) */
+} sos_stat_t;
+
+typedef int pid_t;
 
 typedef struct {
     pid_t     pid;
@@ -55,11 +71,6 @@ typedef struct {
     seL4_CPtr user_ep_cap;
 
     cspace_t *croot;
-
-    struct addrspace *as;
-
-    struct fd_entry proc_files[OPEN_FILE_MAX];
-    int files_head_free, files_tail_free;
 } sos_process_t;
 
 /* I/O system calls */

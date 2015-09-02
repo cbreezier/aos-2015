@@ -14,6 +14,6 @@
 #include <sel4/sel4.h>
 #include <addrspace.h>
 
-int elf_load(sos_process_t *proc, char* elf_file);
+int elf_load(process_t *proc, char* elf_file);
 
 #endif /* _LIBOS_ELF_H_ */
