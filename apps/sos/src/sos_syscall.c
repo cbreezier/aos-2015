@@ -154,6 +154,7 @@ void sos_open(sos_process_t *proc, seL4_CPtr reply_cap, int num_args) {
     if (err) {
         goto sos_open_end;
     }
+    path[NAME_MAX-1] = 0;
 
     int mode = (int) seL4_GetMR(2);
 
