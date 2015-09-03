@@ -132,6 +132,20 @@ void sos_brk(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
+static fmode_t nfs_mode_to_sos(uint32_t mode) {
+    fmode_t ret = 0;
+    if (mode & S_IRUSR) {
+        ret |= FM_READ;
+    }
+    if (mode & S_IWUSR) {
+        ret |= FM_WRITE;
+    }
+    if (mode & S_IXUSR) {
+        ret |= FM_EXEC;
+    }
+    return ret;
+}
+
 void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
@@ -154,14 +168,15 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     int mode = (int) seL4_GetMR(2);
 
+    bool exists = false;
     int open_entry = -1;
-    int existing_location = -1;
 
     sync_acquire(open_files_lock);
     for (int i = OPEN_FILE_MAX; i >= 0; --i) {
         if (open_files[i].ref_count > 0) {
             if (strcmp(open_files[i].file_obj.name, path) == 0) {
-                existing_location = i;
+                exists = true;
+                open_entry = i;
                 break; 
             }
         } else {
@@ -169,7 +184,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         }
     }
 
-    if (existing_location == -1 && open_entry == -1) {
+    if (!exists && open_entry == -1) {
         err = ENFILE;
         goto sos_open_end;
     }
@@ -180,30 +195,52 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         err = EMFILE;
         goto sos_open_end;
     }
-    proc->files_head_free = proc->proc_files[fd].next_free;
-
-    proc->proc_files[fd].offset = 0;
-    proc->proc_files[fd].mode = mode;
     /* TODO M5: Other file stats (type, size, ctime, atime) */
 
-    if (existing_location == -1) {
-        proc->proc_files[fd].open_file_idx = open_entry;
-        proc->proc_files[fd].used = true;
-
-        open_files[open_entry].ref_count = 1;
-        strcpy(open_files[open_entry].file_obj.name, path);
+    if (!exists) {
         /* Set function pointers */
         if (strcmp(path, "console") == 0) {
             open_files[open_entry].file_obj.read = console_read;
             open_files[open_entry].file_obj.write = console_write;
         } else {
-            assert(!"File system not implemented");
-        }
-    } else {
-        proc->proc_files[fd].open_file_idx = existing_location;
+            fhandle_t fh;
+            fattr_t fattr;
+            err = nfs_lookup_sync(path, &fh, &fattr);
 
-        open_files[existing_location].ref_count++;
+            if (err == ENOENT) {
+                // err = nfs_create_sync(path, &fh, mode, &fattr);
+            }
+            if (err) {
+                goto sos_open_end;
+            }
+
+            fmode_t file_mode = nfs_mode_to_sos(fattr.mode);
+            if ((!(file_mode & FM_READ) && (mode & FM_READ)) ||
+                (!(file_mode & FM_WRITE) && (mode & FM_WRITE)) ||
+                (!(file_mode & FM_EXEC) && (mode & FM_EXEC))) {
+                err = EACCES;
+                goto sos_open_end;
+            }
+
+            open_files[open_entry].file_obj.fh = fh;
+
+            open_files[open_entry].file_obj.read = nfs_read_sync;
+            open_files[open_entry].file_obj.write = nfs_write_sync;
+        }
+
+        open_files[open_entry].ref_count = 1;
+        strcpy(open_files[open_entry].file_obj.name, path);
+
+    } else {
+        open_files[open_entry].ref_count++;
     }
+
+    proc->files_head_free = proc->proc_files[fd].next_free;
+
+    proc->proc_files[fd].open_file_idx = open_entry;
+    proc->proc_files[fd].used = true;
+    proc->proc_files[fd].offset = 0;
+    proc->proc_files[fd].mode = mode;
     
 sos_open_end:
     sync_release(open_files_lock);
@@ -368,19 +405,6 @@ sos_write_end:
 
 }
 
-static fmode_t nfs_mode_to_sos(uint32_t mode) {
-    fmode_t ret = 0;
-    if (mode & S_IRUSR) {
-        ret |= FM_READ;
-    }
-    if (mode & S_IWUSR) {
-        ret |= FM_WRITE;
-    }
-    if (mode & S_IXUSR) {
-        ret |= FM_EXEC;
-    }
-    return ret;
-}
 
 void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     printf("sos stat called\n");

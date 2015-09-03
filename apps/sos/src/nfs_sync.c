@@ -83,8 +83,8 @@ int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
         return err;
     }
 
-    *ret_fh = t.fh;
-    *ret_fattr = t.fattr;
+    if (ret_fh != NULL) *ret_fh = t.fh;
+    if (ret_fattr != NULL) *ret_fattr = t.fattr;
 
     return 0;
 }
@@ -199,7 +199,7 @@ int nfs_readdir_sync(void *sos_buf, int *num_files) {
         }
     } while (t.cookie);
 
-    *num_files = t.count;
+    if (num_files != NULL) *num_files = t.count;
     printf("readdir sync done\n");
 
     return 0;
