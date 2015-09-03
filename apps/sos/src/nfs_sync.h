@@ -2,6 +2,7 @@
 #define _NFS_SYNC_H_
 
 #include <nfs/nfs.h>
+#include "file.h"
 
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr);
 

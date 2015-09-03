@@ -39,6 +39,8 @@ struct file_t {
     read_type read;
     write_type write;
 
+    fhandle_t fh;
+
     char name[NAME_MAX];
 };
 

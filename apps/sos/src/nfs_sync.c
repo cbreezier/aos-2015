@@ -1,11 +1,10 @@
 #include <sel4/sel4.h>
 #include <bits/errno.h>
-
+#include <string.h>
 
 #include "thread.h"
 #include "nfs_sync.h"
 #include "network.h"
-#include "file.h"
 
 struct token {
     seL4_CPtr async_ep;
@@ -102,7 +101,7 @@ int nfs_read_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nb
     t.count = 0;
     
     while (t.count < nbytes) {
-        enum rpc_stat res = nfs_read(file->fh, offset + t.count, nbytes - t.count, nfs_read_cb, (uintptr_t)&t);
+        enum rpc_stat res = nfs_read(&file->fh, offset + t.count, nbytes - t.count, nfs_read_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
             return err;
@@ -130,12 +129,12 @@ static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, 
 
 int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes) {
     struct token t;
-    t.async_ep = get_cur_thwrite()->wakeup_async_ep;
+    t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.sos_buf = sos_buf;
     t.count = 0;
     
     while (t.count < nbytes) {
-        enum rpc_stat res = nfs_write(file->fh, offset + t.count, nbytes - t.count, nfs_write_cb, (uintptr_t)&t);
+        enum rpc_stat res = nfs_write(&file->fh, offset + t.count, nbytes - t.count, sos_buf + t.count, nfs_write_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
             return err;
