@@ -21,4 +21,6 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args);
 
 void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args); 
 
+void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args); 
+
 #endif /* _SOS_SYSCALL_H_ */

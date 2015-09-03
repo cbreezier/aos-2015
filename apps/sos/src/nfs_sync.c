@@ -1,3 +1,8 @@
+#include <sel4/sel4.h>
+#include <bits/errno.h>
+
+
+#include "thread.h"
 #include "nfs_sync.h"
 #include "network.h"
 #include "file.h"
@@ -49,20 +54,19 @@ static int nfs_stat_to_err(enum nfs_stat stat) {
     return 0;
 }
 
-void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, fattr_t *fattr) {
+static void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, fattr_t *fattr) {
     struct token *t = (struct token*)token;
     t->fh = *fh;
     t->fattr = *fattr;
     t->status = status;
 
-    seL4_Notify(t->async_ep);
+    seL4_Notify(t->async_ep, 0);
 }
 
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
-
-    enum rpc_stat res = nfs_lookup(mnt_point, name, nfs_lookup_cb, &t);
+    enum rpc_stat res = nfs_lookup(&mnt_point, name, nfs_lookup_cb, (uintptr_t)(&t));
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;
@@ -80,7 +84,7 @@ int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     return 0;
 }
 
-void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count, void *data) {
+static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count, void *data) {
     struct token *t = (struct token*)token;
     t->status = status;
     t->fattr = *fattr;
@@ -114,7 +118,7 @@ int nfs_read_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nb
     return 0;
 }
 
-void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
+static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
     struct token *t = (struct token*)token;
     t->status = status;
     t->fattr = *fattr;

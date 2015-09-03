@@ -3,12 +3,15 @@
 #include <vmem_layout.h>
 #include <clock/clock.h>
 #include <limits.h>
-#include <copy.h>
 #include <stdlib.h>
 #include <string.h>
-#include <console.h>
 #include <syscall.h>
-#include <thread.h>
+#include <nfs/nfs.h>
+#include <sys/stat.h>
+#include "console.h"
+#include "thread.h"
+#include "nfs_sync.h"
+#include "copy.h"
 
 void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
@@ -363,4 +366,68 @@ sos_write_end:
 
     free(sos_buffer);
 
+}
+
+static fmode_t nfs_mode_to_sos(uint32_t mode) {
+    fmode_t ret = 0;
+    if (mode & S_IRUSR) {
+        ret |= FM_READ;
+    }
+    if (mode & S_IWUSR) {
+        ret |= FM_WRITE;
+    }
+    if (mode & S_IXUSR) {
+        ret |= FM_EXEC;
+    }
+    return ret;
+}
+
+void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+
+    int err = 0;
+
+    void *user_path = (void*) seL4_GetMR(1);
+    void *user_buf = (void*) seL4_GetMR(2);
+
+    char *path = malloc(NAME_MAX * sizeof(char));
+    if (path == NULL) {
+        err = ENOMEM;
+        goto sos_stat_end;
+    }
+
+    err = copyinstring(proc, path, user_path, NAME_MAX);
+    if (err) {
+        goto sos_stat_end;
+    }
+    path[NAME_MAX-1] = 0;
+
+    fhandle_t fh;
+    fattr_t fattr;
+    err = nfs_lookup_sync(path, &fh, &fattr); 
+
+    if (err) {
+        goto sos_stat_end;
+    }
+
+    sos_stat_t stat;
+    stat.st_type = (st_type_t)fattr.type;
+    stat.st_fmode = nfs_mode_to_sos(fattr.mode);
+    stat.st_size = (unsigned)fattr.size;
+    stat.st_ctime = fattr.ctime.tv_sec * 1000 + fattr.ctime.tv_usec / 1000;
+    stat.st_atime = fattr.atime.tv_sec * 1000 + fattr.atime.tv_usec / 1000;
+    err = copyout(proc, user_buf, (void*)(&stat), sizeof(sos_stat_t));
+    if (err) {
+        goto sos_stat_end;
+    }
+
+sos_stat_end:
+    free(path);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    seL4_SetMR(0, err);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
 }

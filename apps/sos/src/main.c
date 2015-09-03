@@ -569,6 +569,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     syscall_jt[SYS_close] = sos_close;
     syscall_jt[SYS_read] = sos_read;
     syscall_jt[SYS_write] = sos_write;
+    syscall_jt[SYS_stat] = sos_stat;
 }
 
 static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {

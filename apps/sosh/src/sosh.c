@@ -254,6 +254,12 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
+    sos_stat_t buf2;
+    int err = sos_stat("bootimg.elf", &buf2);
+    assert(!err);
+
+    printf("%d %d %d %ld %ld\n", buf2.st_type, buf2.st_fmode, buf2.st_size, buf2.st_ctime, buf2.st_atime);
+
     in = open("console", O_RDWR);
     assert(in >= 0);
 

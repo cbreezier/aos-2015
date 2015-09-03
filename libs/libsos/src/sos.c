@@ -141,7 +141,17 @@ int sos_getdirent(int pos, char *name, size_t nbyte) {
  */
 
 int sos_stat(const char *path, sos_stat_t *buf) {
-    printf("System call not implemented!\n");
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_stat);
+    seL4_SetMR(1, (seL4_Word)path);
+    seL4_SetMR(2, (seL4_Word)buf);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
     return 0;
 }
 /* Returns information about file "path" through "buf".
