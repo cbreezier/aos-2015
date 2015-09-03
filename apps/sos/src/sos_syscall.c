@@ -431,3 +431,60 @@ sos_stat_end:
 
     cspace_free_slot(cur_cspace, reply_cap);
 }
+
+void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+
+    int err = 0;
+
+    int pos = (int)seL4_GetMR(1);
+    if (pos < 0 || pos >= FILES_PER_DIR) {
+        err = EFAULT;
+        goto sos_getdents_end;
+    }
+    void *user_buf= (void*)seL4_GetMR(2);
+    size_t user_buf_sz = (size_t)seL4_GetMR(3);
+
+    char **dir_entries = malloc(sizeof(char*)*FILES_PER_DIR);
+    if (dir_entries == NULL) {
+        err = ENOMEM;
+        goto sos_getdents_end;
+    }
+    for (int i = 0; i < FILES_PER_DIR; ++i) {
+        dir_entries[i] = malloc(sizeof(char)*NAME_MAX);
+        if (dir_entries[i] == NULL) {
+            err = ENOMEM;
+            goto sos_getdents_end;
+        }
+    }
+
+    err = nfs_readdir_sync((void*)dir_entries);
+    if (err) {
+        goto sos_getdents_end;
+    }
+
+    size_t file_name_size = strlen(dir_entries[pos]);
+    if (file_name_size >= user_buf_sz) {
+        err = EINVAL;
+        goto sos_getdents_end;
+    }
+
+    err = copyoutstring(proc, user_buf, dir_entries[pos], user_buf_sz);
+    if (err) {
+        goto sos_getdents_end;
+    }
+
+sos_getdents_end:
+    for (int i = 0; i < FILES_PER_DIR; ++i) {
+        free(dir_entries[i]);
+    }
+    free(dir_entries);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    seL4_SetMR(0, err);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+

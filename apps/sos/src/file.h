@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define FILES_PER_DIR 32
+
 /* file modes */
 #define FM_EXEC  1
 #define FM_WRITE 2

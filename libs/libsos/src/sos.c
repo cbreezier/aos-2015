@@ -132,8 +132,20 @@ int64_t sos_sys_time_stamp(void) {
 }
 
 int sos_getdirent(int pos, char *name, size_t nbyte) {
-    printf("System call not implemented!\n");
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_getdents);
+    seL4_SetMR(1, (seL4_Word)pos);
+    seL4_SetMR(2, (seL4_Word)name);
+    seL4_SetMR(3, (seL4_Word)nbyte);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
     return 0;
+
 }
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
  * Returns number of bytes returned, zero if "pos" is next free entry,
