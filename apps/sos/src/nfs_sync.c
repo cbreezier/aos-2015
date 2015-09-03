@@ -15,6 +15,9 @@ struct token {
     /* For read and write */
     void *sos_buf;
     int count;
+
+    /* For readdir */
+    nfscookie_t cookie;
 };
 
 static int rpc_stat_to_err(enum rpc_stat stat) {
@@ -54,6 +57,7 @@ static int nfs_stat_to_err(enum nfs_stat stat) {
 }
 
 static void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, fattr_t *fattr) {
+    printf("lookup cb called\n");
     struct token *t = (struct token*)token;
     t->fh = *fh;
     t->fattr = *fattr;
@@ -65,7 +69,9 @@ static void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, 
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
+    printf("async call lookup\n");
     enum rpc_stat res = nfs_lookup(&mnt_point, name, nfs_lookup_cb, (uintptr_t)(&t));
+    printf("done async call\n");
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;
@@ -147,5 +153,54 @@ int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t n
         }
     }
     
+    return 0;
+}
+
+static void nfs_readdir_cb(uintptr_t token, enum nfs_stat status, int num_files, char *file_names[], nfscookie_t nfscookie) {
+    printf("readdir cb called\n");
+    struct token *t = (struct token*)token;
+    t->status = status;
+    t->cookie = nfscookie;
+
+    char **dst = (char **)t->sos_buf;
+
+    for (int i = 0; i < num_files; ++i) {
+        printf("    File %d name %s\n", i, file_names[i]);
+        strncpy(dst[t->count + i], file_names[i], NAME_MAX);
+        dst[t->count + i][NAME_MAX - 1] = '\0';
+    }
+    t->count += num_files;
+    printf("readdir cb finished copying %d files\n", num_files);
+
+    seL4_Notify(t->async_ep, 0);
+}
+
+int nfs_readdir_sync(void *sos_buf, int *num_files) {
+    printf("readdir sync called\n");
+    struct token t;
+    t.async_ep = get_cur_thread()->wakeup_async_ep;
+    t.sos_buf = sos_buf;
+    t.count = 0;
+    t.cookie = 0;
+
+    do {
+        printf("readdir calling cb\n");
+        enum rpc_stat res = nfs_readdir(&mnt_point, t.cookie, nfs_readdir_cb, (uintptr_t)(&t));
+        int err = rpc_stat_to_err(res);
+        if (res) {
+            return err;
+        }
+
+        seL4_Wait(t.async_ep, NULL);
+        printf("cookie is %d\n", t.cookie);
+        err = nfs_stat_to_err(t.status);
+        if (err) {
+            return err;
+        }
+    } while (t.cookie);
+
+    *num_files = t.count;
+    printf("readdir sync done\n");
+
     return 0;
 }

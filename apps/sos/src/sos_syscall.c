@@ -383,6 +383,7 @@ static fmode_t nfs_mode_to_sos(uint32_t mode) {
 }
 
 void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    printf("sos stat called\n");
     (void) num_args;
 
     int err = 0;
@@ -404,7 +405,9 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     fhandle_t fh;
     fattr_t fattr;
+    printf("calling lookup sync\n");
     err = nfs_lookup_sync(path, &fh, &fattr); 
+    printf("finsihed lookup sync\n");
 
     if (err) {
         goto sos_stat_end;
@@ -436,14 +439,7 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
     int err = 0;
-
-    int pos = (int)seL4_GetMR(1);
-    if (pos < 0 || pos >= FILES_PER_DIR) {
-        err = EFAULT;
-        goto sos_getdents_end;
-    }
-    void *user_buf= (void*)seL4_GetMR(2);
-    size_t user_buf_sz = (size_t)seL4_GetMR(3);
+    size_t file_name_size = 0;
 
     char **dir_entries = malloc(sizeof(char*)*FILES_PER_DIR);
     if (dir_entries == NULL) {
@@ -458,12 +454,26 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         }
     }
 
-    err = nfs_readdir_sync((void*)dir_entries);
+    int pos = (int)seL4_GetMR(1);
+    if (pos < 0 || pos >= FILES_PER_DIR) {
+        err = EFAULT;
+        goto sos_getdents_end;
+    }
+    void *user_buf= (void*)seL4_GetMR(2);
+    size_t user_buf_sz = (size_t)seL4_GetMR(3);
+
+
+    int num_files = 0;
+    err = nfs_readdir_sync((void*)dir_entries, &num_files);
     if (err) {
         goto sos_getdents_end;
     }
 
-    size_t file_name_size = strlen(dir_entries[pos]);
+    if (num_files <= pos) {
+        goto sos_getdents_end;
+    }
+
+    file_name_size = strlen(dir_entries[pos]);
     if (file_name_size >= user_buf_sz) {
         err = EINVAL;
         goto sos_getdents_end;
@@ -475,13 +485,17 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
 sos_getdents_end:
-    for (int i = 0; i < FILES_PER_DIR; ++i) {
-        free(dir_entries[i]);
+    if (dir_entries != NULL) {
+        for (int i = 0; i < FILES_PER_DIR; ++i) {
+            free(dir_entries[i]);
+        }
+        free(dir_entries);
     }
-    free(dir_entries);
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    printf("sos_getdents err = %d\n", err);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
+    seL4_SetMR(1, file_name_size);
 
     seL4_Send(reply_cap, reply);
 

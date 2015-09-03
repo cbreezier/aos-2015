@@ -10,4 +10,6 @@ int nfs_read_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nb
 
 int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes);
 
+int nfs_readdir_sync(void *sos_buf, int *num_files);
+
 #endif /* _NFS_SYNC_H_ */

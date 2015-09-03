@@ -144,7 +144,7 @@ int sos_getdirent(int pos, char *name, size_t nbyte) {
     if (err) {
         return -err;
     }
-    return 0;
+    return seL4_GetMR(1);
 
 }
 /* Reads name of entry "pos" in directory into "name", max "nbyte" bytes.
