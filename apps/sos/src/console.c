@@ -18,19 +18,18 @@ sync_mutex_t has_bytes_lock;
 
 void serial_callback_handler(struct serial *serial, char c) {
     sync_acquire(read_serial_lock);
-    if (buf_size >= MAX_BUFF_SIZE) {
-        sync_release(read_serial_lock);
-        /* Dropped chars */
-        return;
-    }
-    uint32_t end = buf_pos + buf_size;
-    if (end >= MAX_BUFF_SIZE) {
-        end -= MAX_BUFF_SIZE;
-    }
-    buf[end] = c;
 
-    ++buf_size;
-    if ((c == '\n' || buf_size >= reader_required_bytes) 
+    if (buf_size < MAX_BUFF_SIZE) {
+        uint32_t end = buf_pos + buf_size;
+        if (end >= MAX_BUFF_SIZE) {
+            end -= MAX_BUFF_SIZE;
+        }
+        buf[end] = c;
+
+        ++buf_size;
+    }
+
+    if ((c == '\n'/* || c == '\04' */|| buf_size >= reader_required_bytes) 
          && reader_required_bytes != 0
          && !has_notified) {
         has_notified = true;

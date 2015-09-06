@@ -226,7 +226,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
             fattr_t fattr;
             err = nfs_lookup_sync(path, &fh, &fattr);
 
-            if (err == ENOENT) {
+            if (err == ENOENT/* && (mode & O_CREAT)*/) {
                 uint32_t nfs_mode = sos_mode_to_nfs(mode);
                 err = nfs_create_sync(path, nfs_mode, &fh, &fattr);
             }
