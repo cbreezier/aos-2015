@@ -199,6 +199,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     if (!exists && open_entry == -1) {
+        sync_release(open_files_lock);
         err = ENFILE;
         goto sos_open_end;
     }
@@ -206,12 +207,16 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     fd = proc->files_head_free;
     /* Update next_free, free_head, free_tail */
     if (fd == 0) {
+        sync_release(open_files_lock);
         err = EMFILE;
         goto sos_open_end;
     }
+
     /* TODO M5: Other file stats (type, size, ctime, atime) */
 
     if (!exists) {
+        open_files[open_entry].ref_count = 1;
+        sync_release(open_files_lock);
         /* Set function pointers */
         if (strcmp(path, "console") == 0) {
             open_files[open_entry].file_obj.read = console_read;
@@ -243,13 +248,13 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
             open_files[open_entry].file_obj.write = nfs_write_sync;
         }
 
-        open_files[open_entry].ref_count = 1;
         strcpy(open_files[open_entry].file_obj.name, path);
 
     } else {
         open_files[open_entry].ref_count++;
+        sync_release(open_files_lock);
     }
-
+    
     proc->files_head_free = proc->proc_files[fd].next_free;
 
     proc->proc_files[fd].open_file_idx = open_entry;
@@ -258,7 +263,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->proc_files[fd].mode = mode;
     
 sos_open_end:
-    sync_release(open_files_lock);
+    free(path);
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -268,7 +273,6 @@ sos_open_end:
 
     cspace_free_slot(cur_cspace, reply_cap);
 
-    free(path);
 }
 
 void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
@@ -277,7 +281,6 @@ void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
     int fd = seL4_GetMR(1);
 
-    sync_acquire(open_files_lock);
 
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
@@ -287,7 +290,9 @@ void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     fd_entry->used = false;
 
+    sync_acquire(open_files_lock);
     open_files[fd_entry->open_file_idx].ref_count--;
+    sync_release(open_files_lock);
 
     /* Add fd back to available fds */
     if (proc->files_head_free == 0) {
@@ -300,7 +305,7 @@ void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->proc_files[fd].next_free = 0;
 
 sos_close_end:
-    sync_release(open_files_lock);
+    asm("nop");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
     seL4_SetMR(0, err);
@@ -320,7 +325,6 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int nread = 0;
     char *sos_buffer = NULL;
 
-    sync_acquire(open_files_lock);
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
         err = EBADF;
@@ -344,6 +348,10 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_read_end;
     }
     nread = file->read(file, fd_entry->offset, sos_buffer, nbytes);
+    if (nread < 0) {
+        err = -nread;
+        goto sos_read_end;
+    }
     fd_entry->offset += nread;
     err = copyout(proc, buf, sos_buffer, nread);
     if (err) {
@@ -351,7 +359,7 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
 sos_read_end:
-    sync_release(open_files_lock);
+    free(sos_buffer);
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -360,8 +368,6 @@ sos_read_end:
     seL4_Send(reply_cap, reply);
 
     cspace_free_slot(cur_cspace, reply_cap);
-
-    free(sos_buffer);
 }
 
 void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
@@ -374,7 +380,6 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int nwrite = 0;
     char *sos_buffer = NULL;
 
-    sync_acquire(open_files_lock);
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
         err = EBADF;
@@ -403,10 +408,14 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_write_end;
     }
     nwrite = file->write(file, fd_entry->offset, sos_buffer, nbytes);
+    if (nwrite < 0) {
+        err = -nwrite;
+        goto sos_write_end;
+    }
     fd_entry->offset += nwrite;
 
 sos_write_end:
-    sync_release(open_files_lock);
+    free(sos_buffer);
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -415,8 +424,6 @@ sos_write_end:
     seL4_Send(reply_cap, reply);
 
     cspace_free_slot(cur_cspace, reply_cap);
-
-    free(sos_buffer);
 
 }
 
@@ -530,7 +537,6 @@ sos_getdents_end:
         }
         free(dir_entries);
     }
-    printf("sos_getdents err = %d\n", err);
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);

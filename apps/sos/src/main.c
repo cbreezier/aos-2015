@@ -87,6 +87,7 @@ seL4_CPtr _sos_interrupt_ep_cap;
 /**
  * NFS mount point
  */
+#define NFS_TICK_TIME 1000ull
 extern fhandle_t mnt_point;
 
 static void end_first_process();
@@ -148,7 +149,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word buffer[350];
     size_t i;
 
-    printf("got syscall number %u\n", syscall_number);
+    //printf("got syscall number %u\n", syscall_number);
 
     switch (syscall_number) {
     case SOS_SYSCALL0:
@@ -593,6 +594,11 @@ void setup_tick_timer(uint32_t id, void *data) {
     register_timer(*((uint64_t*) data), setup_tick_timer, data);
 }
 
+void nfs_tick(uint32_t id, void *data) {
+    nfs_timeout();
+    register_timer(NFS_TICK_TIME, nfs_tick, data);
+}
+
 //static void test0() {
 //    printf("Starting test0\n");
 //    /* Allocate 10 pages and make sure you can touch them all */
@@ -684,6 +690,7 @@ int main(void) {
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    nfs_tick(0, NULL);
 //    uint64_t t1 = 1100000;
 //    uint64_t t2 = 77004001;
 //    uint64_t t3 = 400000;
@@ -700,7 +707,6 @@ int main(void) {
     //test0();
     //test1();
     //test2();
-    //
 
     
     //while (true) {

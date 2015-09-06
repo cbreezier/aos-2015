@@ -42,14 +42,38 @@ static int nfs_stat_to_err(enum nfs_stat stat) {
             return EACCES;
         case NFSERR_NOENT:
             return ENOENT;
+        case NFSERR_IO:
+            return EIO;
+        case NFSERR_NXIO:
+            return ENXIO;
         case NFSERR_ACCES:
             return EACCES;
+        case NFSERR_EXIST:
+            return EEXIST;
+        case NFSERR_NODEV:
+            return ENODEV;
         case NFSERR_NOTDIR:
             return ENOTDIR;
+        case NFSERR_ISDIR:
+            return EISDIR;
+        case NFSERR_FBIG:
+            return EFBIG;
+        case NFSERR_NOSPC:
+            return ENOSPC;
+        case NFSERR_ROFS:
+            return EROFS;
         case NFSERR_NAMETOOLONG:
             return ENAMETOOLONG;
-        case NFSERR_FBIG:
-            return EOVERFLOW;
+        case NFSERR_NOTEMPTY:
+            return ENOTEMPTY;
+        case NFSERR_DQUOT:
+            return EDQUOT;
+        case NFSERR_STALE:
+            return EBADF;
+        case NFSERR_WFLUSH:
+            return EIO;
+        case NFSERR_COMM:
+            return ENETDOWN;
         default:
             return EFAULT;
     }
@@ -98,6 +122,7 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
         t->finished = true;
     }
 
+    //copyout(t->proc, t->usr_buf + t->count, data, count);
     memcpy(t->sos_buf + t->count, data, count);
     t->count += count;
     
@@ -116,13 +141,13 @@ int nfs_read_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nb
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, nbytes - t.count, nfs_read_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
-            return err;
+            return -err;
         }
 
         seL4_Wait(t.async_ep, NULL);
         err = nfs_stat_to_err(t.status);
         if (err) {
-            return err;
+            return -err;
         }
     }
     
