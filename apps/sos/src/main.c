@@ -148,6 +148,8 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word buffer[350];
     size_t i;
 
+    printf("got syscall number %u\n", syscall_number);
+
     switch (syscall_number) {
     case SOS_SYSCALL0:
         dprintf(0, "syscall: thread made syscall 0!\n");
@@ -199,7 +201,10 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word label;
         seL4_MessageInfo_t message;
 
+        //printf("waiting on syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         message = seL4_Wait(ep, &badge);
+        //printf("_");
+        //printf("got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         label = seL4_MessageInfo_get_label(message);
 
         if(badge & IRQ_EP_BADGE){
@@ -697,9 +702,16 @@ int main(void) {
     //test2();
     //
 
+    
+    //while (true) {
+    //    printf("while true main\n");
+    //    seL4_Wait(get_cur_thread()->wakeup_async_ep, NULL);
+    //}
+
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
     printf("Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
+
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */

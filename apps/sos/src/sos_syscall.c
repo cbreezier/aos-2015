@@ -146,6 +146,20 @@ static fmode_t nfs_mode_to_sos(uint32_t mode) {
     return ret;
 }
 
+static uint32_t sos_mode_to_nfs(fmode_t mode) {
+    fmode_t ret = 0;
+    if (mode & FM_READ) {
+        ret |= S_IRUSR;
+    }
+    if (mode & FM_WRITE) {
+        ret |= S_IWUSR;
+    }
+    if (mode & FM_EXEC) {
+        ret |= S_IXUSR;
+    }
+    return ret;
+}
+
 void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
@@ -166,7 +180,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
     path[NAME_MAX-1] = 0;
 
-    int mode = (int) seL4_GetMR(2);
+    fmode_t mode = (fmode_t) seL4_GetMR(2);
 
     bool exists = false;
     int open_entry = -1;
@@ -208,7 +222,8 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
             err = nfs_lookup_sync(path, &fh, &fattr);
 
             if (err == ENOENT) {
-                // err = nfs_create_sync(path, &fh, mode, &fattr);
+                uint32_t nfs_mode = sos_mode_to_nfs(mode);
+                err = nfs_create_sync(path, nfs_mode, &fh, &fattr);
             }
             if (err) {
                 goto sos_open_end;
@@ -407,7 +422,7 @@ sos_write_end:
 
 
 void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
-    printf("sos stat called\n");
+    //printf("sos stat called\n");
     (void) num_args;
 
     int err = 0;
@@ -429,9 +444,9 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     fhandle_t fh;
     fattr_t fattr;
-    printf("calling lookup sync\n");
+    //printf("calling lookup sync\n");
     err = nfs_lookup_sync(path, &fh, &fattr); 
-    printf("finsihed lookup sync\n");
+    //printf("finsihed lookup sync\n");
 
     if (err) {
         goto sos_stat_end;
