@@ -12,4 +12,6 @@ int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t n
 
 int nfs_readdir_sync(void *sos_buf, int *num_files);
 
+int nfs_create_sync(const char *name, uint32_t mode, fhandle_t *ret_fh, fattr_t *ret_fattr);
+
 #endif /* _NFS_SYNC_H_ */

@@ -104,6 +104,7 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
     seL4_Notify(t->async_ep, 0);
 }
 
+/* Returns number of bytes read. Returns -error upon error */
 int nfs_read_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
@@ -142,6 +143,7 @@ static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, 
     seL4_Notify(t->async_ep, 0);
 }
 
+/* Returns number of bytes written. Returns -error upon error */
 int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
@@ -153,13 +155,13 @@ int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t n
         enum rpc_stat res = nfs_write(&file->fh, offset + t.count, nbytes - t.count, sos_buf + t.count, nfs_write_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
-            return err;
+            return -err;
         }
 
         seL4_Wait(t.async_ep, NULL);
         err = nfs_stat_to_err(t.status);
         if (err) {
-            return err;
+            return -err;
         }
     }
     
@@ -211,6 +213,48 @@ int nfs_readdir_sync(void *sos_buf, int *num_files) {
 
     if (num_files != NULL) *num_files = t.count;
     printf("readdir sync done\n");
+
+    return 0;
+}
+
+void nfs_create_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, fattr_t *fattr) {
+    struct token *t = (struct token*)token;
+    t->fh = *fh;
+    t->fattr = *fattr;
+    t->status = status;
+
+    seL4_Notify(t->async_ep, 0);
+}
+
+int nfs_create_sync(const char *name, uint32_t mode, fhandle_t *ret_fh, fattr_t *ret_fattr) {
+    struct token t;
+    t.async_ep = get_cur_thread()->wakeup_async_ep;
+    sattr_t sattr;
+    sattr.mode = mode;
+    sattr.uid = -1;
+    sattr.gid = -1;
+    sattr.size = 0;
+    sattr.atime.tv_sec = -1;
+    sattr.atime.tv_usec = -1;
+    sattr.mtime.tv_sec = -1;
+    sattr.mtime.tv_usec = -1;
+
+    printf("async call create\n");
+    enum rpc_stat res = nfs_create(&mnt_point, name, &sattr, nfs_create_cb, (uintptr_t)(&t));
+    printf("done async create call\n");
+    int err = rpc_stat_to_err(res);
+    if (err) {
+        return err;
+    }
+
+    seL4_Wait(t.async_ep, NULL);
+    err = nfs_stat_to_err(t.status);
+    if (err) {
+        return err;
+    }
+
+    if (ret_fh != NULL) *ret_fh = t.fh;
+    if (ret_fattr != NULL) *ret_fattr = t.fattr;
 
     return 0;
 }
