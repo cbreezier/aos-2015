@@ -30,6 +30,60 @@
 static int in;
 static sos_stat_t sbuf;
 
+static int sosh_open(int argc, char **argv) {
+    if (argc != 3) {
+        printf("Usage: open <file> <mode>\n");
+        return 1;
+    }
+    
+    int fd = open(argv[1], atoi(argv[2]));
+
+    if (fd < 0) {
+        printf("Warning warning fd negative\n");
+    }
+
+    printf("Your fd for %s is fd %d\n", argv[1], fd);
+
+    return 0;
+}
+
+static int sosh_read(int argc, char **argv) {
+    if (argc != 4) {
+        printf("Usage: read - <fd> <offset> <numread>\n");
+        return 1;
+    }
+
+    char buf[(int)1e6];
+    buf[0] = '\0';
+
+    int nread = read(atoi(argv[1]), buf + atoi(argv[2]), atoi(argv[3]));
+
+    if (nread < 0) {
+        printf("Warning warning nread = %d\n", nread);
+    } else {
+        printf("%s\n", buf + atoi(argv[2]));
+    }
+
+    return 0;
+}   
+
+static int sosh_write(int argc, char **argv) {
+    if (argc != 4) {
+        printf("Usage: write - <fd> <string> <num bytes>\n");
+        return 1;
+    }
+
+    int nwrite = write(atoi(argv[1]), argv[2], atoi(argv[3]));
+
+    if (nwrite < 0) {
+        printf("Warning warning nwrite = %d\n", nwrite);
+    } else {
+        printf("Wrote %d bytes\n", nwrite);
+    }
+
+    return 0;
+}
+
 static void prstat(const char *name) {
     /* print out stat buf */
     printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
@@ -246,7 +300,7 @@ struct command {
 
 struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-        {"time", second_time}, {"mtime", micro_time} };
+        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} };
 
 int main(void) {
     char buf[BUF_SIZ];
@@ -260,7 +314,8 @@ int main(void) {
 
     // printf("%d %d %d %ld %ld\n", buf2.st_type, buf2.st_fmode, buf2.st_size, buf2.st_ctime, buf2.st_atime);
 
-    in = open("console", O_RDWR);
+    //in = open("console", O_RDWR);
+    in = 0;
     assert(in >= 0);
 
     bp = buf;

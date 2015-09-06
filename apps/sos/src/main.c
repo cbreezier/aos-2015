@@ -139,52 +139,26 @@ void unknown_syscall(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
+void sos_exit(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+    /* TODO M7: fix */
+    printf("SOS: Ending first process\n");
+    end_first_process();
+    printf("SOS: First process ended\n");
+
+    cspace_free_slot(cur_cspace, reply_cap);
+
+}
+
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word syscall_number;
 
     syscall_number = seL4_GetMR(0);
     
     /* Process system call */
-    seL4_MessageInfo_t reply;
-    seL4_Word buffer[350];
-    size_t i;
-
     //printf("got syscall number %u\n", syscall_number);
 
     switch (syscall_number) {
-    case SOS_SYSCALL0:
-        dprintf(0, "syscall: thread made syscall 0!\n");
-
-        reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, 0);
-        seL4_Send(reply_cap, reply);
-
-        cspace_free_slot(cur_cspace, reply_cap);
-
-        break;
-    case 1:
-        printf("SOS: Ending first process\n");
-        end_first_process();
-        printf("SOS: First process ended\n");
-
-        cspace_free_slot(cur_cspace, reply_cap);
-        
-        break;
-    case 2:
-        num_args = seL4_GetMR(1);
-        for (i = 0; i <= num_args; i++) 
-            buffer[i] = seL4_GetMR(i + 2);
-        *((char *) buffer + num_args) = '\0';
-        console_write(NULL, 0, buffer, num_args);
-
-        // Reply so that we can context switch back to caller
-        reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, 0);
-        seL4_Send(reply_cap, reply);
-        
-        cspace_free_slot(cur_cspace, reply_cap);
-
-        break;
     default:
         if (syscall_number >= NUM_SYSCALLS) {
             unknown_syscall(NULL, 0, 0);   
@@ -444,11 +418,42 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
         tty_test_process.proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? 0 : i + 1;
     }
     /* Invalid fd - reserved for stdin, stdout, stderr */
-    tty_test_process.proc_files[0].next_free = 0;
-    tty_test_process.proc_files[1].next_free = 0;
-    tty_test_process.proc_files[2].next_free = 0;
+//    tty_test_process.proc_files[0].next_free = 0;
+//    tty_test_process.proc_files[1].next_free = 1;
+//    tty_test_process.proc_files[2].next_free = 2;
     tty_test_process.files_head_free = 3;
     tty_test_process.files_tail_free = OPEN_FILE_MAX - 1;
+
+    /* TODO M7: Fix */
+    bool exists = false;
+    int open_entry = -1;
+    sync_acquire(open_files_lock);
+    for (int i = OPEN_FILE_MAX; i >= 0; --i) {
+        if (open_files[i].ref_count > 0) {
+            if (strcmp(open_files[i].file_obj.name, "console") == 0) {
+                exists = true;
+                open_entry = i;
+                break;
+            }
+        } else {
+            open_entry = i;
+        }
+    }
+    assert(exists || open_entry != -1);
+    if (exists) {
+        open_files[open_entry].ref_count += 3;
+    } else {
+        open_files[open_entry].ref_count = 3;
+        open_files[open_entry].file_obj.read = console_read;
+        open_files[open_entry].file_obj.write = console_write;
+        strcpy(open_files[open_entry].file_obj.name, "console");
+    }
+    sync_release(open_files_lock);
+    for (int i = 0; i < 3; ++i) {
+        tty_test_process.proc_files[i].used = true;
+        tty_test_process.proc_files[i].open_file_idx = open_entry;
+        tty_test_process.proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
+    }
 
     /* Start the new process */
     printf("almost done!\n");
@@ -566,6 +571,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     for (uint32_t i = 0; i < NUM_SYSCALLS; ++i) {
         syscall_jt[i] = unknown_syscall;
     }
+    syscall_jt[SYS_exit] = sos_exit;
     syscall_jt[SYS_mmap2] = sos_mmap2;
     syscall_jt[SYS_munmap] = sos_munmap;
     syscall_jt[SYS_nanosleep] = sos_nanosleep;

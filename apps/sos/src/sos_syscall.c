@@ -164,7 +164,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
     int err = 0;
-    int fd = 0;
+    int fd = -1;
 
     /* Do copyin to get path */
     void *user_path = (void*) seL4_GetMR(1);
@@ -206,7 +206,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     fd = proc->files_head_free;
     /* Update next_free, free_head, free_tail */
-    if (fd == 0) {
+    if (fd == -1) {
         sync_release(open_files_lock);
         err = EMFILE;
         goto sos_open_end;
@@ -281,7 +281,11 @@ void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
     int fd = seL4_GetMR(1);
 
-
+    
+    if (fd < 0 || fd >= OPEN_FILE_MAX) {
+        err = EBADF;
+        goto sos_close_end;
+    }
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
         err = EBADF;
@@ -295,14 +299,14 @@ void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     sync_release(open_files_lock);
 
     /* Add fd back to available fds */
-    if (proc->files_head_free == 0) {
+    if (proc->files_head_free == -1) {
         proc->files_head_free = fd;
     } else {
-        proc->proc_files[proc->files_tail_free].next_free = proc->files_head_free;
+        proc->proc_files[proc->files_tail_free].next_free = fd;
     }
     proc->files_tail_free = fd;
 
-    proc->proc_files[fd].next_free = 0;
+    proc->proc_files[fd].next_free = -1;
 
 sos_close_end:
     asm("nop");
@@ -324,6 +328,11 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
     int nread = 0;
     char *sos_buffer = NULL;
+
+    if (fd < 0 || fd >= OPEN_FILE_MAX) {
+        err = EBADF;
+        goto sos_read_end;
+    }
 
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
@@ -379,6 +388,11 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
     int nwrite = 0;
     char *sos_buffer = NULL;
+
+    if (fd < 0 || fd >= OPEN_FILE_MAX) {
+        err = EBADF;
+        goto sos_write_end;
+    }
 
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {

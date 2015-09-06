@@ -66,7 +66,7 @@ sys_writev(va_list ap)
     /* Write the buffer to console if the fd is for stdout or stderr. */
     if (fildes == STDOUT_FD || fildes == STDERR_FD) {
         for (int i = 0; i < iovcnt; i++) {
-            ret += sos_write(iov[i].iov_base, iov[i].iov_len);
+            ret += sos_sys_write(fildes, iov[i].iov_base, iov[i].iov_len);
         }
     } else {
         for (int i = 0; i < iovcnt; i++) {
