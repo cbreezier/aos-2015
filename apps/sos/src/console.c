@@ -77,13 +77,14 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
     size_t can_read = 0;
     int err = 0;
     size_t bytes_left = nbytes;
-    for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size, ++svaddr, --can_read) {
+    for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size, --can_read) {
         if (buf_pos >= MAX_BUFF_SIZE) {
             buf_pos -= MAX_BUFF_SIZE;
         }
         if (!can_read) {
             err = user_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
             if (err) {
+                sync_release(read_serial_lock);
                 return -err;
             }
             assert(can_read && "Should be able to read after translating page");
@@ -121,14 +122,14 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
             has_bytes_lock->holder = 0;
             err = read_buf(proc, dest, to_copy, &read_newline);
             if (err < 0) {
-                return -err;
+                return err;
             }
             nbytes_left -= err; 
 
         } else {
             err = read_buf(proc, dest, nbytes_left, &read_newline);
             if (err < 0) {
-                return -err;
+                return err;
             }
             nbytes_left -= err;
         }
@@ -150,15 +151,13 @@ int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *s
     while (bytes_left > 0) {
         err = user_buf_to_sos(proc, src, (size_t) bytes_left, &svaddr, &to_write);
         if (err) {
+            sync_release(write_serial_lock);
             return -err;
         }
-        err = serial_send(serial, (char *)svaddr, (int) to_write);
-        if (err) {
-            return -err;
-        }
-        bytes_left -= to_write;
+        int written = serial_send(serial, (char *)svaddr, (int) to_write);
+        bytes_left -= written;
     }
     sync_release(write_serial_lock);
 
-    return -err;
+    return nbytes;
 }

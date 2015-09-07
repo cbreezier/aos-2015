@@ -229,7 +229,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
             err = nfs_lookup_sync(path, &fh, &fattr);
 
             if (err == ENOENT/* && (mode & O_CREAT)*/) {
-                uint32_t nfs_mode = sos_mode_to_nfs(mode);
+                uint32_t nfs_mode = sos_mode_to_nfs(FM_WRITE | FM_READ);
                 err = nfs_create_sync(path, nfs_mode, &fh, &fattr);
             }
             if (err) {
@@ -405,6 +405,7 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
+    printf("sos syscall nbytes %d\n", nbytes);
     nwrite = file->write(proc, file, fd_entry->offset, buf, nbytes);
     if (nwrite < 0) {
         err = -nwrite;

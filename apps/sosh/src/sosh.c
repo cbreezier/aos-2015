@@ -118,7 +118,7 @@ static int cat(int argc, char **argv) {
     close(stdout_fd);
 
     if (num_read == -1 || num_written == -1) {
-        printf("error on write\n");
+        printf("error on write %d %d\n", num_read, num_written);
         return 1;
     }
 
