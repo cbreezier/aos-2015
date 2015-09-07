@@ -331,7 +331,6 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     int err = 0;
     int nread = 0;
-    char *sos_buffer = NULL;
 
     if (fd < 0 || fd >= OPEN_FILE_MAX) {
         err = EBADF;
@@ -355,12 +354,7 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    sos_buffer = malloc(nbytes * sizeof(char));
-    if (sos_buffer == NULL) {
-        err = ENOMEM;
-        goto sos_read_end;
-    }
-    nread = file->read(file, fd_entry->offset, sos_buffer, nbytes);
+    nread = file->read(proc, file, fd_entry->offset, buf, nbytes);
     if (nread < 0) {
         err = -nread;
         goto sos_read_end;
@@ -372,9 +366,7 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
 sos_read_end:
-    if (sos_buffer) {
-        free(sos_buffer);
-    }
+    asm("nop");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -393,7 +385,6 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     int err = 0;
     int nwrite = 0;
-    char *sos_buffer = NULL;
 
     if (fd < 0 || fd >= OPEN_FILE_MAX) {
         err = EBADF;
@@ -418,16 +409,7 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    sos_buffer = malloc(nbytes * sizeof(char));
-    if (sos_buffer == NULL) {
-        err = ENOMEM;
-        goto sos_write_end;
-    }
-    err = copyin(proc, sos_buffer, buf, nbytes);
-    if (err) {
-        goto sos_write_end;
-    }
-    nwrite = file->write(file, fd_entry->offset, sos_buffer, nbytes);
+    nwrite = file->write(proc, file, fd_entry->offset, buf, nbytes);
     if (nwrite < 0) {
         err = -nwrite;
         goto sos_write_end;

@@ -34,8 +34,8 @@ struct file_t;
 
 typedef unsigned int size_t;
 
-typedef int (*read_type)(struct file_t *file, uint32_t offset, void *dest, size_t nbytes);
-typedef int (*write_type)(struct file_t *file, uint32_t offset, void *src, size_t nbytes);
+typedef int (*read_type)(sos_process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes);
+typedef int (*write_type)(sos_process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes);
 
 struct file_t {
     read_type read;

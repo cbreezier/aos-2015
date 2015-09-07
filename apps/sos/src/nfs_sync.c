@@ -14,8 +14,12 @@ struct token {
 
     /* For read and write */
     void *sos_buf;
+    void *user_buf;
     int count;
     bool finished;
+    int err;
+
+    sos_process_t *proc;
 
     /* For readdir */
     nfscookie_t cookie;
@@ -122,23 +126,26 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
         t->finished = true;
     }
 
-    //copyout(t->proc, t->usr_buf + t->count, data, count);
-    memcpy(t->sos_buf + t->count, data, count);
+    t->err = copyout(t->proc, t->usr_buf + t->count, data, count);
     t->count += count;
     
     seL4_Notify(t->async_ep, 0);
 }
 
 /* Returns number of bytes read. Returns -error upon error */
-int nfs_read_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes) {
+int nfs_read_sync(sos_process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
-    t.sos_buf = sos_buf;
+    t.usr_buf = usr_buf;
+    t.proc = proc;
     t.count = 0;
     t.finished = false;
     
     while (!t.finished && t.count < nbytes) {
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, nbytes - t.count, nfs_read_cb, (uintptr_t)(&t));
+        if (t.err) {
+            return -err;
+        }
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
@@ -168,15 +175,25 @@ static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, 
 }
 
 /* Returns number of bytes written. Returns -error upon error */
-int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes) {
+int nfs_write_sync(sos_process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.sos_buf = sos_buf;
     t.count = 0;
     t.finished = false;
-    
-    while (!t.finished && t.count < nbytes) {
-        enum rpc_stat res = nfs_write(&file->fh, offset + t.count, nbytes - t.count, sos_buf + t.count, nfs_write_cb, (uintptr_t)(&t));
+
+    if (!user_buf_in_region(usr_buf, nbytes)) {
+        return -EFAULT;
+    }
+ 
+    while (!t.finished && nbytes > 0) {
+        seL4_Word svaddr;
+        size_t to_write = 0;
+        int err = user_buf_to_sos(proc, usr_buf, nbytes, &svaddr, &to_write);
+        if (err) {
+            return -err;
+        }
+        enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(&svaddr), nfs_write_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
@@ -187,6 +204,8 @@ int nfs_write_sync(struct file_t *file, uint32_t offset, void *sos_buf, size_t n
         if (err) {
             return -err;
         }
+        usr_buf += to_write;
+        nbytes -= to_write;
     }
     
     return t.count;
