@@ -405,7 +405,6 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    printf("sos syscall nbytes %d\n", nbytes);
     nwrite = file->write(proc, file, fd_entry->offset, buf, nbytes);
     if (nwrite < 0) {
         err = -nwrite;
