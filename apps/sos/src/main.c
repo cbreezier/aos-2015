@@ -154,6 +154,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word syscall_number;
 
     syscall_number = seL4_GetMR(0);
+    printf("%d\n", syscall_number);
     
     /* Process system call */
     //printf("got syscall number %u\n", syscall_number);
@@ -177,18 +178,24 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_MessageInfo_t message;
 
         //printf("waiting on syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
+        //printf("W %x\n", get_cur_thread()->wakeup_async_ep);
+        printf("W\n");
         message = seL4_Wait(ep, &badge);
+        printf("G\n");
         //printf("_");
         //printf("got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         label = seL4_MessageInfo_get_label(message);
 
         if(badge & IRQ_EP_BADGE){
+            printf("badge %d\n", badge);
 
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
+                printf(" > timer\n");
                 timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
+                printf(" > network\n");
                 network_irq();
             }
 

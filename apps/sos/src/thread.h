@@ -3,8 +3,8 @@
 
 #include <sel4/sel4.h>
 
-#define NUM_SOS_THREADS 32
-#define STACK_NUM_FRAMES 100
+#define NUM_SOS_THREADS 1
+#define STACK_NUM_FRAMES 1
 
 struct sos_thread {
     uint32_t tcb_addr;

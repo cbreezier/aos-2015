@@ -209,13 +209,13 @@ pid_t sos_process_wait(pid_t pid) {
  * to exit. Returns the pid of the process which exited.
  */
 
-static size_t sos_debug_print(const void *vData, size_t count) {
-    size_t i;
-    const char *realdata = vData;
-    for (i = 0; i < count; i++)
-        seL4_DebugPutChar(realdata[i]);
-    return count;
-}
+// static size_t sos_debug_print(const void *vData, size_t count) {
+//     size_t i;
+//     const char *realdata = vData;
+//     for (i = 0; i < count; i++)
+//         seL4_DebugPutChar(realdata[i]);
+//     return count;
+// }
 
 size_t sos_serial_write(const seL4_Word *data, size_t len) {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, (len+3)/4 + 2);

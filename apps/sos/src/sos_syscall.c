@@ -86,7 +86,9 @@ void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     cspace_free_slot(cur_cspace, reply_cap);
 
-    free(data);
+    if (data) {
+        free(data);
+    }
 }
 
 void sos_clock_gettime(process_t *proc, seL4_CPtr reply_cap, int num_args) {
@@ -161,6 +163,7 @@ static uint32_t sos_mode_to_nfs(fmode_t mode) {
 }
 
 void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    printf("O\n");
     (void) num_args;
 
     int err = 0;
@@ -263,7 +266,9 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->proc_files[fd].mode = mode;
     
 sos_open_end:
-    free(path);
+    if (path) {
+        free(path);
+    }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -368,7 +373,9 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
 sos_read_end:
-    free(sos_buffer);
+    if (sos_buffer) {
+        free(sos_buffer);
+    }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -429,7 +436,9 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     fd_entry->offset += nwrite;
 
 sos_write_end:
-    free(sos_buffer);
+    if (sos_buffer) {
+        free(sos_buffer);
+    }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -466,6 +475,7 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     fhandle_t fh;
     fattr_t fattr;
     //printf("calling lookup sync\n");
+    //int a = 0;for (int i = 0; i < 2e4; ++i) a += i;
     err = nfs_lookup_sync(path, &fh, &fattr); 
     //printf("finsihed lookup sync\n");
 
@@ -485,7 +495,9 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
 sos_stat_end:
-    free(path);
+    if (path) {
+        free(path);
+    }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
     seL4_SetMR(0, err);
@@ -522,8 +534,8 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *user_buf= (void*)seL4_GetMR(2);
     size_t user_buf_sz = (size_t)seL4_GetMR(3);
 
-
     int num_files = 0;
+    //int a = 0;for (int i = 0; i < 2e4; ++i) a += i;
     err = nfs_readdir_sync((void*)dir_entries, &num_files);
     if (err) {
         goto sos_getdents_end;
@@ -547,6 +559,9 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 sos_getdents_end:
     if (dir_entries != NULL) {
         for (int i = 0; i < FILES_PER_DIR; ++i) {
+            if (dir_entries[i] == NULL) {
+                break;
+            }
             free(dir_entries[i]);
         }
         free(dir_entries);

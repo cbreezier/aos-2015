@@ -314,8 +314,8 @@ int main(void) {
 
     // printf("%d %d %d %ld %ld\n", buf2.st_type, buf2.st_fmode, buf2.st_size, buf2.st_ctime, buf2.st_atime);
 
-    //in = open("console", O_RDWR);
-    in = 0;
+    in = open("console", O_RDWR);
+    //in = 0;
     assert(in >= 0);
 
     bp = buf;

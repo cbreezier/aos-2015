@@ -54,7 +54,7 @@ void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
 
         err = seL4_TCB_Configure(thread.tcb_cap,
                                  sos_interrupt_ep_cap, 
-                                 255, /* Priority */
+                                 255 - i, /* Priority */
                                  cur_cspace->root_cnode,
                                  cur_cspace->guard,
                                  seL4_CapInitThreadVSpace,
