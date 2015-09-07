@@ -163,7 +163,6 @@ static uint32_t sos_mode_to_nfs(fmode_t mode) {
 }
 
 void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
-    printf("O\n");
     (void) num_args;
 
     int err = 0;
@@ -452,7 +451,6 @@ sos_write_end:
 
 
 void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
-    //printf("sos stat called\n");
     (void) num_args;
 
     int err = 0;
@@ -474,10 +472,7 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     fhandle_t fh;
     fattr_t fattr;
-    //printf("calling lookup sync\n");
-    //int a = 0;for (int i = 0; i < 2e4; ++i) a += i;
     err = nfs_lookup_sync(path, &fh, &fattr); 
-    //printf("finsihed lookup sync\n");
 
     if (err) {
         goto sos_stat_end;
@@ -535,7 +530,6 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     size_t user_buf_sz = (size_t)seL4_GetMR(3);
 
     int num_files = 0;
-    //int a = 0;for (int i = 0; i < 2e4; ++i) a += i;
     err = nfs_readdir_sync((void*)dir_entries, &num_files);
     if (err) {
         goto sos_getdents_end;

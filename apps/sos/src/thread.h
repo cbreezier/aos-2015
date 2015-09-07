@@ -3,7 +3,7 @@
 
 #include <sel4/sel4.h>
 
-#define NUM_SOS_THREADS 1
+#define NUM_SOS_THREADS 2
 #define STACK_NUM_FRAMES 1
 
 struct sos_thread {

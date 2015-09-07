@@ -87,7 +87,7 @@ seL4_CPtr _sos_interrupt_ep_cap;
 /**
  * NFS mount point
  */
-#define NFS_TICK_TIME 1000ull
+#define NFS_TICK_TIME 1000000ull
 extern fhandle_t mnt_point;
 
 static void end_first_process();
@@ -151,10 +151,12 @@ void sos_exit(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 }
 
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
+    if (get_cur_thread() != &sos_threads[1]) {
+        printf("warning warning SKLFJSLFJSLD:FJSDL:\n");
+    }
     seL4_Word syscall_number;
 
     syscall_number = seL4_GetMR(0);
-    printf("%d\n", syscall_number);
     
     /* Process system call */
     //printf("got syscall number %u\n", syscall_number);
@@ -179,23 +181,23 @@ void syscall_loop(seL4_CPtr ep) {
 
         //printf("waiting on syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         //printf("W %x\n", get_cur_thread()->wakeup_async_ep);
-        printf("W\n");
+        //printf("W\n");
         message = seL4_Wait(ep, &badge);
-        printf("G\n");
+        //printf("G\n");
         //printf("_");
         //printf("got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         label = seL4_MessageInfo_get_label(message);
 
         if(badge & IRQ_EP_BADGE){
-            printf("badge %d\n", badge);
+            //printf("badge %d\n", badge);
 
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
-                printf(" > timer\n");
+                //printf(" > timer\n");
                 timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
-                printf(" > network\n");
+                //printf(" > network\n");
                 network_irq();
             }
 
@@ -731,7 +733,8 @@ int main(void) {
     dprintf(0, "\nSOS entering syscall loop\n");
     printf("Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
 
-    syscall_loop(_sos_ipc_ep_cap);
+    //syscall_loop(_sos_ipc_ep_cap);
+    syscall_loop(_sos_interrupt_ep_cap);
 
     /* Not reached */
     return 0;

@@ -112,7 +112,11 @@ struct sos_thread *get_cur_thread() {
     if (ipc_buf_addr < low_ipc_addr || ipc_buf_addr > high_ipc_addr) {
         idx = 0;
     } else {
-        idx = (ipc_buf_addr - low_ipc_addr) / ipc_addr_diff;
+        if (NUM_SOS_THREADS == 2) {
+            idx = 1;
+        } else {
+            idx = (ipc_buf_addr - low_ipc_addr) / ipc_addr_diff;
+        }
     }
     return &sos_threads[idx];
 }
