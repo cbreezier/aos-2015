@@ -87,7 +87,7 @@ seL4_CPtr _sos_interrupt_ep_cap;
 /**
  * NFS mount point
  */
-#define NFS_TICK_TIME 1000000ull
+#define NFS_TICK_TIME 100000ull
 extern fhandle_t mnt_point;
 
 static void end_first_process();
@@ -183,6 +183,7 @@ void syscall_loop(seL4_CPtr ep) {
         //printf("W %x\n", get_cur_thread()->wakeup_async_ep);
         //printf("W\n");
         message = seL4_Wait(ep, &badge);
+        printf("Received message\n");
         //printf("G\n");
         //printf("_");
         //printf("got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);

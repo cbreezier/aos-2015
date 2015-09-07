@@ -63,15 +63,31 @@ static int min(int a, int b) {
     return a < b ? a : b;
 }
 
-static int read_buf(void *dest, size_t nbytes, bool *read_newline) {
+/*
+ * dest is a user address
+ * returns number of bytes read, -err if err
+ */
+static int read_buf(sos_process_t *proc, void *dest, size_t nbytes, bool *read_newline) {
     int num_read = 0;
     sync_acquire(read_serial_lock);
     assert(buf_size >= 1 && "Not enough bytes to read from");
-    for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size) {
+
+    seL4_Word svaddr = 0;
+    size_t can_read = 0;
+    int err = 0;
+    for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size, ++svaddr, --can_read) {
         if (buf_pos >= MAX_BUFF_SIZE) {
             buf_pos -= MAX_BUFF_SIZE;
         }
-        ((char*)dest)[i] = buf[buf_pos];
+        if (!can_read) {
+            err = user_buf_to_sos(proc, dest, (size_t) bytes_left, &svaddr, &can_read);
+            if (err) {
+                return -err;
+            }
+            assert(can_read && "Should be able to read after translating page");
+        }
+
+        ((char*)svaddr)[i] = buf[buf_pos];
         num_read++;
         if (buf[buf_pos] == '\n') {
             *read_newline = true;
@@ -85,9 +101,14 @@ static int read_buf(void *dest, size_t nbytes, bool *read_newline) {
     return num_read;
 }
 
-int console_read(struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
+int console_read(sos_process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
+    if (!user_buf_in_region(dest, nbytes)) {
+        return -EFAULT;
+    }
+
     size_t nbytes_left = nbytes;
     bool read_newline = false;
+    int err = 0;
     while (nbytes_left > 0 && !read_newline) {
         if (buf_size < nbytes_left) {
             size_t to_copy = min(nbytes_left, MAX_BUFF_SIZE);
@@ -95,19 +116,46 @@ int console_read(struct file_t *file, uint32_t offset, void *dest, size_t nbytes
             has_notified = false;
             sync_acquire(has_bytes_lock);
             has_bytes_lock->holder = 0;
-            
-            nbytes_left -= read_buf(dest, to_copy, &read_newline);
+            err = read_buf(proc, dest, to_copy, &read_newline);
+            if (err < 0) {
+                return -err;
+            }
+            nbytes_left -= err; 
 
         } else {
-            nbytes_left -= read_buf(dest, nbytes_left, &read_newline);
+            err = read_buf(proc, dest, nbytes_left, &read_newline);
+            if (err < 0) {
+                return -err;
+            }
+            nbytes_left -= err;
         }
     }
     return nbytes - nbytes_left;
 }
 
-int console_write(struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
+/* src is a user address */
+int console_write(sos_process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
+    if (!user_buf_in_region(src, nbytes)) {
+        return -EFAULT;
+    }
+
     sync_acquire(write_serial_lock);
-    int err = serial_send(serial, (char *)src, (int)nbytes);
+    int bytes_left = nbytes;
+    int err = 0;
+    seL4_Word svaddr = 0;
+    size_t to_write = 0;
+    while (bytes_left > 0) {
+        err = user_buf_to_sos(proc, src, (size_t) bytes_left, &svaddr, &to_write);
+        if (err) {
+            return -err;
+        }
+        err = serial_send(serial, (char *)svaddr, (int) to_write);
+        if (err) {
+            return -err;
+        }
+        bytes_left -= to_write;
+    }
     sync_release(write_serial_lock);
-    return err;
+
+    return -err;
 }
