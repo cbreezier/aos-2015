@@ -1,6 +1,7 @@
 #include <console.h>
 #include <sys/panic.h>
 #include <sync/mutex.h>
+#include "copy.h"
 
 #define MAX_BUFF_SIZE PAGE_SIZE
 
@@ -67,7 +68,7 @@ static int min(int a, int b) {
  * dest is a user address
  * returns number of bytes read, -err if err
  */
-static int read_buf(sos_process_t *proc, void *dest, size_t nbytes, bool *read_newline) {
+static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newline) {
     int num_read = 0;
     sync_acquire(read_serial_lock);
     assert(buf_size >= 1 && "Not enough bytes to read from");
@@ -75,12 +76,13 @@ static int read_buf(sos_process_t *proc, void *dest, size_t nbytes, bool *read_n
     seL4_Word svaddr = 0;
     size_t can_read = 0;
     int err = 0;
+    size_t bytes_left = nbytes;
     for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size, ++svaddr, --can_read) {
         if (buf_pos >= MAX_BUFF_SIZE) {
             buf_pos -= MAX_BUFF_SIZE;
         }
         if (!can_read) {
-            err = user_buf_to_sos(proc, dest, (size_t) bytes_left, &svaddr, &can_read);
+            err = user_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
             if (err) {
                 return -err;
             }
@@ -89,6 +91,7 @@ static int read_buf(sos_process_t *proc, void *dest, size_t nbytes, bool *read_n
 
         ((char*)svaddr)[i] = buf[buf_pos];
         num_read++;
+        bytes_left--;
         if (buf[buf_pos] == '\n') {
             *read_newline = true;
             ++buf_pos;
@@ -101,8 +104,8 @@ static int read_buf(sos_process_t *proc, void *dest, size_t nbytes, bool *read_n
     return num_read;
 }
 
-int console_read(sos_process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
-    if (!user_buf_in_region(dest, nbytes)) {
+int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
+    if (!user_buf_in_region(proc, dest, nbytes)) {
         return -EFAULT;
     }
 
@@ -134,8 +137,8 @@ int console_read(sos_process_t *proc, struct file_t *file, uint32_t offset, void
 }
 
 /* src is a user address */
-int console_write(sos_process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
-    if (!user_buf_in_region(src, nbytes)) {
+int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
+    if (!user_buf_in_region(proc, src, nbytes)) {
         return -EFAULT;
     }
 

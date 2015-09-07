@@ -6,6 +6,7 @@
 #include <sync/mutex.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "proc.h"
 
 #define FILES_PER_DIR 32
 
@@ -20,7 +21,6 @@ typedef int fmode_t;
 #define ST_SPECIAL 2    /* special (console) file */
 typedef int st_type_t;
 
-
 typedef struct {
     st_type_t st_type;    /* file type */
     fmode_t   st_fmode;   /* access mode */
@@ -34,8 +34,8 @@ struct file_t;
 
 typedef unsigned int size_t;
 
-typedef int (*read_type)(sos_process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes);
-typedef int (*write_type)(sos_process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes);
+typedef int (*read_type)(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes);
+typedef int (*write_type)(process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes);
 
 struct file_t {
     read_type read;

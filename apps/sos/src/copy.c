@@ -6,29 +6,29 @@ static inline int min(int a, int b) {
     return a < b ? a : b;
 }
 
-bool user_buf_in_region(void *user_buf, size_t buf_size) {
+bool user_buf_in_region(process_t *proc, void *user_buf, size_t buf_size) {
     /* Check that the entire user buffer lies within a valid region */
-    struct region_entry *path_region = as_get_region(proc->as, usr);
+    struct region_entry *path_region = as_get_region(proc->as, user_buf);
     if (path_region == NULL) {
         return false;
     }
     seL4_Word region_end = path_region->start + path_region->size;
-    if (sizeof(seL4_Word)*(region_end - (seL4_Word)usr) <  nbytes) {
+    if (sizeof(seL4_Word)*(region_end - (seL4_Word)user_buf) < buf_size) {
         return false;
     }
     return true;
 }
 
-int user_buf_to_sos(sos_process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *svaddr, size_t *buf_page_left) {
-    struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr);
+int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *svaddr, size_t *buf_page_left) {
+    struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
     if (pte == NULL || pte->frame == 0) {
-        int err = pt_add_page(proc, (seL4_Word)usr, svaddr, NULL, seL4_AllRights);
+        int err = pt_add_page(proc, (seL4_Word)usr_buf, svaddr, NULL, seL4_AllRights);
         if (err) {
             return err;
         }
     } else {
-        *svaddr = (void*)pte->frame;
+        *svaddr = (seL4_Word)pte->frame;
     }
     *svaddr += offset;
     

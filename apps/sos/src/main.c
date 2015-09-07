@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <limits.h>
 
 #include <cspace/cspace.h>
 
@@ -459,6 +460,8 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
         strcpy(open_files[open_entry].file_obj.name, "console");
     }
     sync_release(open_files_lock);
+
+    tty_test_process.proc_files = malloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
     for (int i = 0; i < 3; ++i) {
         tty_test_process.proc_files[i].used = true;
         tty_test_process.proc_files[i].open_file_idx = open_entry;

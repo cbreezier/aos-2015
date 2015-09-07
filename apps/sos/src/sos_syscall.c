@@ -360,10 +360,6 @@ void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_read_end;
     }
     fd_entry->offset += nread;
-    err = copyout(proc, buf, sos_buffer, nread);
-    if (err) {
-        goto sos_read_end;
-    }
 
 sos_read_end:
     asm("nop");
@@ -417,9 +413,7 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     fd_entry->offset += nwrite;
 
 sos_write_end:
-    if (sos_buffer) {
-        free(sos_buffer);
-    }
+    asm("nop");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);

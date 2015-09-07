@@ -5,6 +5,7 @@
 #include "thread.h"
 #include "nfs_sync.h"
 #include "network.h"
+#include "copy.h"
 
 struct token {
     seL4_CPtr async_ep;
@@ -14,12 +15,12 @@ struct token {
 
     /* For read and write */
     void *sos_buf;
-    void *user_buf;
+    void *usr_buf;
     int count;
     bool finished;
     int err;
 
-    sos_process_t *proc;
+    process_t *proc;
 
     /* For readdir */
     nfscookie_t cookie;
@@ -133,18 +134,19 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
 }
 
 /* Returns number of bytes read. Returns -error upon error */
-int nfs_read_sync(sos_process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
+int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.usr_buf = usr_buf;
     t.proc = proc;
     t.count = 0;
     t.finished = false;
+    t.err = 0;
     
     while (!t.finished && t.count < nbytes) {
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, nbytes - t.count, nfs_read_cb, (uintptr_t)(&t));
         if (t.err) {
-            return -err;
+            return -t.err;
         }
         int err = rpc_stat_to_err(res);
         if (err) {
@@ -175,14 +177,13 @@ static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, 
 }
 
 /* Returns number of bytes written. Returns -error upon error */
-int nfs_write_sync(sos_process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
+int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
-    t.sos_buf = sos_buf;
     t.count = 0;
     t.finished = false;
 
-    if (!user_buf_in_region(usr_buf, nbytes)) {
+    if (!user_buf_in_region(proc, usr_buf, nbytes)) {
         return -EFAULT;
     }
  
@@ -193,8 +194,9 @@ int nfs_write_sync(sos_process_t *proc, struct file_t *file, uint32_t offset, vo
         if (err) {
             return -err;
         }
-        enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(&svaddr), nfs_write_cb, (uintptr_t)(&t));
-        int err = rpc_stat_to_err(res);
+        int count_before = t.count;
+        enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
+        err = rpc_stat_to_err(res);
         if (err) {
             return -err;
         }
@@ -204,8 +206,9 @@ int nfs_write_sync(sos_process_t *proc, struct file_t *file, uint32_t offset, vo
         if (err) {
             return -err;
         }
-        usr_buf += to_write;
-        nbytes -= to_write;
+        int written = t.count - count_before;
+        usr_buf += written;
+        nbytes -= written;
     }
     
     return t.count;

@@ -4,13 +4,14 @@
 #include <sel4/sel4.h>
 #include <cspace/cspace.h>
 #include <limits.h>
-#include "file.h"
 
 #define N_NAME 32
 
 struct addrspace;
 
 typedef int pid_t;
+
+struct fd_entry;
 
 typedef struct {
     pid_t     pid;
@@ -33,7 +34,7 @@ typedef struct {
 
     struct addrspace *as;
 
-    struct fd_entry proc_files[OPEN_FILE_MAX];
+    struct fd_entry *proc_files;
     int files_head_free, files_tail_free;
 } process_t;
 
