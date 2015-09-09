@@ -2,6 +2,7 @@
 #define _SOS_SYSCALL_H_
 #include "proc.h"
 
+void sos_null(process_t *proc, seL4_CPtr reply_cap, int num_args); 
 
 void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args); 
 

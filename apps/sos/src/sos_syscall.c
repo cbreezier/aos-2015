@@ -13,6 +13,15 @@
 #include "nfs_sync.h"
 #include "copy.h"
 
+void sos_null(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, 0);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
 void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
     size_t length = (size_t)seL4_GetMR(2); 

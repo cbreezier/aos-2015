@@ -584,6 +584,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     for (uint32_t i = 0; i < NUM_SYSCALLS; ++i) {
         syscall_jt[i] = unknown_syscall;
     }
+    syscall_jt[0] = sos_null;
     syscall_jt[SYS_exit] = sos_exit;
     syscall_jt[SYS_mmap2] = sos_mmap2;
     syscall_jt[SYS_munmap] = sos_munmap;

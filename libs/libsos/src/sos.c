@@ -24,6 +24,15 @@
 
 #define SYSCALL_ENDPOINT_SLOT (1)
 
+int sos_sys_null(void) {
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, 0);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    return 0;
+}
+
 static int mode_to_sos(fmode_t mode) {
     int ret = 0;
     switch (mode) {

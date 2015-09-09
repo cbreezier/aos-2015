@@ -73,6 +73,9 @@ typedef struct {
     cspace_t *croot;
 } sos_process_t;
 
+/* NULL syscall */
+int sos_sys_null(void);
+
 /* I/O system calls */
 
 int sos_sys_open(const char *path, fmode_t mode);
