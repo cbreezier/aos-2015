@@ -24,7 +24,7 @@
 /* Your OS header file */
 #include <sos.h>
 
-#define BUF_SIZ   128
+#define BUF_SIZ   32768
 #define MAX_ARGS   32
 
 static int in;
@@ -302,7 +302,156 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
         {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} };
 
+static uint64_t mtime(void) {
+    struct timeval time;
+    gettimeofday(&time, NULL);
+    uint64_t micros = (uint64_t)time.tv_sec * US_IN_S + (uint64_t)time.tv_usec;
+    return micros;
+}
+
+#define MAX_BUF_SIZE 4096*16
+
+void touch_pages(char *buf, size_t num_bytes) {
+    for (size_t i = 0; i < num_bytes; i += 4096) {
+        buf[i] = (char)i;
+        if (buf[i] != (char)i) {
+            printf("failed touching pages %c %c\n", buf[i], (char)i);
+            while (true);
+        }
+    }
+}
+
+int read_res_fd, write_res_fd;
+
+void mapped_read_benchmark(size_t buf_size, int num_runs) {
+    //printf("Benchmark buf_size = %u, num_runs = %d\n", buf_size, num_runs);
+    char buf[MAX_BUF_SIZE];
+    uint64_t before_cache[num_runs+1];
+    uint64_t after_cache[num_runs+1];
+    touch_pages(buf, buf_size);
+
+    for (int i = 0; i < num_runs; ++i) {
+        for (int j = 0; j < buf_size; ++j) {
+            buf[j] = 0;
+        }
+        int fd = open("read_test", O_RDWR);
+        before_cache[i] = mtime();
+        int num_read = read(fd, buf, buf_size);
+        after_cache[i] = mtime();
+        for (int j = 0; j < buf_size; ++j) {
+            if (buf[j] != 'a') {
+                while(true);
+            }
+            assert(buf[j] == 'a');
+        }
+        if (num_read != buf_size) while (true);
+        assert(num_read == buf_size);
+        close(fd);
+    }
+
+    write(read_res_fd, "\n", 1);
+    for (int i = 0; i < num_runs; ++i) {
+        char buf[20];
+        sprintf(buf, "%llu\n", after_cache[i] - before_cache[i]);
+        int len = strlen(buf);
+        write(read_res_fd, buf, len);
+    }
+}
+
+void mapped_write_benchmark(size_t buf_size, int num_runs) {
+    //printf("Benchmark buf_size = %u, num_runs = %d\n", buf_size, num_runs);
+    char buf[MAX_BUF_SIZE];
+    uint64_t before_cache[num_runs+1];
+    uint64_t after_cache[num_runs+1];
+    touch_pages(buf, buf_size);
+
+    for (int i = 0; i < num_runs; ++i) {
+        for (int j = 0; j < buf_size; ++j) {
+            buf[j] = (char)(j % 26 + 'a');
+        }
+        int fd = open("write_test", O_RDWR);
+        before_cache[i] = mtime();
+        int num_write = write(fd, buf, buf_size);
+        after_cache[i] = mtime();
+
+        if (num_write != buf_size) while (true);
+        assert(num_write == buf_size);
+
+        int fd_read = open("write_test", O_RDWR);
+        for (int j = 0; j < buf_size; ++j) {
+            buf[j] = 0;
+        }
+        assert(read(fd_read, buf, buf_size) == num_write);
+        for (int j = 0; j < buf_size; ++j) {
+            if (buf[j] != ((char)(j % 26 + 'a'))) {
+                printf("write assertion failed\n");
+                while (true);
+            }
+        }
+        close(fd_read);
+
+        close(fd);
+    }
+
+    write(write_res_fd, "\n", 1);
+    for (int i = 0; i < num_runs; ++i) {
+        char buf[20];
+        sprintf(buf, "%llu\n", after_cache[i] - before_cache[i]);
+        int len = strlen(buf);
+        write(write_res_fd, buf, len);
+    }
+}
+
+void open_close_benchmark(int num_opens) {
+    char buf[num_opens][5];
+    for (int i = 0; i < num_opens; ++i) {
+        sprintf(buf[i], "%d", i);
+    }
+    int fds[num_opens];
+
+    uint64_t t1 = mtime(); 
+    fds[0] = open("0", O_RDWR);
+    for (int i = 1; i < num_opens; ++i) {
+        fds[i] = open(buf[i], O_RDWR);
+    }
+    uint64_t t2 = mtime();
+    
+    for (int i = 0; i < num_opens; ++i) {
+        close(fds[i]);
+    }
+
+    uint64_t t3 = mtime();
+
+    printf("%llu %llu\n", t2-t1, t3-t2);
+}
+
 int main(void) {
+    /* Testing mapped pages */
+
+//    read_res_fd = open("readres", O_RDWR);
+//    write_res_fd = open("writeres", O_RDWR);
+
+//    for (int i = 1; i <= 4096*16; i <<= 1) {
+//        mapped_read_benchmark(i, 16);
+//    }
+//    for (int i = 1; i <= 4096*16; i <<= 1) {
+//        mapped_write_benchmark(i, 16);
+//    }
+
+//    double sum = 0;
+//    for (int i = 0; i < 16; ++i) {
+//        uint64_t t1 = mtime();
+//        uint64_t t2 = mtime();
+//
+//        sum += t2 - t1;
+//    }
+//    printf("mtime avg %lf\n", sum / 16.0);
+//
+//    for (int i = 0; i < 16; ++i) {
+//        open_close_benchmark(25);
+//    }
+//
+//    return 0;
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;

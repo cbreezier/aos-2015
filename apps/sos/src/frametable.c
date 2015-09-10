@@ -75,17 +75,19 @@ void frametable_init() {
     conditional_panic(!ft_lock, "Unable to create ft lock");
 }
 
-seL4_Word frame_alloc(bool freeable, bool swappable) {
-    if (free_head == 0) {
-        return 0;
-    }
-
+seL4_Word frame_alloc(bool freeable, bool swappable) { //, process_t *user_proc) {
     sync_acquire(ft_lock);
 
+    if (free_head == 0) {
+        /* Paging stuff */
+        sync_release(ft_lock);
+        return 0;
+    }
     int idx = free_head;
     
     ft[idx].paddr = ut_alloc(seL4_PageBits);
     if (!ft[idx].paddr) {
+        /* Paging stuff */
         sync_release(ft_lock);
         return 0;
     }
@@ -132,6 +134,7 @@ int frame_free(seL4_Word vaddr) {
     }
     free_tail = idx;
 
+    ft[idx].paddr = 0;
     ft[idx].next_free = 0;
 
     int err = seL4_ARM_Page_Unmap(ft[idx].cap);

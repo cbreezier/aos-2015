@@ -38,5 +38,8 @@ typedef struct {
     int files_head_free, files_tail_free;
 } process_t;
 
+#include <sync/mutex.h>
+sync_mutex_t locklock;
+
 
 #endif /* _PROC_H_ */

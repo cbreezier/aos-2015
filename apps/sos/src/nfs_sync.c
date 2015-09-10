@@ -144,7 +144,8 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
     t.err = 0;
     
     while (!t.finished && t.count < nbytes) {
-        enum rpc_stat res = nfs_read(&file->fh, offset + t.count, nbytes - t.count, nfs_read_cb, (uintptr_t)(&t));
+        size_t to_read = nbytes - t.count < PAGE_SIZE ? nbytes - t.count : PAGE_SIZE;
+        enum rpc_stat res = nfs_read(&file->fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
         if (t.err) {
             return -t.err;
         }
@@ -200,7 +201,6 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
         if (err) {
             return -err;
         }
-
         seL4_Wait(t.async_ep, NULL);
         err = nfs_stat_to_err(t.status);
         if (err) {
@@ -222,6 +222,9 @@ static void nfs_readdir_cb(uintptr_t token, enum nfs_stat status, int num_files,
     char **dst = (char **)t->sos_buf;
 
     for (int i = 0; i < num_files; ++i) {
+        if (t->count+i >= FILES_PER_DIR) {
+            break;
+        }
         strncpy(dst[t->count + i], file_names[i], NAME_MAX);
         dst[t->count + i][NAME_MAX - 1] = '\0';
     }
@@ -243,7 +246,6 @@ int nfs_readdir_sync(void *sos_buf, int *num_files) {
         if (res) {
             return err;
         }
-
         seL4_Wait(t.async_ep, NULL);
         err = nfs_stat_to_err(t.status);
         if (err) {
@@ -283,7 +285,6 @@ int nfs_create_sync(const char *name, uint32_t mode, fhandle_t *ret_fh, fattr_t 
     if (err) {
         return err;
     }
-
     seL4_Wait(t.async_ep, NULL);
     err = nfs_stat_to_err(t.status);
     if (err) {

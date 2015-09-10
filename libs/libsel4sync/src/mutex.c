@@ -21,7 +21,8 @@ sync_create_mutex() {
     }
 
     // Prime the endpoint
-    sync_release(mutex);
+    mutex->holder = 0;
+    seL4_Notify(mutex->mapping, 0);
     return mutex;
 }
 
@@ -54,6 +55,9 @@ sync_acquire(sync_mutex_t mutex) {
 void
 sync_release(sync_mutex_t mutex) {
     assert(mutex);
+    if (mutex->holder != get_thread_id()) {
+        return;
+    }
     mutex->holder = 0;
 
     // Wake the next guy up

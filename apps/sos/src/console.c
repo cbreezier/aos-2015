@@ -2,6 +2,7 @@
 #include <sys/panic.h>
 #include <sync/mutex.h>
 #include "copy.h"
+#include "thread.h"
 
 #define MAX_BUFF_SIZE PAGE_SIZE
 
@@ -14,8 +15,7 @@ bool has_notified;
 sync_mutex_t read_serial_lock;
 sync_mutex_t write_serial_lock;
 
-/* More of a notifying semaphore */
-sync_mutex_t has_bytes_lock;
+seL4_CPtr notify_async_ep;
 
 void serial_callback_handler(struct serial *serial, char c) {
     sync_acquire(read_serial_lock);
@@ -34,7 +34,7 @@ void serial_callback_handler(struct serial *serial, char c) {
          && reader_required_bytes != 0
          && !has_notified) {
         has_notified = true;
-        sync_release(has_bytes_lock);
+        seL4_Notify(notify_async_ep, 0);
     }
     sync_release(read_serial_lock);
 
@@ -51,10 +51,6 @@ void console_init() {
     write_serial_lock = sync_create_mutex();
     conditional_panic(!write_serial_lock, "Cannot initialise serial device - write serial lock");
 
-    has_bytes_lock = sync_create_mutex();
-    conditional_panic(!has_bytes_lock, "Cannot initialise serial device - has bytes lock");
-    sync_acquire(has_bytes_lock);
-    has_bytes_lock->holder = 0;
     has_notified = true;
 
     buf_pos = 0;
@@ -106,6 +102,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
 }
 
 int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
+    /* TODO M7: Lock around entire console read? enforce only 1 reader */
     if (!user_buf_in_region(proc, dest, nbytes)) {
         return -EFAULT;
     }
@@ -114,12 +111,17 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
     bool read_newline = false;
     int err = 0;
     while (nbytes_left > 0 && !read_newline) {
+        sync_acquire(read_serial_lock);
         if (buf_size < nbytes_left) {
+
             size_t to_copy = min(nbytes_left, MAX_BUFF_SIZE);
             reader_required_bytes = to_copy;
             has_notified = false;
-            sync_acquire(has_bytes_lock);
-            has_bytes_lock->holder = 0;
+            notify_async_ep = get_cur_thread()->wakeup_async_ep;
+            sync_release(read_serial_lock);
+
+            seL4_Wait(notify_async_ep, NULL);
+
             err = read_buf(proc, dest, to_copy, &read_newline);
             if (err < 0) {
                 return err;
@@ -128,6 +130,7 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
 
         } else {
             err = read_buf(proc, dest, nbytes_left, &read_newline);
+            sync_release(read_serial_lock);
             if (err < 0) {
                 return err;
             }

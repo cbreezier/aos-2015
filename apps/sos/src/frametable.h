@@ -2,11 +2,18 @@
 #define _FRAMETABLE_H_
 
 #include <sync/mutex.h>
+#include "proc.h"
 
 struct ft_entry {
+    /* paddr should be 0 when the frame isn't allocated */
     seL4_Word paddr;
     seL4_CPtr cap;
     seL4_CPtr user_cap;
+
+    process_t *vaddr_proc;
+    seL4_Word vaddr;
+
+    bool referenced;
 
     uint32_t next_free;
 

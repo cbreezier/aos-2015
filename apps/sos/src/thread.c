@@ -103,6 +103,10 @@ void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
         err = create_ep(&sos_threads[i].wakeup_async_ep, &sos_threads[i].wakeup_ep_addr);
         conditional_panic(err, "Cannot create thread 0 ep");
 
+        /* Name thread (for debugging only) */
+        char buf[20];
+        sprintf(buf, "Thread %d", i);
+        seL4_DebugNameThread(thread.tcb_cap, buf);
     }
 }
 

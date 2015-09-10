@@ -223,8 +223,6 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_open_end;
     }
 
-    /* TODO M5: Other file stats (type, size, ctime, atime) */
-
     if (!exists) {
         open_files[open_entry].ref_count = 1;
         sync_release(open_files_lock);
@@ -516,6 +514,7 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     int num_files = 0;
     err = nfs_readdir_sync((void*)dir_entries, &num_files);
+    dir_entries[FILES_PER_DIR-1][0] = '\0';
     if (err) {
         goto sos_getdents_end;
     }
