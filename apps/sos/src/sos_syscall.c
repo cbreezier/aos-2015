@@ -174,11 +174,13 @@ static uint32_t sos_mode_to_nfs(fmode_t mode) {
 void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
+    void *user_path = (void*) seL4_GetMR(1);
+    fmode_t mode = (fmode_t) seL4_GetMR(2);
+
     int err = 0;
     int fd = -1;
 
     /* Do copyin to get path */
-    void *user_path = (void*) seL4_GetMR(1);
     char *path = malloc(NAME_MAX * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
@@ -190,8 +192,6 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_open_end;
     }
     path[NAME_MAX-1] = 0;
-
-    fmode_t mode = (fmode_t) seL4_GetMR(2);
 
     bool exists = false;
     int open_entry = -1;
@@ -237,7 +237,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
             if (err == ENOENT/* && (mode & O_CREAT)*/) {
                 uint32_t nfs_mode = sos_mode_to_nfs(FM_WRITE | FM_READ);
-                err = nfs_create_sync(path, nfs_mode, &fh, &fattr);
+                err = nfs_create_sync(path, nfs_mode, 0, &fh, &fattr);
             }
             if (err) {
                 goto sos_open_end;
@@ -270,6 +270,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     proc->proc_files[fd].used = true;
     proc->proc_files[fd].offset = 0;
     proc->proc_files[fd].mode = mode;
+
     
 sos_open_end:
     if (path) {
@@ -291,7 +292,6 @@ void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     int err = 0;
     int fd = seL4_GetMR(1);
-
     
     if (fd < 0 || fd >= OPEN_FILE_MAX) {
         err = EBADF;
@@ -489,6 +489,15 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) num_args;
 
     int err = 0;
+
+    int pos = (int)seL4_GetMR(1);
+    if (pos < 0 || pos >= FILES_PER_DIR) {
+        err = EFAULT;
+        goto sos_getdents_end;
+    }
+    void *user_buf= (void*)seL4_GetMR(2);
+    size_t user_buf_sz = (size_t)seL4_GetMR(3);
+
     size_t file_name_size = 0;
 
     char **dir_entries = malloc(sizeof(char*)*FILES_PER_DIR);
@@ -503,14 +512,6 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
             goto sos_getdents_end;
         }
     }
-
-    int pos = (int)seL4_GetMR(1);
-    if (pos < 0 || pos >= FILES_PER_DIR) {
-        err = EFAULT;
-        goto sos_getdents_end;
-    }
-    void *user_buf= (void*)seL4_GetMR(2);
-    size_t user_buf_sz = (size_t)seL4_GetMR(3);
 
     int num_files = 0;
     err = nfs_readdir_sync((void*)dir_entries, &num_files);

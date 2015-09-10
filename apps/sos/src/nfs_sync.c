@@ -267,14 +267,14 @@ void nfs_create_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, fattr_t
     seL4_Notify(t->async_ep, 0);
 }
 
-int nfs_create_sync(const char *name, uint32_t mode, fhandle_t *ret_fh, fattr_t *ret_fattr) {
+int nfs_create_sync(const char *name, uint32_t mode, size_t sz, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     sattr_t sattr;
     sattr.mode = mode;
     sattr.uid = -1;
     sattr.gid = -1;
-    sattr.size = 0;
+    sattr.size = sz;
     sattr.atime.tv_sec = -1;
     sattr.atime.tv_usec = -1;
     sattr.mtime.tv_sec = -1;

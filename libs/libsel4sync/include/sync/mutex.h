@@ -9,6 +9,9 @@ struct sync_mutex_ {
     void* ep;
     seL4_CPtr mapping;
 
+    /* Number of consecutive times the same thread has acquired this lock */
+    uint32_t hold_count;
+
     uint32_t holder;
 };
 

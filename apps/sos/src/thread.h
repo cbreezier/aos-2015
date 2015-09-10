@@ -3,7 +3,9 @@
 
 #include <sel4/sel4.h>
 
-#define NUM_SOS_THREADS 2
+#define NUM_SYNC_SOS_THREADS 2
+#define NUM_ASYNC_SOS_THREADS 2
+#define NUM_SOS_THREADS (NUM_ASYNC_SOS_THREADS + NUM_SYNC_SOS_THREADS)
 #define STACK_NUM_FRAMES 1
 
 struct sos_thread {
@@ -20,7 +22,8 @@ struct sos_thread {
     uint32_t wakeup_ep_addr;
 } sos_threads[NUM_SOS_THREADS];
 
-void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap);
+void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void), seL4_CPtr sos_interrupt_ep_cap);
+
 
 struct sos_thread *get_cur_thread();
 

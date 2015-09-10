@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <sys/panic.h>
 
-int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap, unsigned long permissions) {
+int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap) {
 
     vaddr = (vaddr / PAGE_SIZE) * PAGE_SIZE;
 
@@ -25,6 +25,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *f
     seL4_CapRights cap_rights = 0;
     if (cur->r) cap_rights |= seL4_CanRead;
     if (cur->w) cap_rights |= seL4_CanWrite;
+    if (cur->x) cap_rights |= seL4_CanRead;
     seL4_ARM_VMAttributes cap_attr = seL4_ARM_Default_VMAttributes;
     if (!cur->x) cap_attr |= seL4_ARM_ExecuteNever;
 
@@ -61,16 +62,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *f
     seL4_ARM_PageTable pt_cap = 0;
     seL4_Word pt_addr = 0;
 
-    ///* Only map at the end to prevent mapping before error checking */
-    //printf("frame %u, cap %u, proc->vroot %u, vaddr %u\n", frame_idx, (uint32_t)ft[frame_idx].cap, (uint32_t)proc->vroot, (uint32_t)vaddr);
-
-    //printf("minting %u %u\n", (uint32_t) cur_cspace, (uint32_t)proc->croot);
-    //seL4_CPtr cap = cspace_mint_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights, seL4_CapData_Badge_new(proc->pid));
     seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
-    //printf("minted %u\n", cap);
-
-    //int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
-    int err = sos_map_page(cap, proc->vroot, vaddr, permissions, cap_attr, &pt_cap, &pt_addr);
+    int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     //printf("sos_map_page with error %u\n", err);
     if (err) {
         frame_free(svaddr);
@@ -85,9 +78,9 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *f
 
     ft[frame_idx].user_cap = cap;
 
-    sync_release(ft_lock);
-
     proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
+
+    sync_release(ft_lock);
 
     return 0;
 }

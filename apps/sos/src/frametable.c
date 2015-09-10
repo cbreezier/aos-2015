@@ -166,14 +166,27 @@ seL4_Word frame_idx_to_vaddr(uint32_t idx) {
     return low_addr + PAGE_SIZE*idx;
 }
 
+int frame_change_swappable(seL4_Word svaddr, bool swappable) {
+    uint32_t idx = vaddr_to_frame_idx(svaddr);
+
+    if (!idx) {
+        return EFAULT;
+    }
+    
+    sync_acquire(ft_lock);
+    ft[idx].is_swappable = swappable;
+    sync_release(ft_lock);
+
+    return 0;
+}
+
 int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_VMAttributes attr) {
     uint32_t idx = vaddr_to_frame_idx(svaddr);
 
-    sync_acquire(ft_lock);
     if (!idx) {
-        sync_release(ft_lock);
         return EFAULT;
     }
+    sync_acquire(ft_lock);
 
     int err = seL4_ARM_Page_Unmap(ft[idx].cap);
     conditional_panic(err, "Unable to unmap page(change permissions)");

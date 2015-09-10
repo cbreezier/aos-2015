@@ -152,9 +152,6 @@ void sos_exit(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 }
 
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
-    if (get_cur_thread() != &sos_threads[1]) {
-        printf("warning warning SKLFJSLFJSLD:FJSDL:\n");
-    }
     seL4_Word syscall_number;
 
     syscall_number = seL4_GetMR(0);
@@ -209,7 +206,7 @@ void syscall_loop(seL4_CPtr ep) {
 
                 seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
                 assert(reply_cap != CSPACE_NULL);
-                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL, seL4_AllRights);
+                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
                 conditional_panic(err, "failed to add page(vm fault)");
 
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -337,7 +334,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     printf("Added IPC region\n");
 
     /* Create an IPC buffer */
-    err = pt_add_page(&tty_test_process, PROCESS_IPC_BUFFER, NULL, &tty_test_process.ipc_buffer_cap, seL4_AllRights);
+    err = pt_add_page(&tty_test_process, PROCESS_IPC_BUFFER, NULL, &tty_test_process.ipc_buffer_cap);
     conditional_panic(err, "Unable to add page table page for ipc buffer\n");
 
     // tty_test_process.ipc_buffer_addr = ut_alloc(seL4_PageBits);
@@ -524,8 +521,8 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     conditional_panic(err, "Failed to allocate c-slot for Interrupt endpoint");
 
     /* Bind the Async endpoint to our TCB */
-    err = seL4_TCB_BindAEP(seL4_CapInitThreadTCB, *async_ep);
-    conditional_panic(err, "Failed to bind ASync EP to TCB");
+    //err = seL4_TCB_BindAEP(seL4_CapInitThreadTCB, *async_ep);
+    //conditional_panic(err, "Failed to bind ASync EP to TCB");
 
 
     /* Create an endpoint for user application IPC */
@@ -672,12 +669,20 @@ void nfs_tick(uint32_t id, void *data) {
 //    printf("test2 done\n");
 //}
 
-void sos_thread_entrypoint() {
+void sos_sync_thread_entrypoint() {
     printf("Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
     syscall_loop(_sos_ipc_ep_cap);
 
     assert(!"SOS thread has exited");
 }
+
+void sos_async_thread_entrypoint() {
+    printf("Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
+    syscall_loop(_sos_interrupt_ep_cap);
+
+    assert(!"SOS thread has exited");
+}
+
 
 
 /*
@@ -692,7 +697,7 @@ int main(void) {
     frametable_init();
 
     /* Allocate all SOS threads */
-    threads_init(sos_thread_entrypoint, _sos_interrupt_ep_cap);
+    threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
 
 
     /* Initialise the network hardware */
@@ -735,6 +740,7 @@ int main(void) {
     printf("Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
 
     //syscall_loop(_sos_ipc_ep_cap);
+    //seL4_Wait(sos_threads[0].wakeup_async_ep, NULL);
     syscall_loop(_sos_interrupt_ep_cap);
 
     /* Not reached */

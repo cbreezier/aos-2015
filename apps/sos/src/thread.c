@@ -24,7 +24,7 @@ static int create_ep(seL4_CPtr *ep, uint32_t *ep_addr) {
     return 0;
 }
 
-void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
+void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
     /* Create extra notification endpoint for main SOS thread */
 
     int err = create_ep(&sos_threads[0].wakeup_async_ep, &sos_threads[0].wakeup_ep_addr);
@@ -80,7 +80,11 @@ void threads_init(void (*entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
 
         seL4_UserContext context;
         memset(&context, 0, sizeof(context));
-        context.pc = (seL4_Word)entry_point;
+        if (i < NUM_ASYNC_SOS_THREADS) {
+            context.pc = (seL4_Word)async_entry_point;
+        } else {
+            context.pc = (seL4_Word)sync_entry_point;
+        }
         context.sp = (seL4_Word)thread.stack_top;
 
         seL4_TCB_WriteRegisters(thread.tcb_cap, 1, 0, 2, &context);

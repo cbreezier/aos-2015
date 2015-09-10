@@ -1,11 +1,11 @@
-#include <addrspace.h>
-#include <vmem_layout.h>
 #include <string.h>
 #include <stdlib.h>
-#include <pagetable.h>
 #include <sys/panic.h>
 #include <ut_manager/ut.h>
-#include <frametable.h>
+#include "vmem_layout.h"
+#include "addrspace.h"
+#include "pagetable.h"
+#include "frametable.h"
 
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
@@ -42,8 +42,6 @@ int as_init(struct addrspace **as) {
         return ENOMEM;
     }
     memset(new->pt_addrs, 0, PAGE_SIZE);
-
-
 
     *as = new;
     return 0;
@@ -160,7 +158,7 @@ int as_add_stack(process_t *proc) {
     if (err) {
         return err;
     }
-    err = pt_add_page(proc, PROCESS_STACK_TOP - STACK_SIZE, NULL, NULL, 0);
+    err = pt_add_page(proc, PROCESS_STACK_TOP - STACK_SIZE, NULL, NULL);
     return err;
 }
 

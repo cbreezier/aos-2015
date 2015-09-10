@@ -1,6 +1,9 @@
-#include <copy.h>
-#include <pagetable.h>
 #include <string.h>
+#include <stdio.h>
+#include "copy.h"
+#include "pagetable.h"
+#include "frametable.h"
+#include "swap.h"
 
 static inline int min(int a, int b) {
     return a < b ? a : b;
@@ -20,11 +23,19 @@ bool user_buf_in_region(process_t *proc, void *user_buf, size_t buf_size) {
 }
 
 int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *svaddr, size_t *buf_page_left) {
+    sync_acquire(ft_lock);
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
     if (pte == NULL || pte->frame == 0) {
-        int err = pt_add_page(proc, (seL4_Word)usr_buf, svaddr, NULL, seL4_AllRights);
+        int err = pt_add_page(proc, (seL4_Word)usr_buf, svaddr, NULL);
         if (err) {
+            sync_release(ft_lock);
+            return err;
+        }
+    } else if (pte->frame < 0) {
+        int err = swapin(proc, (seL4_Word)usr_buf, svaddr);
+        if (err) {
+            sync_release(ft_lock);
             return err;
         }
     } else {
@@ -38,65 +49,29 @@ int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *
         *buf_page_left = buf_size;
     }
 
+    frame_change_swappable(*svaddr, 0);
+    sync_release(ft_lock);
+
     return 0;
 }
 
 static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
     /* Check that the entire user buffer lies within a valid region */
-    struct region_entry *path_region = as_get_region(proc->as, usr);
-    if (path_region == NULL) {
-        return EFAULT;
-    }
-    seL4_Word region_end = path_region->start + path_region->size;
-    if (sizeof(seL4_Word)*(region_end - (seL4_Word)usr) <  nbytes) {
+    if (!user_buf_in_region(proc, usr, nbytes)) {
         return EFAULT;
     }
 
     void *svaddr;
     void **dst = copyout ? &svaddr : &sos;
     void **src = copyout ? &sos : &svaddr;
-    /* 
-     * Get the svaddr for the initial value of the user buffer, and copy until
-     * a page aligned value. 
-     */
-    struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr);
-    seL4_Word offset = ((seL4_Word)usr - ((seL4_Word)usr / PAGE_SIZE) * PAGE_SIZE);
-    if (pte == NULL || pte->frame == 0) {
-        int err = pt_add_page(proc, (seL4_Word)usr, (seL4_Word*)&svaddr, NULL, seL4_AllRights);
+
+    /* Copy intermediate and final pages */
+    size_t to_copy;
+    while (nbytes > 0) {
+        int err = user_buf_to_sos(proc, usr, nbytes, (seL4_Word*)(&svaddr), &to_copy);
         if (err) {
             return err;
         }
-    } else {
-        svaddr = (void*)pte->frame;
-    }
-    svaddr += offset;
-    /* Copy first page */
-    size_t to_copy = min(nbytes, PAGE_SIZE - offset);
-    if (is_string) {
-        strncpy(*dst, *src, to_copy);
-        /* Check for end of string char */
-        if (*((char *)(*dst + to_copy - 1)) == 0) {
-            return 0;
-        }
-    } else {
-        memcpy(*dst, *src, to_copy);
-    }
-
-    nbytes -= to_copy;
-    usr += to_copy;
-    sos += to_copy;
-    /* Copy intermediate and final pages */
-    while (nbytes > 0) {
-        pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr);
-        if (pte == NULL || pte->frame == 0) {
-            int err = pt_add_page(proc, (seL4_Word)usr, (seL4_Word*)&svaddr, NULL, seL4_AllRights);
-            if (err) {
-                return err;
-            }
-        } else {
-            svaddr = (void*)pte->frame;
-        }
-        to_copy = min(nbytes, PAGE_SIZE);
         if (is_string) {
             strncpy(*dst, *src, to_copy);
             /* Check for end of string char */

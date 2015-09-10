@@ -42,14 +42,15 @@ sync_acquire(sync_mutex_t mutex) {
     assert(mutex);
 
     if (mutex->holder == get_thread_id()) {
+        mutex->hold_count++;
         return;
     }
 
-    //printf("acquiring for %d\n", get_thread_id());
     seL4_Wait(mutex->mapping, &badge);
     assert(badge == MUTEX_MAGIC);
+
     mutex->holder = get_thread_id();
-    //printf("acquired for %d\n", mutex->holder);
+    mutex->hold_count = 1;
 }
 
 void
@@ -57,11 +58,15 @@ sync_release(sync_mutex_t mutex) {
     assert(mutex);
     if (mutex->holder != get_thread_id()) {
         return;
-    }
-    mutex->holder = 0;
+    }  
 
-    // Wake the next guy up
-    seL4_Notify(mutex->mapping, 0);
+    mutex->hold_count--;
+    if (mutex->hold_count == 0) {
+        mutex->holder = 0;
+
+        // Wake the next guy up
+        seL4_Notify(mutex->mapping, 0);
+    }
 }
 
 int

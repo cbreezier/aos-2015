@@ -17,8 +17,8 @@ struct ft_entry {
 
     uint32_t next_free;
 
-    uint32_t is_freeable : 1;
-    uint32_t is_swappable : 1;
+    bool is_freeable;
+    bool is_swappable;
 } *ft;
 
 sync_mutex_t ft_lock;
@@ -42,6 +42,9 @@ uint32_t vaddr_to_frame_idx(seL4_Word vaddr);
 
 /* Given a frametable index, returns an SOS addr */
 seL4_Word frame_idx_to_vaddr(uint32_t idx);
+
+/* Given a vaddr, set the frame's swappable bit */
+int frame_change_swappable(seL4_Word svaddr, bool swappable);
 
 /* Given a vaddr, and permissions, change the frame's permissions */
 int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_VMAttributes attr);
