@@ -1,20 +1,21 @@
-#include <pagetable.h>
 #include <utils/mapping.h>
 #include <sel4/types.h>
-#include <frametable.h>
 #include <sel4/types_gen.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/panic.h>
+#include "swap.h"
+#include "pagetable.h"
+#include "frametable.h"
 
-int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *frame_cap) {
+int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CPtr *frame_cap) {
+
+    int err = 0;
 
     vaddr = (vaddr / PAGE_SIZE) * PAGE_SIZE;
 
     struct region_entry *cur = NULL;
-    //printf("vaddr is %u\n", vaddr);
     for (cur = proc->as->region_head; cur != NULL; cur = cur->next) {
-        //printf("considering region starting %u size %d\n", cur->start, cur->size);
         if (cur->start <= vaddr && cur->start + cur->size > vaddr) 
             break;
     }
@@ -42,15 +43,30 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *f
         }
         memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
     }
-    seL4_Word svaddr = frame_alloc(1, 1);
-//    seL4_Word waste_of_memory;
-//    uint32_t frame_idx = frame_alloc(&waste_of_memory);
+
+    seL4_Word svaddr = 0;
+    /* Swapped out page */
+    if (proc->as->page_directory[tl_idx][sl_idx].frame < 0) {
+        err = swapin(proc, vaddr, &svaddr);
+        if (err) {
+            return err;
+        }
+    } else {
+        svaddr = frame_alloc(1, 1);
+        if (svaddr == 0) {
+            err = swapin(proc, vaddr, &svaddr);
+            if (err) {
+                return err;
+            }
+        }
+    }
+
     uint32_t frame_idx = vaddr_to_frame_idx(svaddr);
     if (frame_idx == 0) {
         return ENOMEM;
     }
-    if (kaddr != NULL) {
-        *kaddr = frame_idx_to_vaddr(frame_idx);
+    if (ret_svaddr != NULL) {
+        *ret_svaddr = svaddr;
     }
 
     sync_acquire(ft_lock);
@@ -63,8 +79,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *f
     seL4_Word pt_addr = 0;
 
     seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
-    int err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
-    //printf("sos_map_page with error %u\n", err);
+    sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     if (err) {
         frame_free(svaddr);
         sync_release(ft_lock);
@@ -77,6 +92,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *kaddr, seL4_CPtr *f
     }
 
     ft[frame_idx].user_cap = cap;
+    ft[frame_idx].referenced = true;
 
     proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
 

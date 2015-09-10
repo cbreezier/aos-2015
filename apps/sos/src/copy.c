@@ -26,14 +26,8 @@ int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *
     sync_acquire(ft_lock);
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
-    if (pte == NULL || pte->frame == 0) {
+    if (pte == NULL || pte->frame <= 0) {
         int err = pt_add_page(proc, (seL4_Word)usr_buf, svaddr, NULL);
-        if (err) {
-            sync_release(ft_lock);
-            return err;
-        }
-    } else if (pte->frame < 0) {
-        int err = swapin(proc, (seL4_Word)usr_buf, svaddr);
         if (err) {
             sync_release(ft_lock);
             return err;
@@ -81,6 +75,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
         } else {
             memcpy(*dst, *src, to_copy);
         }
+        frame_change_swappable((seL4_Word)svaddr, true);
 
         nbytes -= to_copy;
         usr += to_copy;

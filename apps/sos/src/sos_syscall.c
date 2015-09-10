@@ -491,16 +491,18 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
 
     int pos = (int)seL4_GetMR(1);
+    void *user_buf= (void*)seL4_GetMR(2);
+    size_t user_buf_sz = (size_t)seL4_GetMR(3);
+
+    char **dir_entries = NULL;
+    size_t file_name_size = 0;
+
     if (pos < 0 || pos >= FILES_PER_DIR) {
         err = EFAULT;
         goto sos_getdents_end;
     }
-    void *user_buf= (void*)seL4_GetMR(2);
-    size_t user_buf_sz = (size_t)seL4_GetMR(3);
 
-    size_t file_name_size = 0;
-
-    char **dir_entries = malloc(sizeof(char*)*FILES_PER_DIR);
+    dir_entries = malloc(sizeof(char*)*FILES_PER_DIR);
     if (dir_entries == NULL) {
         err = ENOMEM;
         goto sos_getdents_end;

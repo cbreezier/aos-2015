@@ -3,6 +3,7 @@
 #include <sync/mutex.h>
 #include "copy.h"
 #include "thread.h"
+#include "frametable.h"
 
 #define MAX_BUFF_SIZE PAGE_SIZE
 
@@ -78,6 +79,9 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
             buf_pos -= MAX_BUFF_SIZE;
         }
         if (!can_read) {
+            if (svaddr != 0) {
+                frame_change_swappable(svaddr, true);
+            }
             err = user_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
             if (err) {
                 sync_release(read_serial_lock);
@@ -87,6 +91,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
         }
 
         ((char*)svaddr)[i] = buf[buf_pos];
+
         num_read++;
         bytes_left--;
         if (buf[buf_pos] == '\n') {
@@ -96,6 +101,10 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
             break;
         }
     }
+    if (svaddr != 0) {
+        frame_change_swappable(svaddr, true);
+    }
+
     reader_required_bytes = 0;
     sync_release(read_serial_lock);
     return num_read;
@@ -158,6 +167,8 @@ int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *s
             return -err;
         }
         int written = serial_send(serial, (char *)svaddr, (int) to_write);
+        frame_change_swappable(svaddr, true);
+
         bytes_left -= written;
     }
     sync_release(write_serial_lock);

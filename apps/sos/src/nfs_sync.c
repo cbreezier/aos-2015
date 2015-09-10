@@ -6,6 +6,7 @@
 #include "nfs_sync.h"
 #include "network.h"
 #include "copy.h"
+#include "frametable.h"
 
 struct token {
     seL4_CPtr async_ep;
@@ -164,6 +165,48 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
     return t.count;
 }
 
+static void nfs_sos_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count, void *data) {
+    struct token *t = (struct token*)token;
+    t->status = status;
+    t->fattr = *fattr;
+    if (!count) {
+        t->finished = true;
+    }
+
+    memcpy(t->sos_buf + t->count, data, count);
+    t->count += count;
+    
+    seL4_Notify(t->async_ep, 0);
+}
+
+int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes) {
+    assert(nbytes <= PAGE_SIZE);
+    struct token t;
+    t.async_ep = get_cur_thread()->wakeup_async_ep;
+    t.sos_buf = sos_buf;
+    t.count = 0;
+    t.finished = false;
+    t.err = 0;
+    
+    while (!t.finished && t.count < nbytes) {
+        enum rpc_stat res = nfs_read(&fh, offset + t.count, nbytes - t.count, nfs_sos_read_cb, (uintptr_t)(&t));
+        if (t.err) {
+            return -t.err;
+        }
+        int err = rpc_stat_to_err(res);
+        if (err) {
+            return -err;
+        }
+
+        seL4_Wait(t.async_ep, NULL);
+        err = nfs_stat_to_err(t.status);
+        if (err) {
+            return -err;
+        }
+    }
+    return t.count;
+}
+
 static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
     struct token *t = (struct token*)token;
     t->status = status;
@@ -199,15 +242,47 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
         enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
         err = rpc_stat_to_err(res);
         if (err) {
+            frame_change_swappable(svaddr, true);
             return -err;
         }
         seL4_Wait(t.async_ep, NULL);
+        frame_change_swappable(svaddr, true);
+
         err = nfs_stat_to_err(t.status);
         if (err) {
             return -err;
         }
         int written = t.count - count_before;
         usr_buf += written;
+        nbytes -= written;
+    }
+    
+    return t.count;
+}
+
+/* Returns number of bytes written. Returns -error upon error */
+int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes) {
+    assert(nbytes <= PAGE_SIZE && "nfs_sos_write_sync only handles writing at most PAGE_SIZE bytes");
+    struct token t;
+    t.async_ep = get_cur_thread()->wakeup_async_ep;
+    t.count = 0;
+    t.finished = false;
+ 
+    while (!t.finished && nbytes > 0) {
+        int count_before = t.count;
+        enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes - t.count, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
+        int err = rpc_stat_to_err(res);
+        if (err) {
+            return -err;
+        }
+        seL4_Wait(t.async_ep, NULL);
+
+        err = nfs_stat_to_err(t.status);
+        if (err) {
+            return -err;
+        }
+        int written = t.count - count_before;
+        sos_buf += written;
         nbytes -= written;
     }
     
