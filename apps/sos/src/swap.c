@@ -128,10 +128,10 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
     if (in_pte->frame < 0) {
         int disk_loc_in = -(in_pte->frame);
         /* Fetch page from disk */   
-        int err = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*svaddr), PAGE_SIZE);
-        if (err) {
-            printf("warning warning nfs read sucks\n");
-            return err;
+        int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*svaddr), PAGE_SIZE);
+        if (nread < 0) {
+            printf("warning warning nfs read sucks %d\n", nread);
+            return -nread;
         }
         swap_table[swap_free_tail].next_free = disk_loc_in;
         swap_table[disk_loc_in].next_free = -1;
