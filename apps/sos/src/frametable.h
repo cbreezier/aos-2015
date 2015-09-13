@@ -49,4 +49,7 @@ int frame_change_swappable(seL4_Word svaddr, bool swappable);
 /* Given a vaddr, and permissions, change the frame's permissions */
 int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_VMAttributes attr);
 
+/* Returns number of frames held in frame table */
+void get_ft_limits(size_t *lo, size_t *hi);
+
 #endif /* _FRAMETABLE_H_ */

@@ -32,6 +32,7 @@
 #include "pagetable.h"
 #include "sos_syscall.h"
 #include "console.h"
+#include "swap.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
@@ -699,7 +700,6 @@ int main(void) {
     /* Allocate all SOS threads */
     threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
 
-
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
@@ -712,6 +712,11 @@ int main(void) {
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     nfs_tick(0, NULL);
+
+    /* Initialise swap table */
+    size_t ft_lo_idx, ft_hi_idx;
+    get_ft_limits(&ft_lo_idx, &ft_hi_idx);
+    swap_init(ft_lo_idx, ft_hi_idx);
 //    uint64_t t1 = 1100000;
 //    uint64_t t2 = 77004001;
 //    uint64_t t3 = 400000;

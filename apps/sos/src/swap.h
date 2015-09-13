@@ -9,7 +9,7 @@
 
 struct swap_entry {
     int next_free;
-} swap_table[SWAP_TABLE_SIZE];
+} *swap_table;
 
 void swap_init(size_t lo_ft_idx, size_t hi_ft_idx);
 

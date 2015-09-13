@@ -6,6 +6,7 @@
 #include <sync/mutex.h>
 #include <sys/panic.h>
 #include <string.h>
+#include <sys/stat.h>
 
 size_t _lo_ft_idx, _hi_ft_idx, _cur_ft_idx;
 fhandle_t swap_fh;
@@ -13,10 +14,23 @@ fhandle_t swap_fh;
 int swap_free_head, swap_free_tail;
 
 void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
+    printf("%x %x\n", lo_ft_idx, hi_ft_idx);
     _lo_ft_idx = lo_ft_idx;
     _hi_ft_idx = hi_ft_idx;
     _cur_ft_idx = lo_ft_idx;
-    int err = nfs_create_sync("swap", FM_READ | FM_WRITE, SWAP_TABLE_SIZE * PAGE_SIZE, &swap_fh, NULL);
+
+    swap_table = (struct swap_entry *)frame_alloc(1, 0);
+    void *prev = (void *)swap_table;
+    conditional_panic(!swap_table, "Unable to allocate frame 0 of swap table");
+    size_t mem_required = (hi_ft_idx - lo_ft_idx) * SWAP_MULTIPLIER * sizeof(struct swap_entry);
+    size_t frames_required = mem_required / PAGE_SIZE;
+    for (size_t i = 1; i < frames_required; ++i) {
+        void *cur = (void *)frame_alloc(1, 0);
+        //printf("prev %x cur %x\n", prev, cur);
+        conditional_panic(prev + PAGE_SIZE != cur, "Swap table frame not contiguous");
+        prev += PAGE_SIZE;
+    }
+    int err = nfs_create_sync("swap", S_IRUSR | S_IWUSR, SWAP_TABLE_SIZE * PAGE_SIZE, &swap_fh, NULL);
     conditional_panic(err, "Cannot create swap file");
 
     swap_free_head = 0;
@@ -24,6 +38,7 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
     for (size_t i = 0; i < SWAP_TABLE_SIZE; ++i) {
         swap_table[i].next_free = (i == SWAP_TABLE_SIZE - 1) ? -1 : i + 1;
     }
+    printf("swap init done\n");
 }
 
 static int swapout() {

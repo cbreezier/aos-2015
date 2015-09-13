@@ -23,7 +23,7 @@
 
 uint32_t free_head, free_tail;
 
-seL4_Word low_addr, hi_addr, num_frames;
+seL4_Word low_addr, hi_addr, first_valid_frame, num_frames;
 
 
 void frametable_init() {
@@ -40,6 +40,8 @@ void frametable_init() {
     ft = (struct ft_entry*) low_addr;
     free_head = frametable_frames_required;
     free_tail = num_frames-1;
+
+    first_valid_frame = frametable_frames_required;
 
     /* Allocate all frames required to hold the frametable data */
     for (uint32_t i = 0; i < frametable_frames_required; ++i) {
@@ -196,4 +198,9 @@ int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_V
     sync_release(ft_lock);
 
     return err;
+}
+
+void get_ft_limits(size_t *lo, size_t *hi) {
+    *lo = first_valid_frame;
+    *hi = num_frames;
 }

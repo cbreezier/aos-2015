@@ -191,7 +191,8 @@ int ut_table_init(const seL4_BootInfo *bi){
     _select_largest_contiguous();
 
     _low = UT_PSTART(0);
-    _high = UT_PEND(_ut.count - 1);
+    _high = _low + (1024*1024*32);
+    //_high = UT_PEND(_ut.count - 1);
 
     _print_table();
 
