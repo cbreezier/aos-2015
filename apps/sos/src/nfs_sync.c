@@ -89,7 +89,6 @@ static int nfs_stat_to_err(enum nfs_stat stat) {
 
 static void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, fattr_t *fattr) {
     struct token *t = (struct token*)token;
-    //printf("lookup cb %x\n", get_cur_thread()->wakeup_async_ep);
     t->fh = *fh;
     t->fattr = *fattr;
     t->status = status;
@@ -100,8 +99,6 @@ static void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, 
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
-    //printf("async call lookup\n");
-    //printf("nfs lookup sync %x\n", get_cur_thread()->wakeup_async_ep);
     enum rpc_stat res = nfs_lookup(&mnt_point, name, nfs_lookup_cb, (uintptr_t)(&t));
     int err = rpc_stat_to_err(res);
     if (err) {
@@ -270,7 +267,7 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  
     while (!t.finished && nbytes > 0) {
         int count_before = t.count;
-        enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes - t.count, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
+        enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;

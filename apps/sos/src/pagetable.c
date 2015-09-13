@@ -51,11 +51,17 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         if (err) {
             return err;
         }
+    } else if (proc->as->page_directory[tl_idx][sl_idx].frame > 0) {
+        // simply map page back in and set reference to true
+        printf("in frame > 0 if\n");
+        svaddr = proc->as->page_directory[tl_idx][sl_idx].frame;
+        printf(" > %d\n", svaddr);
     } else {
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
             err = swapin(proc, vaddr, &svaddr);
             if (err) {
+                printf("warning warning a\n");
                 return err;
             }
         }
@@ -63,6 +69,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     uint32_t frame_idx = vaddr_to_frame_idx(svaddr);
     if (frame_idx == 0) {
+                printf("warning warning b\n");
         return ENOMEM;
     }
     if (ret_svaddr != NULL) {
@@ -78,9 +85,12 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     seL4_ARM_PageTable pt_cap = 0;
     seL4_Word pt_addr = 0;
 
+    printf("frame idx %u, cspace copy cap %u\n", frame_idx, ft[frame_idx].cap);
     seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
-    sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
+    //printf("%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
+    err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     if (err) {
+        printf("warning warning c err %d\n", err);
         frame_free(svaddr);
         sync_release(ft_lock);
         return err;
@@ -93,6 +103,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     ft[frame_idx].user_cap = cap;
     ft[frame_idx].referenced = true;
+    ft[frame_idx].vaddr_proc = proc;
+    ft[frame_idx].vaddr = vaddr;
 
     proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
 

@@ -33,7 +33,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         struct sos_thread thread;
 
         /* Init IPC buffer */
-        thread.ipc_addr = frame_alloc(1, 1);
+        thread.ipc_addr = frame_alloc(0, 0);
         conditional_panic(!thread.ipc_addr, "Can't create IPC buffer - SOS thread");
         uint32_t frame_idx = vaddr_to_frame_idx(thread.ipc_addr);
         conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");

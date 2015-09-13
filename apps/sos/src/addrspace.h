@@ -24,7 +24,7 @@ struct region_entry {
 };
 
 struct pt_entry {
-    seL4_Word frame;
+    int frame;
 };
 
 struct addrspace {

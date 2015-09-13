@@ -28,6 +28,7 @@ seL4_Word low_addr, hi_addr, first_valid_frame, num_frames;
 
 void frametable_init() {
     ut_find_memory(&low_addr, &hi_addr);
+    hi_addr -= PAGE_SIZE*128;
     printf("low addr = %x, high = %x\n", low_addr, hi_addr);
 
     seL4_Word memory_size = hi_addr - low_addr;
@@ -71,13 +72,14 @@ void frametable_init() {
 
         ft[i].next_free = (i == num_frames - 1) ? 0 : i+1;
         ft[i].is_freeable = 1;
-        ft[i].is_swappable = 1;
+        ft[i].is_swappable = 0;
     }
     ft_lock = sync_create_mutex();
     conditional_panic(!ft_lock, "Unable to create ft lock");
 }
 
 seL4_Word frame_alloc(bool freeable, bool swappable) { //, process_t *user_proc) {
+    //printf("allocating frame %d %d\n", freeable, swappable);
     sync_acquire(ft_lock);
 
     if (free_head == 0) {

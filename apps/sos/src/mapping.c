@@ -36,6 +36,7 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *
     /* Allocate a PT object */
     pt_addr = ut_alloc(seL4_PageTableBits);
     if(pt_addr == 0){
+        printf("makes sense?\n");
         return !0;
     }
     /* Create the frame cap */
@@ -45,6 +46,7 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *
                                  cur_cspace,
                                  &pt_cap);
     if(err){
+        printf("wtf\n");
         return !0;
     }
     /* Tell seL4 to map the PT in for us */
@@ -83,15 +85,18 @@ sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
 
     /* Attempt the mapping */
     err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
+    //printf("sos map page err %d (seL4_FailedLookup is %d)\n", err, seL4_FailedLookup);
     //printf("err = %u, %u\n", err, seL4_FailedLookup);
     if(err == seL4_FailedLookup){
         /* Assume the error was because we have no page table */
         err = _map_page_table(pd, vaddr, pt_cap, pt_addr);
+    //printf("sos map page table err %d\n", err);
         //printf("err = %u\n", err);
         if(!err){
             /* Try the mapping again */
             //printf("err = %u\n", err);
             err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
+    //printf("sos map page 2 %d\n", err);
         }
     }
 
