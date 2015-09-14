@@ -425,7 +425,8 @@ void open_close_benchmark(int num_opens) {
     printf("%llu %llu\n", t2-t1, t3-t2);
 }
 
-#define NPAGES (4*1024)
+//#define NPAGES (4*1024)
+#define NPAGES 64
 /* called from pt_test */
 static void
 do_pt_test( char *buf )
@@ -433,12 +434,28 @@ do_pt_test( char *buf )
     int i;
 
     /* set */
-    for(i = 0; i < NPAGES; i ++)
-	buf[i * 4096] = i;
+    for(i = 0; i < NPAGES; i ++) {
+        for (int j = 0; j < 4096; ++j) {
+	        buf[i * 4096 + j] = i + j;
+        }
+    }
+
+    //int a = 0;
+    //for (i = 0; i < (int)1e9; ++i) {
+    //    a += i;
+    //}
+
+    //printf("Done touching pages. Checking now\n");
+    //sleep(5);
+    //printf("%d\n", a);
+    
 
     /* check */
-    for(i = 0; i < NPAGES; i ++)
-	assert(buf[i * 4096] == i);
+    for(i = 0; i < NPAGES; i ++) {
+        for (int j = 0; j < 4096; ++j) {
+	        assert(buf[i * 4096 + j] == (char)(i + j));
+        }
+    }
 }
 
 static void

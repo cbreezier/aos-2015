@@ -20,6 +20,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
             break;
     }
     if (cur == NULL) {
+        printf("warning warning d\n");
         return EINVAL;
     }
 
@@ -39,6 +40,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
         proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc(1, 0);
         if (proc->as->page_directory[tl_idx] == NULL) {
+            printf("warning warning e\n");
             return ENOMEM;
         }
         memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
@@ -49,6 +51,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     if (proc->as->page_directory[tl_idx][sl_idx].frame < 0) {
         err = swapin(proc, vaddr, &svaddr);
         if (err) {
+            printf("warning warning f\n");
             return err;
         }
     } else if (proc->as->page_directory[tl_idx][sl_idx].frame > 0) {

@@ -207,7 +207,14 @@ void syscall_loop(seL4_CPtr ep) {
 
                 seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
                 assert(reply_cap != CSPACE_NULL);
-                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, NULL);
+                seL4_CPtr sos_cap;
+                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, &sos_cap);
+
+                if (seL4_GetMR(2)) {
+                    /* Flush cache entry */
+                    seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+                }
+
                 conditional_panic(err, "failed to add page(vm fault)");
 
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -226,7 +233,7 @@ void syscall_loop(seL4_CPtr ep) {
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply_cap);
 
         }else{
-            printf("Rootserver got an unknown message\n");
+            printf("Rootserver got an unknown message %d\n", label);
         }
     }
 }

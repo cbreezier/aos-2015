@@ -76,6 +76,14 @@ static int swapout() {
     
     struct ft_entry *out_fte = &ft[_cur_ft_idx];
 
+//    if (out_fte->vaddr < 0x10000000) {
+//        _cur_ft_idx++;
+//        if (_cur_ft_idx >= _hi_ft_idx) {
+//            _cur_ft_idx = _lo_ft_idx;
+//        }
+//        return swapout();
+//    }
+
     if (swap_free_head == -1) {
         return -ENOMEM;
     }
@@ -106,6 +114,7 @@ static int swapout() {
 }
 
 int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
+    conditional_panic(vaddr % PAGE_SIZE != 0, "vaddr provided to swapin is not page aligned");
     sync_acquire(ft_lock);  
     //printf("swapping in %x\n", vaddr);
 
@@ -127,12 +136,15 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
 
     if (in_pte->frame < 0) {
         int disk_loc_in = -(in_pte->frame);
+        printf("page already in disk at loc %d, swapping to %d\n", disk_loc_in, frame_idx);
         /* Fetch page from disk */   
         int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*svaddr), PAGE_SIZE);
         if (nread < 0) {
             printf("warning warning nfs read sucks %d\n", nread);
             return -nread;
         }
+
+        /* TODO: Handle case where swap_free_head or swap_free_tail are -1 */
         swap_table[swap_free_tail].next_free = disk_loc_in;
         swap_table[disk_loc_in].next_free = -1;
         swap_free_tail = disk_loc_in;
