@@ -7,6 +7,7 @@
 #include <utils/mapping.h>
 #include <bits/errno.h>
 #include <string.h>
+#include "swap.h"
 
 #define ROUND_UP(n, b) (((((n) - 1ul) >> (b)) + 1ul) << (b))
 
@@ -78,15 +79,19 @@ void frametable_init() {
     conditional_panic(!ft_lock, "Unable to create ft lock");
 }
 
-seL4_Word frame_alloc(bool freeable, bool swappable) { //, process_t *user_proc) {
+seL4_Word frame_alloc(bool freeable, bool swappable) { 
     //printf("allocating frame %d %d\n", freeable, swappable);
+    printf("wtf\n");
     sync_acquire(ft_lock);
+    printf("trying to frame alloc\n");
 
     if (free_head == 0) {
         /* Paging stuff */
+        printf("failure\n");
         sync_release(ft_lock);
         return 0;
     }
+    printf("success\n");
     int idx = free_head;
     
     ft[idx].paddr = ut_alloc(seL4_PageBits);
@@ -114,8 +119,17 @@ seL4_Word frame_alloc(bool freeable, bool swappable) { //, process_t *user_proc)
 
     sync_release(ft_lock);
 
-
     return vaddr;
+}
+
+seL4_Word frame_alloc_sos(bool freeable) {
+    sync_acquire(ft_lock);
+    seL4_Word svaddr = frame_alloc(freeable, false);
+    if (svaddr == 0) {
+        swapin_sos(&svaddr);
+    }
+    sync_release(ft_lock);
+    return svaddr;
 }
 
 int frame_free(seL4_Word vaddr) {
@@ -133,12 +147,11 @@ int frame_free(seL4_Word vaddr) {
 
     if (free_head == 0) {
         free_head = idx;
+        printf("free head = %d\n", idx);
     } else {
         ft[free_tail].next_free = idx;
     }
     free_tail = idx;
-
-    ft[idx].paddr = 0;
     ft[idx].next_free = 0;
 
     int err = seL4_ARM_Page_Unmap(ft[idx].cap);
@@ -154,8 +167,14 @@ int frame_free(seL4_Word vaddr) {
 
     ut_free(ft[idx].paddr, seL4_PageBits);
 
-    sync_release(ft_lock);
+    ft[idx].paddr = 0;
+    ft[idx].user_cap = 0;
+    ft[idx].cap = 0;
+//    ft[idx].vaddr_proc = NULL;
+//    ft[idx].vaddr = 0;
+    ft[idx].referenced = false;
 
+    sync_release(ft_lock);
 
     return 0;
 }

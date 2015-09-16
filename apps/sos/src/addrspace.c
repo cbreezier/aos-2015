@@ -19,7 +19,7 @@ int as_init(struct addrspace **as) {
 
     new->region_head = NULL;
     assert(PAGE_SIZE == sizeof(struct pt_entry*)*(1 << TOP_LEVEL_SIZE));
-    new->page_directory = (struct pt_entry**)frame_alloc(1, 0);
+    new->page_directory = (struct pt_entry**)frame_alloc_sos(true);
     if (new->page_directory == NULL) {
         return ENOMEM;
     }
@@ -31,13 +31,13 @@ int as_init(struct addrspace **as) {
      */
     assert(PAGE_SIZE == sizeof(seL4_CPtr)*(1 << TOP_LEVEL_SIZE));
     assert(PAGE_SIZE == sizeof(seL4_Word)*(1 << TOP_LEVEL_SIZE));
-    new->pt_caps = (seL4_CPtr*)frame_alloc(1, 0);
+    new->pt_caps = (seL4_CPtr*)frame_alloc_sos(true);
     if (new->pt_caps == 0) {
         return ENOMEM;
     }
     memset(new->pt_caps, 0, PAGE_SIZE);
 
-    new->pt_addrs = (seL4_Word *)frame_alloc(1, 0);
+    new->pt_addrs = (seL4_Word *)frame_alloc_sos(true);
     if (new->pt_addrs == 0) {
         return ENOMEM;
     }

@@ -32,6 +32,13 @@ void frametable_init();
 seL4_Word frame_alloc(bool freeable, bool swappable);
 
 /* 
+ * Allocates an unswappable physical frame. Swaps a page
+ * out if not enough space for it. This frame is meant 
+ * to be used within sos.
+ */
+seL4_Word frame_alloc_sos(bool freeable);
+
+/* 
  * Given a vaddr within SOS's address space, free
  * the frame associated with it.
  */

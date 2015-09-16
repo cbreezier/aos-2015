@@ -27,7 +27,9 @@ int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
     if (pte == NULL || pte->frame <= 0) {
+        printf("copy pt add page\n");
         int err = pt_add_page(proc, (seL4_Word)usr_buf, svaddr, NULL);
+        printf("done adding page\n");
         if (err) {
             sync_release(ft_lock);
             return err;
@@ -62,20 +64,24 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
     /* Copy intermediate and final pages */
     size_t to_copy;
     while (nbytes > 0) {
+        sync_acquire(ft_lock);
         int err = user_buf_to_sos(proc, usr, nbytes, (seL4_Word*)(&svaddr), &to_copy);
         if (err) {
+            sync_release(ft_lock);
             return err;
         }
         if (is_string) {
             strncpy(*dst, *src, to_copy);
             /* Check for end of string char */
             if (*((char*)(*dst + to_copy - 1)) == 0) {
+                sync_release(ft_lock);
                 return 0;
             }
         } else {
             memcpy(*dst, *src, to_copy);
         }
         frame_change_swappable((seL4_Word)svaddr, true);
+        sync_release(ft_lock);
 
         nbytes -= to_copy;
         usr += to_copy;

@@ -125,7 +125,8 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
         t->finished = true;
     }
 
-    t->err = copyout(t->proc, t->usr_buf + t->count, data, count);
+    // t->err = copyout(t->proc, t->usr_buf + t->count, data, count);
+    memcpy(t->sos_buf, data, count);
     t->count += count;
     
     seL4_Notify(t->async_ep, 0);
@@ -140,24 +141,37 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
     t.count = 0;
     t.finished = false;
     t.err = 0;
+
+    void *sos_buf = malloc(PAGE_SIZE);
+    if (sos_buf == NULL) {
+        return -ENOMEM;
+    }
+    t.sos_buf = sos_buf;
     
     while (!t.finished && t.count < nbytes) {
+        int before_count = t.count;
         size_t to_read = nbytes - t.count < PAGE_SIZE ? nbytes - t.count : PAGE_SIZE;
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
         if (t.err) {
+            free(sos_buf);
             return -t.err;
         }
         int err = rpc_stat_to_err(res);
         if (err) {
+            free(sos_buf);
             return -err;
         }
 
         seL4_Wait(t.async_ep, NULL);
         err = nfs_stat_to_err(t.status);
         if (err) {
+            free(sos_buf);
             return -err;
         }
+        
+        err = copyout(proc, usr_buf + before_count, sos_buf, t.count - before_count);
     }
+    free(sos_buf);
     
     return t.count;
 }
@@ -205,6 +219,7 @@ int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyte
 }
 
 static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
+    printf("WRITE CB\n");
     struct token *t = (struct token*)token;
     t->status = status;
     t->fattr = *fattr;
@@ -267,12 +282,16 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  
     while (!t.finished && nbytes > 0) {
         int count_before = t.count;
+        printf("sos write sync writing\n");
         enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
+        printf("sos write sync called\n");
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
         }
+        printf("sos write sync waiting\n");
         seL4_Wait(t.async_ep, NULL);
+        printf("sos write sync waited\n");
 
         err = nfs_stat_to_err(t.status);
         if (err) {

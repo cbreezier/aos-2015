@@ -19,7 +19,7 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
     _hi_ft_idx = hi_ft_idx;
     _cur_ft_idx = lo_ft_idx;
 
-    swap_table = (struct swap_entry *)frame_alloc(1, 0);
+    swap_table = (struct swap_entry *)frame_alloc_sos(true);
     void *prev = (void *)swap_table;
     conditional_panic(!swap_table, "Unable to allocate frame 0 of swap table");
     size_t num_entries = (hi_ft_idx - lo_ft_idx) * SWAP_MULTIPLIER;
@@ -27,7 +27,7 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
     /* frame_requires = ceil(mem_required / PAGE_SIZE) */
     size_t frames_required = (mem_required + PAGE_SIZE - 1) / PAGE_SIZE;
     for (size_t i = 1; i < frames_required; ++i) {
-        void *cur = (void *)frame_alloc(1, 0);
+        void *cur = (void *)frame_alloc_sos(true);
         //printf("prev %x cur %x\n", prev, cur);
         conditional_panic(prev + PAGE_SIZE != cur, "Swap table frame not contiguous");
         prev += PAGE_SIZE;
@@ -99,13 +99,16 @@ static int swapout() {
     conditional_panic(!out_fte->vaddr_proc->as, "b ft_entry (swap)");
     struct pt_entry *out_pte = vaddr_to_pt_entry(out_fte->vaddr_proc->as, out_fte->vaddr);
     conditional_panic(!out_pte, "Swapped out page is not in page table");
+    //printf("out_pte->frame %d vaddr %d\n", out_pte->frame, frame_idx_to_vaddr(_cur_ft_idx));
     conditional_panic(out_pte->frame != frame_idx_to_vaddr(_cur_ft_idx), "Page table and frametable are not synced");
 
     out_pte->frame = -disk_loc;
 
     seL4_Word svaddr = frame_idx_to_vaddr(_cur_ft_idx);
     //printf("writing at loc %d\n", disk_loc * PAGE_SIZE);
+    printf("before nfs sos write\n");
     int nwritten = nfs_sos_write_sync(swap_fh, disk_loc * PAGE_SIZE, (void*)svaddr, PAGE_SIZE);
+    printf("done\n");
     if (nwritten < 0) {
         return nwritten;
     }
@@ -118,15 +121,22 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
     sync_acquire(ft_lock);  
     //printf("swapping in %x\n", vaddr);
 
-    int frame_idx = swapout();
+    int frame_idx = -EFAULT;
+    if (*svaddr == 0) {
+        frame_idx = swapout();
+    } else {
+        frame_idx = vaddr_to_frame_idx(*svaddr);
+    }
     if (frame_idx < 0) {
         printf("warning warning swapout frame_idx %d\n", frame_idx);
+        sync_release(ft_lock);
         return -frame_idx;
     }
 
     struct pt_entry *in_pte = vaddr_to_pt_entry(proc->as, vaddr);
     if (in_pte == NULL) {
         printf("warning warning null pt_entry\n");
+        sync_release(ft_lock);
         return EFAULT;
     }
     //printf("in_pte->frame = %d\n", in_pte->frame);
@@ -141,18 +151,49 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
         int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*svaddr), PAGE_SIZE);
         if (nread < 0) {
             printf("warning warning nfs read sucks %d\n", nread);
+            sync_release(ft_lock);
             return -nread;
         }
 
-        /* TODO: Handle case where swap_free_head or swap_free_tail are -1 */
-        swap_table[swap_free_tail].next_free = disk_loc_in;
-        swap_table[disk_loc_in].next_free = -1;
-        swap_free_tail = disk_loc_in;
+        free_swap_entry(disk_loc_in);
     } else {
         /* Equal to zero at this point. Brand new page, zero it out */
         memset((void*)(*svaddr), 0, PAGE_SIZE);
     }
     
     sync_release(ft_lock);
+    return 0;
+}
+
+int swapin_sos(seL4_Word *svaddr) {
+    sync_acquire(ft_lock);  
+
+    int frame_idx = swapout();
+    if (frame_idx < 0) {
+        printf("warning warning swapout_sos frame_idx %d\n", frame_idx);
+        return -frame_idx;
+    }
+
+    *svaddr = frame_idx_to_vaddr(frame_idx);
+
+    memset((void*)(*svaddr), 0, PAGE_SIZE);
+    frame_change_swappable(*svaddr, false);
+
+    sync_release(ft_lock);
+    return 0;
+
+}
+
+int free_swap_entry(int entry_idx) {
+    if (swap_free_head == -1 || swap_free_tail == -1) {
+        assert(swap_free_tail == -1 && swap_free_head == -1);
+        swap_free_head = entry_idx;
+        swap_free_tail = entry_idx;
+        swap_table[entry_idx].next_free = -1;
+        return 0;
+    }
+    swap_table[swap_free_tail].next_free = entry_idx;
+    swap_table[entry_idx].next_free = -1;
+    swap_free_tail = entry_idx;
     return 0;
 }

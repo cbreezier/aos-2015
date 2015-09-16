@@ -194,6 +194,7 @@ void syscall_loop(seL4_CPtr ep) {
                 timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
+                printf("network irq\n");
                 network_irq();
             }
 

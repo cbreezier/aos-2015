@@ -21,6 +21,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     }
     if (cur == NULL) {
         printf("warning warning d\n");
+        /* TODO M7: segfault */
         return EINVAL;
     }
 
@@ -38,7 +39,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     if (proc->as->page_directory[tl_idx] == NULL) {
         assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
-        proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc(1, 0);
+        proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc_sos(true);
         if (proc->as->page_directory[tl_idx] == NULL) {
             printf("warning warning e\n");
             return ENOMEM;
@@ -46,12 +47,16 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
     }
 
+    sync_acquire(ft_lock);
     seL4_Word svaddr = 0;
     /* Swapped out page */
     if (proc->as->page_directory[tl_idx][sl_idx].frame < 0) {
-        err = swapin(proc, vaddr, &svaddr);
+        printf("< 0 frame alloc\n");
+        svaddr = frame_alloc(1, 1);
+        swapin(proc, vaddr, &svaddr);
         if (err) {
             printf("warning warning f\n");
+            sync_release(ft_lock);
             return err;
         }
     } else if (proc->as->page_directory[tl_idx][sl_idx].frame > 0) {
@@ -60,11 +65,13 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         svaddr = proc->as->page_directory[tl_idx][sl_idx].frame;
         printf(" > %d\n", svaddr);
     } else {
+        printf("= 0 frame alloc\n");
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
             err = swapin(proc, vaddr, &svaddr);
             if (err) {
                 printf("warning warning a\n");
+                sync_release(ft_lock);
                 return err;
             }
         }
@@ -72,14 +79,14 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     uint32_t frame_idx = vaddr_to_frame_idx(svaddr);
     if (frame_idx == 0) {
-                printf("warning warning b\n");
+        printf("warning warning b\n");
+        sync_release(ft_lock);
         return ENOMEM;
     }
     if (ret_svaddr != NULL) {
         *ret_svaddr = svaddr;
     }
 
-    sync_acquire(ft_lock);
 
     if (frame_cap != NULL) {
         *frame_cap = ft[frame_idx].cap;
@@ -118,17 +125,24 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
 void pt_remove_page(struct pt_entry *pe) {
     sync_acquire(ft_lock);
+    if (pe->frame < 0) {
+        free_swap_entry(-pe->frame);
+        sync_release(ft_lock);
+        return;
+    }
     seL4_CPtr user_cap = ft[vaddr_to_frame_idx(pe->frame)].user_cap;
-    seL4_ARM_Page_Unmap(user_cap);
+    if (user_cap) {
+        seL4_ARM_Page_Unmap(user_cap);
 
-    /* Remove all child capabilities */
-    int err = cspace_revoke_cap(cur_cspace, user_cap);
-    conditional_panic(err, "unable to revoke cap(free)");
+        /* Remove all child capabilities */
+        int err = cspace_revoke_cap(cur_cspace, user_cap);
+        conditional_panic(err, "unable to revoke cap(free)");
 
-    /* Remove the capability itself */
-    err = cspace_delete_cap(cur_cspace, user_cap);
-    conditional_panic(err, "unable to delete cap(free)");
-
+        /* Remove the capability itself */
+        err = cspace_delete_cap(cur_cspace, user_cap);
+        conditional_panic(err, "unable to delete cap(free)");
+    }
+    printf("frame freeing %u\n", pe->frame);
     frame_free(pe->frame);
     sync_release(ft_lock);
 }

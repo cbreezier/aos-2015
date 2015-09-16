@@ -53,7 +53,7 @@ static int sosh_read(int argc, char **argv) {
         return 1;
     }
 
-    char buf[(int)1e6];
+    char buf[(int)1e7];
     buf[0] = '\0';
 
     int nread = read(atoi(argv[1]), buf + atoi(argv[2]), atoi(argv[3]));
@@ -429,29 +429,19 @@ void open_close_benchmark(int num_opens) {
 #define NPAGES 64
 /* called from pt_test */
 static void
-do_pt_test( char *buf )
+do_pt_test( char *buf, int numpages )
 {
     int i;
 
     /* set */
-    for(i = 0; i < NPAGES; i ++) {
+    for(i = 0; i < numpages; i ++) {
         for (int j = 0; j < 4096; ++j) {
 	        buf[i * 4096 + j] = i + j;
         }
     }
 
-    //int a = 0;
-    //for (i = 0; i < (int)1e9; ++i) {
-    //    a += i;
-    //}
-
-    //printf("Done touching pages. Checking now\n");
-    //sleep(5);
-    //printf("%d\n", a);
-    
-
     /* check */
-    for(i = 0; i < NPAGES; i ++) {
+    for(i = 0; i < numpages; i ++) {
         for (int j = 0; j < 4096; ++j) {
 	        assert(buf[i * 4096 + j] == (char)(i + j));
         }
@@ -468,23 +458,23 @@ pt_test( void )
     assert((void *) buf1 > (void *) 0x20000000);
 
     /* stack test */
-    do_pt_test(buf1);
+    do_pt_test(buf1, NPAGES);
     printf("Stack test ok\n");
 
     /* heap test */
-    buf2 = malloc(100000);
+    buf2 = malloc(24*4096);
     printf("%p\n", buf2);
     assert(buf2);
-    do_pt_test(buf2);
+    do_pt_test(buf2, 24);
     free(buf2);
 
-    buf2 = malloc(1500000);
+    buf2 = malloc(30*4096);
     printf("%p\n", buf2);
     assert(buf2);
-    do_pt_test(buf2);
+    do_pt_test(buf2, 30);
 
-    char *buf3 = malloc(100000);
-    do_pt_test(buf3);
+    char *buf3 = malloc(24*4096);
+    do_pt_test(buf3, 24);
     printf("%p\n", buf3);
     free(buf3);
     free(buf2);
@@ -521,10 +511,12 @@ int main(void) {
     pt_test();
     printf("IT WORKED\n");
 
+    //printf("a\n");
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
     char *bp, *p;
+    //printf("b\n");
 
     // sos_stat_t buf2;
     // int err = sos_stat("bootimg.elf", &buf2);

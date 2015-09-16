@@ -33,7 +33,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         struct sos_thread thread;
 
         /* Init IPC buffer */
-        thread.ipc_addr = frame_alloc(0, 0);
+        thread.ipc_addr = frame_alloc_sos(false);
         conditional_panic(!thread.ipc_addr, "Can't create IPC buffer - SOS thread");
         uint32_t frame_idx = vaddr_to_frame_idx(thread.ipc_addr);
         conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");
@@ -54,7 +54,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
 
         err = seL4_TCB_Configure(thread.tcb_cap,
                                  sos_interrupt_ep_cap, 
-                                 255 - i, /* Priority */
+                                 255, /* Priority */
                                  cur_cspace->root_cnode,
                                  cur_cspace->guard,
                                  seL4_CapInitThreadVSpace,
@@ -64,13 +64,13 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         conditional_panic(err, "Failed to configure thread TCB - SOS thread");
 
         /* Allocate stack guard */
-        thread.stack_top = frame_alloc(0, 0);
+        thread.stack_top = frame_alloc_sos(false);
         conditional_panic(err, "Cannot allocate guard page 1");
         err = frame_change_permissions(thread.stack_top, 0, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
         conditional_panic(err, "Cannot allocate guard page 2");
         /* Allocate stack memory */
         for (int i = 0; i < STACK_NUM_FRAMES; ++i) {
-            seL4_Word next_frame = frame_alloc(0, 0);
+            seL4_Word next_frame = frame_alloc_sos(false);
             conditional_panic(!next_frame, "No memory for thread stack");
             assert(next_frame == thread.stack_top + PAGE_SIZE);
             thread.stack_top = next_frame;
