@@ -439,7 +439,7 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
 
     void *user_path = (void*) seL4_GetMR(1);
-    void *user_buf = (void*) seL4_GetMR(2);
+    void *usr_buf = (void*) seL4_GetMR(2);
 
     char *path = malloc(NAME_MAX * sizeof(char));
     if (path == NULL) {
@@ -467,7 +467,7 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     stat.st_size = (unsigned)fattr.size;
     stat.st_ctime = fattr.ctime.tv_sec * 1000 + fattr.ctime.tv_usec / 1000;
     stat.st_atime = fattr.atime.tv_sec * 1000 + fattr.atime.tv_usec / 1000;
-    err = copyout(proc, user_buf, (void*)(&stat), sizeof(sos_stat_t));
+    err = copyout(proc, usr_buf, (void*)(&stat), sizeof(sos_stat_t));
     if (err) {
         goto sos_stat_end;
     }
@@ -491,8 +491,8 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int err = 0;
 
     int pos = (int)seL4_GetMR(1);
-    void *user_buf= (void*)seL4_GetMR(2);
-    size_t user_buf_sz = (size_t)seL4_GetMR(3);
+    void *usr_buf= (void*)seL4_GetMR(2);
+    size_t usr_buf_sz = (size_t)seL4_GetMR(3);
 
     char **dir_entries = NULL;
     size_t file_name_size = 0;
@@ -527,12 +527,12 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     file_name_size = strlen(dir_entries[pos]);
-    if (file_name_size >= user_buf_sz) {
+    if (file_name_size >= usr_buf_sz) {
         err = EINVAL;
         goto sos_getdents_end;
     }
 
-    err = copyoutstring(proc, user_buf, dir_entries[pos], user_buf_sz);
+    err = copyoutstring(proc, usr_buf, dir_entries[pos], usr_buf_sz);
     if (err) {
         goto sos_getdents_end;
     }

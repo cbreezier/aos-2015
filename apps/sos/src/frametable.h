@@ -45,10 +45,10 @@ seL4_Word frame_alloc_sos(bool freeable);
 int frame_free(seL4_Word vaddr);
 
 /* Given an sos addr, returns a frametable index */
-uint32_t vaddr_to_frame_idx(seL4_Word vaddr);
+uint32_t svaddr_to_frame_idx(seL4_Word vaddr);
 
 /* Given a frametable index, returns an SOS addr */
-seL4_Word frame_idx_to_vaddr(uint32_t idx);
+seL4_Word frame_idx_to_svaddr(uint32_t idx);
 
 /* Given a vaddr, set the frame's swappable bit */
 int frame_change_swappable(seL4_Word svaddr, bool swappable);

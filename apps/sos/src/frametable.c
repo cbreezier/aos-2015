@@ -81,17 +81,13 @@ void frametable_init() {
 
 seL4_Word frame_alloc(bool freeable, bool swappable) { 
     //printf("allocating frame %d %d\n", freeable, swappable);
-    printf("wtf\n");
     sync_acquire(ft_lock);
-    printf("trying to frame alloc\n");
 
     if (free_head == 0) {
         /* Paging stuff */
-        printf("failure\n");
         sync_release(ft_lock);
         return 0;
     }
-    printf("success\n");
     int idx = free_head;
     
     ft[idx].paddr = ut_alloc(seL4_PageBits);
@@ -101,16 +97,16 @@ seL4_Word frame_alloc(bool freeable, bool swappable) {
         return 0;
     }
 
-    seL4_Word vaddr = low_addr + PAGE_SIZE*idx;
+    seL4_Word svaddr = low_addr + PAGE_SIZE*idx;
 
     int err = cspace_ut_retype_addr(ft[idx].paddr, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &(ft[idx].cap));
     conditional_panic(err, "Unable to alloc frame(retype)");
 
     //printf("frame alloc cap %u\n", (uint32_t)ft[idx].cap);
-    err = map_page(ft[idx].cap, seL4_CapInitThreadPD, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
+    err = map_page(ft[idx].cap, seL4_CapInitThreadPD, svaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to alloc frame(map)");
 
-    memset((void*)vaddr, 0, PAGE_SIZE);
+    memset((void*)svaddr, 0, PAGE_SIZE);
 
     free_head = ft[idx].next_free;
     
@@ -119,7 +115,7 @@ seL4_Word frame_alloc(bool freeable, bool swappable) {
 
     sync_release(ft_lock);
 
-    return vaddr;
+    return svaddr;
 }
 
 seL4_Word frame_alloc_sos(bool freeable) {
@@ -132,12 +128,12 @@ seL4_Word frame_alloc_sos(bool freeable) {
     return svaddr;
 }
 
-int frame_free(seL4_Word vaddr) {
-    if (vaddr < low_addr) {
+int frame_free(seL4_Word svaddr) {
+    if (svaddr < low_addr) {
         return EFAULT;
     }
 
-    uint32_t idx = vaddr_to_frame_idx(vaddr);
+    uint32_t idx = svaddr_to_frame_idx(svaddr);
 
     sync_acquire(ft_lock);
     if (!idx || !ft[idx].is_freeable) {
@@ -147,7 +143,6 @@ int frame_free(seL4_Word vaddr) {
 
     if (free_head == 0) {
         free_head = idx;
-        printf("free head = %d\n", idx);
     } else {
         ft[free_tail].next_free = idx;
     }
@@ -179,18 +174,18 @@ int frame_free(seL4_Word vaddr) {
     return 0;
 }
 
-uint32_t vaddr_to_frame_idx(seL4_Word vaddr) {
-    if (vaddr < low_addr) return 0;
+uint32_t svaddr_to_frame_idx(seL4_Word svaddr) {
+    if (svaddr < low_addr) return 0;
 
-    return (vaddr - low_addr) / PAGE_SIZE;
+    return (svaddr - low_addr) / PAGE_SIZE;
 }
 
-seL4_Word frame_idx_to_vaddr(uint32_t idx) {
+seL4_Word frame_idx_to_svaddr(uint32_t idx) {
     return low_addr + PAGE_SIZE*idx;
 }
 
 int frame_change_swappable(seL4_Word svaddr, bool swappable) {
-    uint32_t idx = vaddr_to_frame_idx(svaddr);
+    uint32_t idx = svaddr_to_frame_idx(svaddr);
 
     if (!idx) {
         return EFAULT;
@@ -204,7 +199,7 @@ int frame_change_swappable(seL4_Word svaddr, bool swappable) {
 }
 
 int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_VMAttributes attr) {
-    uint32_t idx = vaddr_to_frame_idx(svaddr);
+    uint32_t idx = svaddr_to_frame_idx(svaddr);
 
     if (!idx) {
         return EFAULT;

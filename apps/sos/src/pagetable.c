@@ -51,7 +51,6 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     seL4_Word svaddr = 0;
     /* Swapped out page */
     if (proc->as->page_directory[tl_idx][sl_idx].frame < 0) {
-        printf("< 0 frame alloc\n");
         svaddr = frame_alloc(1, 1);
         swapin(proc, vaddr, &svaddr);
         if (err) {
@@ -61,11 +60,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         }
     } else if (proc->as->page_directory[tl_idx][sl_idx].frame > 0) {
         // simply map page back in and set reference to true
-        printf("in frame > 0 if\n");
         svaddr = proc->as->page_directory[tl_idx][sl_idx].frame;
-        printf(" > %d\n", svaddr);
     } else {
-        printf("= 0 frame alloc\n");
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
             err = swapin(proc, vaddr, &svaddr);
@@ -77,7 +73,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         }
     }
 
-    uint32_t frame_idx = vaddr_to_frame_idx(svaddr);
+    uint32_t frame_idx = svaddr_to_frame_idx(svaddr);
     if (frame_idx == 0) {
         printf("warning warning b\n");
         sync_release(ft_lock);
@@ -95,10 +91,9 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     seL4_ARM_PageTable pt_cap = 0;
     seL4_Word pt_addr = 0;
 
-    printf("frame idx %u, cspace copy cap %u\n", frame_idx, ft[frame_idx].cap);
     seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
     //printf("%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
-    err = sos_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
+    err = usr_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     if (err) {
         printf("warning warning c err %d\n", err);
         frame_free(svaddr);
@@ -130,7 +125,7 @@ void pt_remove_page(struct pt_entry *pe) {
         sync_release(ft_lock);
         return;
     }
-    seL4_CPtr user_cap = ft[vaddr_to_frame_idx(pe->frame)].user_cap;
+    seL4_CPtr user_cap = ft[svaddr_to_frame_idx(pe->frame)].user_cap;
     if (user_cap) {
         seL4_ARM_Page_Unmap(user_cap);
 
@@ -142,7 +137,6 @@ void pt_remove_page(struct pt_entry *pe) {
         err = cspace_delete_cap(cur_cspace, user_cap);
         conditional_panic(err, "unable to delete cap(free)");
     }
-    printf("frame freeing %u\n", pe->frame);
     frame_free(pe->frame);
     sync_release(ft_lock);
 }

@@ -106,7 +106,6 @@ static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, 
     if (as == NULL || invalid_location) {
         return EINVAL;
     }
-    printf("Adding region at 0x%08x, size 0x%08x\n", start, size);
 
     struct region_entry *prev = NULL;
     struct region_entry *cur = as->region_head;
@@ -173,7 +172,6 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
     // Round up size
     size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
 
-    printf("searching %u %u\n", min, size);
     bool invalid_location = (size == 0 || size == MEMORY_TOP || min <= 0 || min > MEMORY_TOP - size - 1);
     if (as == NULL || invalid_location) {
         return EINVAL;

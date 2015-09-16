@@ -82,7 +82,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
             if (svaddr != 0) {
                 frame_change_swappable(svaddr, true);
             }
-            err = user_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
+            err = usr_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
             if (err) {
                 sync_release(read_serial_lock);
                 return -err;
@@ -112,7 +112,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
 
 int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
     /* TODO M7: Lock around entire console read? enforce only 1 reader */
-    if (!user_buf_in_region(proc, dest, nbytes)) {
+    if (!usr_buf_in_region(proc, dest, nbytes)) {
         return -EFAULT;
     }
 
@@ -151,7 +151,7 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
 
 /* src is a user address */
 int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
-    if (!user_buf_in_region(proc, src, nbytes)) {
+    if (!usr_buf_in_region(proc, src, nbytes)) {
         return -EFAULT;
     }
 
@@ -161,7 +161,7 @@ int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *s
     seL4_Word svaddr = 0;
     size_t to_write = 0;
     while (bytes_left > 0) {
-        err = user_buf_to_sos(proc, src, (size_t) bytes_left, &svaddr, &to_write);
+        err = usr_buf_to_sos(proc, src, (size_t) bytes_left, &svaddr, &to_write);
         if (err) {
             sync_release(write_serial_lock);
             return -err;

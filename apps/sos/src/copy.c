@@ -9,20 +9,20 @@ static inline int min(int a, int b) {
     return a < b ? a : b;
 }
 
-bool user_buf_in_region(process_t *proc, void *user_buf, size_t buf_size) {
-    /* Check that the entire user buffer lies within a valid region */
-    struct region_entry *path_region = as_get_region(proc->as, user_buf);
+bool usr_buf_in_region(process_t *proc, void *usr_buf, size_t buf_size) {
+    /* Check that the entire usr buffer lies within a valid region */
+    struct region_entry *path_region = as_get_region(proc->as, usr_buf);
     if (path_region == NULL) {
         return false;
     }
     seL4_Word region_end = path_region->start + path_region->size;
-    if (sizeof(seL4_Word)*(region_end - (seL4_Word)user_buf) < buf_size) {
+    if (sizeof(seL4_Word)*(region_end - (seL4_Word)usr_buf) < buf_size) {
         return false;
     }
     return true;
 }
 
-int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *svaddr, size_t *buf_page_left) {
+int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *svaddr, size_t *buf_page_left) {
     sync_acquire(ft_lock);
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
@@ -53,7 +53,7 @@ int user_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *
 
 static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
     /* Check that the entire user buffer lies within a valid region */
-    if (!user_buf_in_region(proc, usr, nbytes)) {
+    if (!usr_buf_in_region(proc, usr, nbytes)) {
         return EFAULT;
     }
 
@@ -65,7 +65,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
     size_t to_copy;
     while (nbytes > 0) {
         sync_acquire(ft_lock);
-        int err = user_buf_to_sos(proc, usr, nbytes, (seL4_Word*)(&svaddr), &to_copy);
+        int err = usr_buf_to_sos(proc, usr, nbytes, (seL4_Word*)(&svaddr), &to_copy);
         if (err) {
             sync_release(ft_lock);
             return err;

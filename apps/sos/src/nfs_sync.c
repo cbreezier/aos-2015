@@ -219,7 +219,6 @@ int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyte
 }
 
 static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
-    printf("WRITE CB\n");
     struct token *t = (struct token*)token;
     t->status = status;
     t->fattr = *fattr;
@@ -239,14 +238,14 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
     t.count = 0;
     t.finished = false;
 
-    if (!user_buf_in_region(proc, usr_buf, nbytes)) {
+    if (!usr_buf_in_region(proc, usr_buf, nbytes)) {
         return -EFAULT;
     }
  
     while (!t.finished && nbytes > 0) {
         seL4_Word svaddr;
         size_t to_write = 0;
-        int err = user_buf_to_sos(proc, usr_buf, nbytes, &svaddr, &to_write);
+        int err = usr_buf_to_sos(proc, usr_buf, nbytes, &svaddr, &to_write);
         if (err) {
             return -err;
         }
@@ -282,16 +281,12 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  
     while (!t.finished && nbytes > 0) {
         int count_before = t.count;
-        printf("sos write sync writing\n");
         enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
-        printf("sos write sync called\n");
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
         }
-        printf("sos write sync waiting\n");
         seL4_Wait(t.async_ep, NULL);
-        printf("sos write sync waited\n");
 
         err = nfs_stat_to_err(t.status);
         if (err) {
