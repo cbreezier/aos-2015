@@ -13,9 +13,14 @@ struct swap_entry {
 
 void swap_init(size_t lo_ft_idx, size_t hi_ft_idx);
 
-int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr);
+/* 
+ * If ret_svaddr is 0, swapin first swaps out another frame.
+ * If ret_svaddr is not zero, swapin uses *ret_svaddr as the location
+ * in the frametable at which to insert 
+ */
+int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr);
 
-int swapin_sos(seL4_Word *svaddr);
+int swapin_sos(seL4_Word *ret_svaddr);
 
 int free_swap_entry(int entry_idx);
 

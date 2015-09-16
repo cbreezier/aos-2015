@@ -112,16 +112,17 @@ static int swapout() {
     return _cur_ft_idx;
 }
 
-int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
+int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
+    assert(ret_svaddr != NULL);
     conditional_panic(vaddr % PAGE_SIZE != 0, "vaddr provided to swapin is not page aligned");
     sync_acquire(ft_lock);  
     //printf("swapping in %x\n", vaddr);
 
     int frame_idx = -EFAULT;
-    if (*svaddr == 0) {
+    if (*ret_svaddr == 0) {
         frame_idx = swapout();
     } else {
-        frame_idx = svaddr_to_frame_idx(*svaddr);
+        frame_idx = svaddr_to_frame_idx(*ret_svaddr);
     }
     if (frame_idx < 0) {
         printf("warning warning swapout frame_idx %d\n", frame_idx);
@@ -138,12 +139,12 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
     //printf("in_pte->frame = %d\n", in_pte->frame);
     conditional_panic(in_pte->frame > 0, "Trying to swap in a page which is already swapped in");
 
-    *svaddr = frame_idx_to_svaddr(frame_idx);
+    *ret_svaddr = frame_idx_to_svaddr(frame_idx);
 
     if (in_pte->frame < 0) {
         int disk_loc_in = -(in_pte->frame);
         /* Fetch page from disk */   
-        int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*svaddr), PAGE_SIZE);
+        int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*ret_svaddr), PAGE_SIZE);
         if (nread < 0) {
             printf("warning warning nfs read sucks %d\n", nread);
             sync_release(ft_lock);
@@ -153,15 +154,16 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *svaddr) {
         free_swap_entry(disk_loc_in);
     } else {
         /* Equal to zero at this point. Brand new page, zero it out */
-        memset((void*)(*svaddr), 0, PAGE_SIZE);
+        memset((void*)(*ret_svaddr), 0, PAGE_SIZE);
     }
     
     sync_release(ft_lock);
     return 0;
 }
 
-int swapin_sos(seL4_Word *svaddr) {
-    sync_acquire(ft_lock);  
+int swapin_sos(seL4_Word *ret_svaddr) {
+    assert(ret_svaddr != NULL);
+    sync_acquire(ft_lock); 
 
     int frame_idx = swapout();
     if (frame_idx < 0) {
@@ -169,10 +171,10 @@ int swapin_sos(seL4_Word *svaddr) {
         return -frame_idx;
     }
 
-    *svaddr = frame_idx_to_svaddr(frame_idx);
+    *ret_svaddr = frame_idx_to_svaddr(frame_idx);
 
-    memset((void*)(*svaddr), 0, PAGE_SIZE);
-    frame_change_swappable(*svaddr, false);
+    memset((void*)(*ret_svaddr), 0, PAGE_SIZE);
+    frame_change_swappable(*ret_svaddr, false);
 
     sync_release(ft_lock);
     return 0;

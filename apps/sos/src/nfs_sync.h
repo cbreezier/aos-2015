@@ -17,7 +17,7 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
 /* Pls only give me at most PAGE_SIZE bytes */
 int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes);
 
-int nfs_readdir_sync(void *sos_buf, int *num_files);
+int nfs_readdir_sync(void *sos_buf, int *ret_num_files);
 
 int nfs_create_sync(const char *name, uint32_t mode, size_t sz, fhandle_t *ret_fh, fattr_t *ret_fattr);
 

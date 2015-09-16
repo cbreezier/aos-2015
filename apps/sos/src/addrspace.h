@@ -37,7 +37,7 @@ struct addrspace {
     seL4_Word *pt_addrs;
 };
 
-int as_init(struct addrspace **as);
+int as_init(struct addrspace **ret_as);
 
 int as_destroy(struct addrspace *as);
 
@@ -47,7 +47,7 @@ int as_add_stack(process_t *proc);
 
 int as_add_heap(struct addrspace *as);
 
-int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *insert_location);
+int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *ret_insert_location);
 
 int as_remove_region(struct addrspace *as, seL4_Word addr);
 

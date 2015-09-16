@@ -216,7 +216,7 @@ int frame_change_permissions(seL4_Word svaddr, seL4_CapRights rights, seL4_ARM_V
     return err;
 }
 
-void get_ft_limits(size_t *lo, size_t *hi) {
-    *lo = first_valid_frame;
-    *hi = num_frames;
+void get_ft_limits(size_t *ret_lo, size_t *ret_hi) {
+    if (ret_lo != NULL) *ret_lo = first_valid_frame;
+    if (ret_hi != NULL) *ret_hi = num_frames;
 }

@@ -8,7 +8,7 @@
 #include "pagetable.h"
 #include "frametable.h"
 
-int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CPtr *frame_cap) {
+int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CPtr *ret_frame_cap) {
 
     int err = 0;
 
@@ -84,8 +84,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     }
 
 
-    if (frame_cap != NULL) {
-        *frame_cap = ft[frame_idx].cap;
+    if (ret_frame_cap != NULL) {
+        *ret_frame_cap = ft[frame_idx].cap;
     }
     
     seL4_ARM_PageTable pt_cap = 0;

@@ -112,7 +112,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
 
 int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
     /* TODO M7: Lock around entire console read? enforce only 1 reader */
-    if (!usr_buf_in_region(proc, dest, nbytes)) {
+    if (!usr_buf_in_region(proc, dest, nbytes, NULL, NULL)) {
         return -EFAULT;
     }
 
@@ -151,8 +151,13 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
 
 /* src is a user address */
 int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
-    if (!usr_buf_in_region(proc, src, nbytes)) {
+    bool region_r;
+    if (!usr_buf_in_region(proc, src, nbytes, &region_r, NULL)) {
         return -EFAULT;
+    }
+
+    if (!region_r) {
+        return -EACCES;
     }
 
     sync_acquire(write_serial_lock);

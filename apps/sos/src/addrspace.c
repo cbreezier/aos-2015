@@ -10,8 +10,10 @@
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
 
-int as_init(struct addrspace **as) {
-    *as = NULL;
+int as_init(struct addrspace **ret_as) {
+    assert(ret_as != NULL);
+
+    *ret_as = NULL;
     struct addrspace *new = malloc(sizeof(struct addrspace));
     if (new == NULL) {
         return ENOMEM;
@@ -43,7 +45,7 @@ int as_init(struct addrspace **as) {
     }
     memset(new->pt_addrs, 0, PAGE_SIZE);
 
-    *as = new;
+    *ret_as = new;
     return 0;
 }
 
@@ -166,7 +168,9 @@ int as_add_heap(struct addrspace *as) {
     return as_do_add_region(as, start, PROCESS_HEAP_SIZE, 1, 1, 0, &(as->heap_region));
 }
 
-int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *insert_location) {
+int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *ret_insert_location) {
+    assert(ret_insert_location != NULL);
+
     // Round down starting vaddr
     min = (min / PAGE_SIZE) * PAGE_SIZE;
     // Round up size
@@ -181,21 +185,21 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
     struct region_entry *cur = as->region_head;
 
     /* Cannot insert at 0 so start at the next page */
-    *insert_location = min;
+    *ret_insert_location = min;
 
     bool found = false;
     for (; cur != NULL; cur = cur->next) {
-        if (cur->start - *insert_location > size) {
+        if (cur->start - *ret_insert_location > size) {
             found = true;
             break;
         }
         prev = cur;
-        *insert_location = cur->start + cur->size;
+        *ret_insert_location = cur->start + cur->size;
     }
     if (!found) {
         /* Case where we can add after the last region */
         if (prev != NULL && prev->start + prev->size + size <= MEMORY_TOP) {
-            *insert_location = prev->start + prev->size;
+            *ret_insert_location = prev->start + prev->size;
         } else {
             return EFAULT;
         }
@@ -206,7 +210,7 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
     if (new_region == NULL) {
         return ENOMEM;
     }
-    new_region->start = *insert_location;
+    new_region->start = *ret_insert_location;
     new_region->size = size;
     new_region->r = r;
     new_region->w = w;

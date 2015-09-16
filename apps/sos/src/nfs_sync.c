@@ -238,8 +238,13 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
     t.count = 0;
     t.finished = false;
 
-    if (!usr_buf_in_region(proc, usr_buf, nbytes)) {
+    bool region_r;
+    if (!usr_buf_in_region(proc, usr_buf, nbytes, &region_r, NULL)) {
         return -EFAULT;
+    }
+    
+    if (!region_r) {
+        return -EACCES;
     }
  
     while (!t.finished && nbytes > 0) {
@@ -319,7 +324,7 @@ static void nfs_readdir_cb(uintptr_t token, enum nfs_stat status, int num_files,
     seL4_Notify(t->async_ep, 0);
 }
 
-int nfs_readdir_sync(void *sos_buf, int *num_files) {
+int nfs_readdir_sync(void *sos_buf, int *ret_num_files) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.sos_buf = sos_buf;
@@ -339,7 +344,7 @@ int nfs_readdir_sync(void *sos_buf, int *num_files) {
         }
     } while (t.cookie);
 
-    if (num_files != NULL) *num_files = t.count;
+    if (ret_num_files != NULL) *ret_num_files = t.count;
 
     return 0;
 }

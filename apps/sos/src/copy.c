@@ -9,7 +9,7 @@ static inline int min(int a, int b) {
     return a < b ? a : b;
 }
 
-bool usr_buf_in_region(process_t *proc, void *usr_buf, size_t buf_size) {
+bool usr_buf_in_region(process_t *proc, void *usr_buf, size_t buf_size, bool *ret_region_r, bool *ret_region_w) {
     /* Check that the entire usr buffer lies within a valid region */
     struct region_entry *path_region = as_get_region(proc->as, usr_buf);
     if (path_region == NULL) {
@@ -19,42 +19,52 @@ bool usr_buf_in_region(process_t *proc, void *usr_buf, size_t buf_size) {
     if (sizeof(seL4_Word)*(region_end - (seL4_Word)usr_buf) < buf_size) {
         return false;
     }
+    if (ret_region_r != NULL) *ret_region_r = path_region->r;
+    if (ret_region_w != NULL) *ret_region_w = path_region->w;
     return true;
 }
 
-int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *svaddr, size_t *buf_page_left) {
+int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *ret_svaddr, size_t *ret_buf_page_left) {
+    assert(ret_svaddr != NULL);
+
     sync_acquire(ft_lock);
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
     if (pte == NULL || pte->frame <= 0) {
         printf("copy pt add page\n");
-        int err = pt_add_page(proc, (seL4_Word)usr_buf, svaddr, NULL);
+        int err = pt_add_page(proc, (seL4_Word)usr_buf, ret_svaddr, NULL);
         printf("done adding page\n");
         if (err) {
             sync_release(ft_lock);
             return err;
         }
     } else {
-        *svaddr = (seL4_Word)pte->frame;
+        *ret_svaddr = (seL4_Word)pte->frame;
     }
-    *svaddr += offset;
+    *ret_svaddr += offset;
     
-    if (PAGE_SIZE - offset < buf_size) {
-        *buf_page_left = PAGE_SIZE - offset;   
-    } else {
-        *buf_page_left = buf_size;
+    if (ret_buf_page_left != NULL) {
+        if (PAGE_SIZE - offset < buf_size) {
+            *ret_buf_page_left = PAGE_SIZE - offset;   
+        } else {
+            *ret_buf_page_left = buf_size;
+        }
     }
 
-    frame_change_swappable(*svaddr, 0);
+    frame_change_swappable(*ret_svaddr, 0);
     sync_release(ft_lock);
 
     return 0;
 }
 
 static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
+    bool region_r, region_w;
     /* Check that the entire user buffer lies within a valid region */
-    if (!usr_buf_in_region(proc, usr, nbytes)) {
+    if (!usr_buf_in_region(proc, usr, nbytes, &region_r, &region_w)) {
         return EFAULT;
+    }
+    if ((!region_r && !copyout) || (!region_w && copyout)) {
+        return EACCES;
     }
 
     void *svaddr;
