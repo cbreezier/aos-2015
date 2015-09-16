@@ -15,6 +15,7 @@ uint32_t reader_required_bytes;
 bool has_notified;
 sync_mutex_t read_serial_lock;
 sync_mutex_t write_serial_lock;
+sync_mutex_t one_reader_lock;
 
 seL4_CPtr notify_async_ep;
 
@@ -51,6 +52,9 @@ void console_init() {
     conditional_panic(!read_serial_lock, "Cannot initialise serial device - read serial lock");
     write_serial_lock = sync_create_mutex();
     conditional_panic(!write_serial_lock, "Cannot initialise serial device - write serial lock");
+    one_reader_lock = sync_create_mutex();
+    conditional_panic(!one_reader_lock, "Cannot initialise serial device - one reader lock");
+
 
     has_notified = true;
 
@@ -111,11 +115,11 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
 }
 
 int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
-    /* TODO M7: Lock around entire console read? enforce only 1 reader */
     if (!usr_buf_in_region(proc, dest, nbytes, NULL, NULL)) {
         return -EFAULT;
     }
 
+    sync_acquire(one_reader_lock);
     size_t nbytes_left = nbytes;
     bool read_newline = false;
     int err = 0;
@@ -133,6 +137,7 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
 
             err = read_buf(proc, dest, to_copy, &read_newline);
             if (err < 0) {
+                sync_release(one_reader_lock);
                 return err;
             }
             nbytes_left -= err; 
@@ -141,11 +146,13 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
             err = read_buf(proc, dest, nbytes_left, &read_newline);
             sync_release(read_serial_lock);
             if (err < 0) {
+                sync_release(one_reader_lock);
                 return err;
             }
             nbytes_left -= err;
         }
     }
+    sync_release(one_reader_lock);
     return nbytes - nbytes_left;
 }
 

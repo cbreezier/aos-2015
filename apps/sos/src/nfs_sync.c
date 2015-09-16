@@ -1,6 +1,8 @@
 #include <sel4/sel4.h>
 #include <bits/errno.h>
 #include <string.h>
+#include <sync/mutex.h>
+#include <sys/panic.h>
 
 #include "thread.h"
 #include "nfs_sync.h"
@@ -26,6 +28,12 @@ struct token {
     /* For readdir */
     nfscookie_t cookie;
 };
+
+
+void nfs_sync_init() {
+    nfs_lock = sync_create_mutex();
+    conditional_panic(!nfs_lock, "Cannot initialise nfs sync lock"); 
+}
 
 static int rpc_stat_to_err(enum rpc_stat stat) {
     switch(stat) {
@@ -99,6 +107,8 @@ static void nfs_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t *fh, 
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
+
+    sync_acquire(nfs_lock);
     enum rpc_stat res = nfs_lookup(&mnt_point, name, nfs_lookup_cb, (uintptr_t)(&t));
     int err = rpc_stat_to_err(res);
     if (err) {
@@ -106,6 +116,7 @@ int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     }
 
     seL4_Wait(t.async_ep, NULL);
+    sync_release(nfs_lock);
     err = nfs_stat_to_err(t.status);
     if (err) {
         return err;
@@ -151,6 +162,8 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
     while (!t.finished && t.count < nbytes) {
         int before_count = t.count;
         size_t to_read = nbytes - t.count < PAGE_SIZE ? nbytes - t.count : PAGE_SIZE;
+
+        sync_acquire(nfs_lock);
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
         if (t.err) {
             free(sos_buf);
@@ -163,6 +176,7 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
         }
 
         seL4_Wait(t.async_ep, NULL);
+        sync_release(nfs_lock);
         err = nfs_stat_to_err(t.status);
         if (err) {
             free(sos_buf);
@@ -200,6 +214,7 @@ int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyte
     t.err = 0;
     
     while (!t.finished && t.count < nbytes) {
+        sync_acquire(nfs_lock);
         enum rpc_stat res = nfs_read(&fh, offset + t.count, nbytes - t.count, nfs_sos_read_cb, (uintptr_t)(&t));
         if (t.err) {
             return -t.err;
@@ -210,6 +225,7 @@ int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyte
         }
 
         seL4_Wait(t.async_ep, NULL);
+        sync_release(nfs_lock);
         err = nfs_stat_to_err(t.status);
         if (err) {
             return -err;
@@ -255,13 +271,17 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
             return -err;
         }
         int count_before = t.count;
+
+        sync_acquire(nfs_lock);
         enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
         err = rpc_stat_to_err(res);
         if (err) {
+            sync_release(ft_lock);
             frame_change_swappable(svaddr, true);
             return -err;
         }
         seL4_Wait(t.async_ep, NULL);
+        sync_release(nfs_lock);
         frame_change_swappable(svaddr, true);
 
         err = nfs_stat_to_err(t.status);
@@ -286,12 +306,14 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  
     while (!t.finished && nbytes > 0) {
         int count_before = t.count;
+        sync_acquire(nfs_lock);
         enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
         }
         seL4_Wait(t.async_ep, NULL);
+        sync_release(nfs_lock);
 
         err = nfs_stat_to_err(t.status);
         if (err) {
@@ -332,12 +354,14 @@ int nfs_readdir_sync(void *sos_buf, int *ret_num_files) {
     t.cookie = 0;
 
     do {
+        sync_acquire(nfs_lock);
         enum rpc_stat res = nfs_readdir(&mnt_point, t.cookie, nfs_readdir_cb, (uintptr_t)(&t));
         int err = rpc_stat_to_err(res);
         if (res) {
             return err;
         }
         seL4_Wait(t.async_ep, NULL);
+        sync_release(nfs_lock);
         err = nfs_stat_to_err(t.status);
         if (err) {
             return err;
@@ -371,12 +395,14 @@ int nfs_create_sync(const char *name, uint32_t mode, size_t sz, fhandle_t *ret_f
     sattr.mtime.tv_sec = -1;
     sattr.atime.tv_usec = -1;
 
+    sync_acquire(nfs_lock);
     enum rpc_stat res = nfs_create(&mnt_point, name, &sattr, nfs_create_cb, (uintptr_t)(&t));
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;
     }
     seL4_Wait(t.async_ep, NULL);
+    sync_release(nfs_lock);
     err = nfs_stat_to_err(t.status);
     if (err) {
         return err;

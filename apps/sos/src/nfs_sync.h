@@ -5,6 +5,10 @@
 #include "file.h"
 #include "proc.h"
 
+sync_mutex_t nfs_lock;
+
+void nfs_sync_init();
+
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr);
 
 int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes);

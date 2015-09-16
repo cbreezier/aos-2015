@@ -33,6 +33,7 @@
 #include "sos_syscall.h"
 #include "console.h"
 #include "swap.h"
+#include "nfs_sync.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
@@ -616,7 +617,9 @@ void setup_tick_timer(uint32_t id, void *data) {
 }
 
 void nfs_tick(uint32_t id, void *data) {
+    sync_acquire(nfs_lock);
     nfs_timeout();
+    sync_release(nfs_lock);
     register_timer(NFS_TICK_TIME, nfs_tick, data);
 }
 
@@ -716,6 +719,9 @@ int main(void) {
     /* Initialise console */
     console_init();
 
+    /* Initialise nfs sync */
+    nfs_sync_init();
+
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     nfs_tick(0, NULL);
@@ -724,13 +730,6 @@ int main(void) {
     size_t ft_lo_idx, ft_hi_idx;
     get_ft_limits(&ft_lo_idx, &ft_hi_idx);
     swap_init(ft_lo_idx, ft_hi_idx);
-//    uint64_t t1 = 1100000;
-//    uint64_t t2 = 77004001;
-//    uint64_t t3 = 400000;
-//    setup_tick_timer(0, &t1);
-//    setup_tick_timer(0, &t2);
-//    setup_tick_timer(0, &t3);
-
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

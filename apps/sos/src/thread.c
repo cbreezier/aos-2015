@@ -52,9 +52,10 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         conditional_panic(err, "Failed to create thread TCB - SOS thread");
 
 
+        seL4_Uint8 priority = (i < NUM_ASYNC_SOS_THREADS) ? 255 : 254;
         err = seL4_TCB_Configure(thread.tcb_cap,
                                  sos_interrupt_ep_cap, 
-                                 255, /* Priority */
+                                 priority,
                                  cur_cspace->root_cnode,
                                  cur_cspace->guard,
                                  seL4_CapInitThreadVSpace,
