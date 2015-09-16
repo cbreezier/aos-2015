@@ -63,10 +63,6 @@
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
-/* The linker will link this symbol to the start address  *
- * of an archive of attached applications.                */
-extern char _cpio_archive[];
-
 const seL4_BootInfo* _boot_info;
 
 process_t tty_test_process;
@@ -83,9 +79,6 @@ process_t tty_test_process;
 typedef void (*sos_syscall_t)(process_t *proc, seL4_CPtr reply_cap, int num_args);
 
 sos_syscall_t syscall_jt[NUM_SYSCALLS];
-
-seL4_CPtr _sos_ipc_ep_cap;
-seL4_CPtr _sos_interrupt_ep_cap;
 
 /**
  * NFS mount point
@@ -166,7 +159,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         if (syscall_number >= NUM_SYSCALLS) {
             unknown_syscall(NULL, 0, 0);   
         } else {
-            syscall_jt[syscall_number](&tty_test_process, reply_cap, num_args);
+            syscall_jt[syscall_number](&processes[badge], reply_cap, num_args);
         }
         break;
     }
@@ -204,28 +197,23 @@ void syscall_loop(seL4_CPtr ep) {
                     seL4_GetMR(0),
                     seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
 
-            if (badge == TTY_EP_BADGE) {
+            seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+            assert(reply_cap != CSPACE_NULL);
+            seL4_CPtr sos_cap;
+            int err = pt_add_page(&processes[badge], seL4_GetMR(1), NULL, &sos_cap);
 
-                seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
-                assert(reply_cap != CSPACE_NULL);
-                seL4_CPtr sos_cap;
-                int err = pt_add_page(&tty_test_process, seL4_GetMR(1), NULL, &sos_cap);
-
-                if (seL4_GetMR(2)) {
-                    /* Flush cache entry */
-                    seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-                }
-
-                conditional_panic(err, "failed to add page(vm fault)");
-
-                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                seL4_SetMR(0, 0);
-
-                seL4_Send(reply_cap, reply);
-                cspace_free_slot(cur_cspace, reply_cap);
-            } else {
-                assert(!"Unable to handle vm faults");
+            if (seL4_GetMR(2)) {
+                /* Flush cache entry */
+                seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
             }
+
+            conditional_panic(err, "failed to add page(vm fault)");
+
+            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+            seL4_SetMR(0, 0);
+
+            seL4_Send(reply_cap, reply);
+            cspace_free_slot(cur_cspace, reply_cap);
         }else if(label == seL4_NoFault) {
             /* System call */
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -731,20 +719,13 @@ int main(void) {
     get_ft_limits(&ft_lo_idx, &ft_hi_idx);
     swap_init(ft_lo_idx, ft_hi_idx);
 
+    proc_init();
+
     /* Start the user application */
-    start_first_process(TTY_NAME, _sos_ipc_ep_cap);
+    int pid = proc_create(CONFIG_SOS_STARTUP_APP);
+    //start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
-    printf("tty test pid = %d\n", tty_test_process.pid);
-
-    //test0();
-    //test1();
-    //test2();
-
-    
-    //while (true) {
-    //    printf("while true main\n");
-    //    seL4_Wait(get_cur_thread()->wakeup_async_ep, NULL);
-    //}
+    printf("initial pid = %d\n", pid);
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");

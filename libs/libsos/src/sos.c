@@ -180,8 +180,17 @@ int sos_stat(const char *path, sos_stat_t *buf) {
  */
 
 pid_t sos_process_create(const char *path) {
-    printf("System call not implemented!\n");
-    return 0;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_execve);
+    seL4_SetMR(1, (seL4_Word)path);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
+    return seL4_GetMR(1);
 }
 /* Create a new process running the executable image "path".
  * Returns ID of new process, -1 if error (non-executable image, nonexisting

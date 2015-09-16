@@ -6,12 +6,23 @@
 #include <limits.h>
 
 #define N_NAME 32
+#define MAX_PROCESSES 32
+
+#define USER_EP_CAP          (1)
+#define USER_PRIORITY (0)
+
+seL4_CPtr _sos_ipc_ep_cap;
+seL4_CPtr _sos_interrupt_ep_cap;
 
 struct addrspace;
 
 typedef int pid_t;
 
 struct fd_entry;
+
+/* The linker will link this symbol to the start address  *
+ * of an archive of attached applications.                */
+extern char _cpio_archive[];
 
 typedef struct {
     pid_t     pid;
@@ -36,10 +47,16 @@ typedef struct {
 
     struct fd_entry *proc_files;
     int files_head_free, files_tail_free;
+
+    int next_free;
 } process_t;
 
-#include <sync/mutex.h>
-sync_mutex_t locklock;
+int procs_head_free, procs_tail_free;
 
+process_t processes[MAX_PROCESSES];
+
+void proc_init();
+
+int proc_create(char *program_name);
 
 #endif /* _PROC_H_ */
