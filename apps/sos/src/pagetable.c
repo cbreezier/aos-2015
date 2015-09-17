@@ -82,6 +82,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     }
     if (ret_svaddr != NULL) {
         *ret_svaddr = svaddr;
+        frame_change_swappable(svaddr, 0);
     }
 
 

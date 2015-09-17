@@ -87,8 +87,6 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
 #define NFS_TICK_TIME 100000ull
 extern fhandle_t mnt_point;
 
-static void end_first_process();
-
 struct mutex_ep {
     seL4_CPtr unminted;
     uint32_t ep_addr;

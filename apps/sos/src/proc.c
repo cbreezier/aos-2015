@@ -238,6 +238,10 @@ void proc_exit(process_t *proc) {
     }
     sync_release(proc_table_lock);
 
+    char outbuf[100];
+    sprintf(outbuf, "Not all proc memory freed %d\n", proc->size);
+    conditional_panic(proc->size != 0, outbuf);
+
     sync_release(proc->proc_lock);
 
     /* Signal possibly waiting parent */

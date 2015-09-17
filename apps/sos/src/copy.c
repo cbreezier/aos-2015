@@ -31,15 +31,14 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
     if (pte == NULL || pte->frame <= 0) {
-        printf("copy pt add page\n");
         int err = pt_add_page(proc, (seL4_Word)usr_buf, ret_svaddr, NULL);
-        printf("done adding page\n");
         if (err) {
             sync_release(ft_lock);
             return err;
         }
     } else {
         *ret_svaddr = (seL4_Word)pte->frame;
+        frame_change_swappable(*ret_svaddr, 0);
     }
     *ret_svaddr += offset;
     
@@ -51,7 +50,6 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
         }
     }
 
-    frame_change_swappable(*ret_svaddr, 0);
     sync_release(ft_lock);
 
     return 0;

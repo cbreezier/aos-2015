@@ -15,11 +15,12 @@
 #include <cspace/cspace.h>
 
 #include "elf.h"
+#include "pagetable.h"
+#include "frametable.h"
+#include "vmem_layout.h"
+#include "ut_manager/ut.h"
 
-#include <vmem_layout.h>
-#include <ut_manager/ut.h>
 #include <utils/mapping.h>
-#include <pagetable.h>
 
 #define verbose 0
 #include <sys/debug.h>
@@ -121,6 +122,7 @@ static int load_segment_into_vspace(process_t *proc,
         if (pos < file_size){
             memcpy((void*)kaddr + (PAGE_SIZE - nbytes), (void*)src, MIN(nbytes, file_size - pos));
         }
+        frame_change_swappable(kaddr, 1);
 
         /* Not observable to I-cache yet so flush the frame */
         seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
