@@ -34,6 +34,7 @@
 #include "console.h"
 #include "swap.h"
 #include "nfs_sync.h"
+#include "kmalloc.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
@@ -94,21 +95,21 @@ struct mutex_ep {
 };
 
 void* sync_new_ep(seL4_CPtr* ep, int badge) {
-
     struct mutex_ep *ret = malloc(sizeof(struct mutex_ep));
+
     if (!ret) {
         return NULL;
     }   
 
     ret->ep_addr = ut_alloc(seL4_EndpointBits);
     if (ret->ep_addr == 0) {
-        free(ret);
+        kfree(ret);
         return NULL;
     }
 
     int err = cspace_ut_retype_addr(ret->ep_addr, seL4_AsyncEndpointObject, seL4_EndpointBits, cur_cspace, &ret->unminted);
     if (err) {
-        free(ret);
+        kfree(ret);
         return NULL;
     }
 
@@ -412,7 +413,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     // conditional_panic(err, "Unable to map IPC buffer for user app");
 
     /* File descriptor table stuff */
-    tty_test_process.proc_files = malloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
+    tty_test_process.proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
     for (int i = 0; i < OPEN_FILE_MAX; ++i) {
         tty_test_process.proc_files[i].used = false;
         tty_test_process.proc_files[i].offset = 0;
@@ -695,6 +696,9 @@ int main(void) {
     dprintf(0, "\nSOS Starting...\n");
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
+
+    /* Initialise kmalloc */
+    kmalloc_init();
 
     frametable_init();
 

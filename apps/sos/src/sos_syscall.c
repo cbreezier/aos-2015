@@ -12,6 +12,7 @@
 #include "thread.h"
 #include "nfs_sync.h"
 #include "copy.h"
+#include "kmalloc.h"
 
 void sos_null(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -77,7 +78,7 @@ void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     uint64_t delay = (uint64_t) seL4_GetMR(1);
     delay *= 1000ull;
 
-    seL4_CPtr *data = malloc(sizeof(seL4_CPtr));
+    seL4_CPtr *data = kmalloc(sizeof(seL4_CPtr));
     uint32_t err = 0;
     if (data != NULL) {
         seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
@@ -96,7 +97,7 @@ void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     cspace_free_slot(cur_cspace, reply_cap);
 
     if (data) {
-        free(data);
+        kfree(data);
     }
 }
 
@@ -181,7 +182,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int fd = -1;
 
     /* Do copyin to get path */
-    char *path = malloc(NAME_MAX * sizeof(char));
+    char *path = kmalloc(NAME_MAX * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
         goto sos_open_end;
@@ -273,7 +274,7 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     
 sos_open_end:
     if (path) {
-        free(path);
+        kfree(path);
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
@@ -441,7 +442,7 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *user_path = (void*) seL4_GetMR(1);
     void *usr_buf = (void*) seL4_GetMR(2);
 
-    char *path = malloc(NAME_MAX * sizeof(char));
+    char *path = kmalloc(NAME_MAX * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
         goto sos_stat_end;
@@ -474,7 +475,7 @@ void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
 sos_stat_end:
     if (path) {
-        free(path);
+        kfree(path);
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
@@ -502,13 +503,13 @@ void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
         goto sos_getdents_end;
     }
 
-    dir_entries = malloc(sizeof(char*)*FILES_PER_DIR);
+    dir_entries = kmalloc(sizeof(char*)*FILES_PER_DIR);
     if (dir_entries == NULL) {
         err = ENOMEM;
         goto sos_getdents_end;
     }
     for (int i = 0; i < FILES_PER_DIR; ++i) {
-        dir_entries[i] = malloc(sizeof(char)*NAME_MAX);
+        dir_entries[i] = kmalloc(sizeof(char)*NAME_MAX);
         if (dir_entries[i] == NULL) {
             err = ENOMEM;
             goto sos_getdents_end;
@@ -543,9 +544,9 @@ sos_getdents_end:
             if (dir_entries[i] == NULL) {
                 break;
             }
-            free(dir_entries[i]);
+            kfree(dir_entries[i]);
         }
-        free(dir_entries);
+        kfree(dir_entries);
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
@@ -566,7 +567,7 @@ void sos_execve(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *usr_buf= (void*)seL4_GetMR(1);
 
     /* Do copyin to get path */
-    char *path = malloc(N_NAME * sizeof(char));
+    char *path = kmalloc(N_NAME * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
         goto sos_execve_end;
@@ -586,7 +587,7 @@ void sos_execve(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     
 sos_execve_end:
     if (path != NULL) {
-        free(path);   
+        kfree(path);   
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 

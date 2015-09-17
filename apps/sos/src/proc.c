@@ -17,6 +17,8 @@
 #include "addrspace.h"
 #include "proc.h"
 #include "console.h"
+#include "kmalloc.h"
+
 
 sync_mutex_t proc_table_lock;
 
@@ -135,7 +137,7 @@ int proc_create(pid_t parent, char *program_name) {
     as_add_stack(&processes[pid]);
 
     /* File descriptor table stuff */
-    processes[pid].proc_files = malloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
+    processes[pid].proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
     for (int i = 0; i < OPEN_FILE_MAX; ++i) {
         processes[pid].proc_files[i].used = false;
         processes[pid].proc_files[i].offset = 0;

@@ -9,6 +9,7 @@
 #include "network.h"
 #include "copy.h"
 #include "frametable.h"
+#include "kmalloc.h"
 
 struct token {
     seL4_CPtr async_ep;
@@ -153,7 +154,7 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
     t.finished = false;
     t.err = 0;
 
-    void *sos_buf = malloc(PAGE_SIZE);
+    void *sos_buf = kmalloc(PAGE_SIZE);
     if (sos_buf == NULL) {
         return -ENOMEM;
     }
@@ -167,25 +168,25 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
         sync_release(nfs_lock);
         if (t.err) {
-            free(sos_buf);
+            kfree(sos_buf);
             return -t.err;
         }
         int err = rpc_stat_to_err(res);
         if (err) {
-            free(sos_buf);
+            kfree(sos_buf);
             return -err;
         }
 
         seL4_Wait(t.async_ep, NULL);
         err = nfs_stat_to_err(t.status);
         if (err) {
-            free(sos_buf);
+            kfree(sos_buf);
             return -err;
         }
         
         err = copyout(proc, usr_buf + before_count, sos_buf, t.count - before_count);
     }
-    free(sos_buf);
+    kfree(sos_buf);
     
     return t.count;
 }

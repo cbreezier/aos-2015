@@ -6,6 +6,7 @@
 #include "addrspace.h"
 #include "pagetable.h"
 #include "frametable.h"
+#include "kmalloc.h"
 
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
@@ -15,7 +16,7 @@ int as_init(struct addrspace **ret_as) {
 
     *ret_as = NULL;
     printf("allocing addrspace\n");
-    struct addrspace *new = malloc(sizeof(struct addrspace));
+    struct addrspace *new = kmalloc(sizeof(struct addrspace));
     printf("done allocing addrspace\n");
     if (new == NULL) {
         return ENOMEM;
@@ -59,7 +60,7 @@ int as_destroy(process_t *proc) {
     struct region_entry *prev = NULL;
     for (cur = as->region_head; cur != NULL; cur = cur->next) {
         if (prev != NULL) {
-            free(prev);
+            kfree(prev);
         }
         prev = cur;
     }
@@ -130,7 +131,7 @@ static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, 
     }
 
     // Found where to insert region to maintain sorted order
-    struct region_entry *new_region = malloc(sizeof(struct region_entry));
+    struct region_entry *new_region = kmalloc(sizeof(struct region_entry));
     if (new_region == NULL) {
         return ENOMEM;
     }
@@ -209,7 +210,7 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
     }
 
     // Found where to insert region to maintain sorted order
-    struct region_entry *new_region = malloc(sizeof(struct region_entry));
+    struct region_entry *new_region = kmalloc(sizeof(struct region_entry));
     if (new_region == NULL) {
         return ENOMEM;
     }
@@ -248,7 +249,7 @@ int as_remove_region(process_t *proc, seL4_Word addr) {
                 prev->next = cur->next;
             }
             size = cur->size;
-            free(cur);
+            kfree(cur);
             break;
         }
     }
