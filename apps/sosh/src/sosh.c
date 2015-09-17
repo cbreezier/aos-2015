@@ -214,6 +214,7 @@ static int exec(int argc, char **argv) {
         in = open("console", O_RDONLY);
         assert(in >= 0);
     }
+    printf("exec complete\n");
     return 0;
 }
 
@@ -541,7 +542,7 @@ int main(void) {
 
 
     while (!done) {
-        pt_test();
+        //pt_test();
         printf("IT WORKED\n");
         if (new) {
             printf("$ ");
@@ -626,6 +627,10 @@ int main(void) {
         }
 
         found = 0;
+
+        if (strcmp(argv[0], "exit") == 0) {
+            return 0;
+        }
 
         for (i = 0; i < sizeof(commands) / sizeof(struct command); i++) {
             if (strcmp(argv[0], commands[i].name) == 0) {

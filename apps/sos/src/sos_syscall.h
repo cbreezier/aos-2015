@@ -32,4 +32,10 @@ void sos_getpid(process_t *proc, seL4_CPtr reply_cap, int num_args);
 
 void sos_ustat(process_t *proc, seL4_CPtr reply_cap, int num_args);
 
+void sos_waitid(process_t *proc, seL4_CPtr reply_cap, int num_args);
+
+void sos_kill(process_t *proc, seL4_CPtr reply_cap, int num_args);
+
+void sos_exit(process_t *proc, seL4_CPtr reply_cap, int num_args);
+
 #endif /* _SOS_SYSCALL_H_ */

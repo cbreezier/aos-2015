@@ -26,6 +26,7 @@ void proc_init() {
     for (int i = 0; i < MAX_PROCESSES; ++i) {
         processes[i].next_free = (i == MAX_PROCESSES - 1) ? -1 : i+1;
         processes[i].pid = -1;
+        processes[i].proc_lock = sync_create_mutex();
     }
     procs_head_free = 0;
     procs_tail_free = MAX_PROCESSES - 1;
@@ -46,11 +47,13 @@ int proc_create(pid_t parent, char *program_name) {
     procs_head_free = processes[procs_head_free].next_free;
     sync_release(proc_table_lock);
 
+    sync_acquire(processes[pid].proc_lock);
     processes[pid].parent_proc = parent;
     processes[pid].pid = pid;
     processes[pid].size = 0;
     processes[pid].stime = (unsigned)(time_stamp() / 1000);
     strcpy(processes[pid].command, program_name);
+    processes[pid].wait_ep = 0;
 
     /* These required for setting up the TCB */
     seL4_UserContext context;
@@ -167,6 +170,7 @@ int proc_create(pid_t parent, char *program_name) {
         processes[pid].proc_files[i].open_file_idx = open_entry;
         processes[pid].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
     }
+    sync_release(processes[pid].proc_lock);
 
     /* Start the new process */
     printf("almost done!\n");
@@ -176,4 +180,78 @@ int proc_create(pid_t parent, char *program_name) {
     seL4_TCB_WriteRegisters(processes[pid].tcb_cap, 1, 0, 2, &context);
 
     return pid;
+}
+
+void proc_exit(process_t *proc) {
+    int err;
+
+    sync_acquire(proc->proc_lock);
+
+    pid_t pid_parent = proc->parent_proc;
+    pid_t pid_proc = proc->pid;
+
+    proc->pid = -1;
+
+    /* Destroy address space */
+    err = as_destroy(proc);
+    conditional_panic(err, "unable to destroy address space");
+
+    /* Destroy tcb */
+    err = cspace_revoke_cap(cur_cspace, proc->tcb_cap);
+    conditional_panic(err, "unable to revoke tcb cap");
+
+    err = cspace_delete_cap(cur_cspace, proc->tcb_cap);
+    conditional_panic(err, "unable to delete tcb cap");
+
+    ut_free(proc->tcb_addr, seL4_TCBBits);
+
+    /* Destroy process ipc cap */
+    //err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
+    //conditional_panic(err, "unable to revoke user ep cap");
+
+    //err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
+    //conditional_panic(err, "unable to delete user ep cap");
+
+    /* Destroy process cspace */
+    err = cspace_destroy(proc->croot);
+    conditional_panic(err, "unable to destroy cspace");
+
+    /* Destroy page directory */
+    err = cspace_revoke_cap(cur_cspace, proc->vroot);
+    conditional_panic(err, "unable to revoke vroot");
+
+    err = cspace_delete_cap(cur_cspace, proc->vroot);
+    conditional_panic(err, "unable to delete vroot");
+
+    ut_free(proc->vroot_addr, seL4_PageDirBits);
+
+    sync_acquire(proc_table_lock);
+    if (procs_head_free == -1 || procs_tail_free == -1) {
+        assert(procs_head_free == -1 && procs_tail_free == -1);
+        procs_head_free = pid_proc;
+        procs_tail_free = pid_proc;
+        processes[pid_proc].next_free = -1;
+    } else {
+        processes[procs_tail_free].next_free = pid_proc;
+        processes[pid_proc].next_free = -1;
+        procs_tail_free = pid_proc;
+    }
+    sync_release(proc_table_lock);
+
+    sync_release(proc->proc_lock);
+
+    /* Signal possibly waiting parent */
+    if (pid_parent != -1) {
+        sync_acquire(processes[pid_parent].proc_lock);
+
+        if (processes[pid_parent].wait_ep) {
+            if (processes[pid_parent].wait_pid == -1 || processes[pid_parent].wait_pid == pid_proc) {
+                processes[pid_parent].wait_pid = pid_proc;
+                seL4_Notify(processes[pid_parent].wait_ep, 0);
+                processes[pid_parent].wait_ep = 0;
+            }
+        }
+
+        sync_release(processes[pid_parent].proc_lock);
+    }
 }

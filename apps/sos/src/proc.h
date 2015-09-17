@@ -4,6 +4,7 @@
 #include <sel4/sel4.h>
 #include <cspace/cspace.h>
 #include <limits.h>
+#include <sync/mutex.h>
 
 #define N_NAME 32
 #define MAX_PROCESSES 32
@@ -53,8 +54,11 @@ typedef struct {
 
     pid_t parent_proc;
 
+    sync_mutex_t proc_lock;
+
     /* Fields for wait_pid */
-    
+    seL4_CPtr wait_ep;
+    pid_t wait_pid;
 
     struct addrspace *as;
 
@@ -71,5 +75,7 @@ process_t processes[MAX_PROCESSES];
 void proc_init();
 
 int proc_create(pid_t parent, char *program_name);
+
+void proc_exit(process_t *proc);
 
 #endif /* _PROC_H_ */

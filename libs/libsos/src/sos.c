@@ -198,7 +198,16 @@ pid_t sos_process_create(const char *path) {
  */
 
 int sos_process_delete(pid_t pid) {
-    printf("System call not implemented!\n");
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_kill);
+    seL4_SetMR(1, (seL4_Word)pid);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
     return 0;
 }
 /* Delete process (and close all its file descriptors).
@@ -234,12 +243,31 @@ int sos_process_status(sos_process_t *processes, unsigned max) {
  */
 
 pid_t sos_process_wait(pid_t pid) {
-    printf("System call not implemented!\n");
-    return 0;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_waitid);
+    seL4_SetMR(1, (seL4_Word)pid);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
+    return seL4_GetMR(1);
 }
 /* Wait for process "pid" to exit. If "pid" is -1, wait for any process
  * to exit. Returns the pid of the process which exited.
  */
+
+void sos_process_exit() {
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_exit);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    assert(!"should never get here");
+    while(true);
+}
 
 // static size_t sos_debug_print(const void *vData, size_t count) {
 //     size_t i;

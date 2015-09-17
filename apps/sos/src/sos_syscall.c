@@ -385,7 +385,6 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int fd = (int) seL4_GetMR(1);
     void *buf = (void*) seL4_GetMR(2);
     size_t nbytes = (size_t) seL4_GetMR(3);
-    printf("fd %d, nbytes %u\n", fd, nbytes);
 
     int err = 0;
     int nwrite = 0;
@@ -629,11 +628,13 @@ void sos_ustat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     for (int i = 0; i < MAX_PROCESSES && num_procs < max_procs; ++i) {
         if (processes[i].pid != -1) {
+            sync_acquire(processes[i].proc_lock);
             sos_process_t sos_proc;
             sos_proc.pid = i;
             sos_proc.size = processes[i].size;
             sos_proc.stime = processes[i].stime;
             strcpy(sos_proc.command, processes[i].command);
+            sync_release(processes[i].proc_lock);
 
             err = copyout(proc, usr_buf, &sos_proc, sizeof(sos_process_t));
             if (err) {
@@ -654,6 +655,69 @@ sos_ustat_end:
 
     seL4_Send(reply_cap, reply);
 
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
+void sos_waitid(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+
+    int err = 0;
+    int pid = (int)seL4_GetMR(1);
+
+    if (pid < -1 || pid >= MAX_PROCESSES) {
+        err = EINVAL;
+        goto sos_waitid_end;
+    }
+
+    if (pid != -1) {
+        sync_acquire(processes[pid].proc_lock);
+        /* Process we want to wait on does not exist */
+        if (processes[pid].pid == -1) {
+            err = ECHILD;
+            sync_release(processes[pid].proc_lock);
+            goto sos_waitid_end;
+        }
+
+        /* Process we want to wait on is not our child */
+        if (processes[pid].parent_proc != proc->pid) {
+            err = ECHILD;
+            sync_release(processes[pid].proc_lock);
+            goto sos_waitid_end;
+        }
+        sync_release(processes[pid].proc_lock);
+    }
+
+    seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
+    proc->wait_ep = async_ep;
+    proc->wait_pid = pid;
+
+    seL4_Wait(async_ep, NULL);
+    /* 
+     * At this point, our wait_pid is the child that exited (set by
+     * exiting child).
+     */
+
+sos_waitid_end:
+    asm("nop");
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
+
+    seL4_SetMR(0, err);
+    seL4_SetMR(1, proc->wait_pid);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
+void sos_kill(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+
+}
+
+void sos_exit(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+
+    proc_exit(proc);
+    
     cspace_free_slot(cur_cspace, reply_cap);
 }
 

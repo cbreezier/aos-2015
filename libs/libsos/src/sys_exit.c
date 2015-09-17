@@ -16,8 +16,8 @@
 static void
 sel4_abort()
 {
-    printf("sos aborting\n");
-    seL4_DebugHalt();
+    sos_process_exit();
+    //seL4_DebugHalt();
     while(1); /* We don't return after this */
 }
 
@@ -42,6 +42,7 @@ sys_getpid(va_list ap) {
 long
 sys_exit(va_list ap)
 {
+    printf("exit\n");
     abort();
     return 0;
 }

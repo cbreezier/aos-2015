@@ -135,6 +135,8 @@ void sos_sys_usleep(int msec);
 /* Sleeps for the specified number of milliseconds.
  */
 
+void sos_process_exit();
+
 
 /*************************************************************************/
 /*                                   */
