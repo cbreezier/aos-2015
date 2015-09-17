@@ -470,7 +470,7 @@ static void end_first_process(void) {
     int err;
 
     /* Destroy address space */
-    err = as_destroy(tty_test_process.as);
+    err = as_destroy(&tty_test_process);
     conditional_panic(err, "unable to destroy address space");
     
     /* Destroy tcb */
@@ -588,6 +588,8 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     syscall_jt[SYS_stat] = sos_stat;
     syscall_jt[SYS_getdents] = sos_getdents;
     syscall_jt[SYS_execve] = sos_execve;
+    syscall_jt[SYS_getpid] = sos_getpid;
+    syscall_jt[SYS_ustat] = sos_ustat;
 }
 
 static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
@@ -723,7 +725,7 @@ int main(void) {
     proc_init();
 
     /* Start the user application */
-    int pid = proc_create(CONFIG_SOS_STARTUP_APP);
+    int pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
     //start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
     printf("initial pid = %d\n", pid);

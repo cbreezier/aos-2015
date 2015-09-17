@@ -56,7 +56,7 @@ void sos_munmap(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     (void) length;
     (void) num_args;
 
-    int err = as_remove_region(proc->as, (seL4_Word)addr);
+    int err = as_remove_region(proc, (seL4_Word)addr);
     seL4_SetMR(0, err);
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -566,7 +566,7 @@ void sos_execve(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     void *usr_buf= (void*)seL4_GetMR(1);
 
     /* Do copyin to get path */
-    char *path = malloc(NAME_MAX * sizeof(char));
+    char *path = malloc(N_NAME * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
         goto sos_execve_end;
@@ -576,9 +576,9 @@ void sos_execve(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     if (err) {
         goto sos_execve_end;
     }
-    path[NAME_MAX-1] = 0;
+    path[N_NAME-1] = 0;
 
-    pid = proc_create(path);
+    pid = proc_create(proc->pid, path);
     if (pid < 0) {
         err = -pid;
         goto sos_execve_end;
@@ -597,3 +597,62 @@ sos_execve_end:
 
     cspace_free_slot(cur_cspace, reply_cap);
 }
+
+void sos_getpid(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+
+    pid_t pid = proc->pid;
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    seL4_SetMR(0, pid);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
+void sos_ustat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+    
+    int err = 0;
+    int num_procs = 0;
+
+    void *usr_buf = (void*)seL4_GetMR(1);
+    int max_procs = (int)seL4_GetMR(2);
+
+    if (max_procs < 0 || max_procs > MAX_PROCESSES) {
+        err = EINVAL;
+        goto sos_ustat_end;
+    }
+
+    for (int i = 0; i < MAX_PROCESSES && num_procs < max_procs; ++i) {
+        if (processes[i].pid != -1) {
+            sos_process_t sos_proc;
+            sos_proc.pid = i;
+            sos_proc.size = processes[i].size;
+            sos_proc.stime = processes[i].stime;
+            strcpy(sos_proc.command, processes[i].command);
+
+            err = copyout(proc, usr_buf, &sos_proc, sizeof(sos_process_t));
+            if (err) {
+                goto sos_ustat_end;
+            }
+
+            usr_buf += sizeof(sos_process_t);
+            num_procs++;
+        }
+    }
+
+sos_ustat_end:
+    asm("nop");
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
+
+    seL4_SetMR(0, err);
+    seL4_SetMR(1, num_procs);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+

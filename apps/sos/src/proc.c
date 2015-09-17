@@ -5,6 +5,7 @@
 #include <cpio/cpio.h>
 #include <utils/mapping.h>
 #include <string.h>
+#include <clock/clock.h>
 #include <elf/elf.h>
 #include <sync/mutex.h>
 
@@ -22,6 +23,7 @@ sync_mutex_t proc_table_lock;
 void proc_init() {
     for (int i = 0; i < MAX_PROCESSES; ++i) {
         processes[i].next_free = (i == MAX_PROCESSES - 1) ? -1 : i+1;
+        processes[i].pid = -1;
     }
     procs_head_free = 0;
     procs_tail_free = MAX_PROCESSES - 1;
@@ -30,7 +32,7 @@ void proc_init() {
     conditional_panic(!proc_table_lock, "Can't create proc table lock");
 }
 
-int proc_create(char *program_name) {
+int proc_create(pid_t parent, char *program_name) {
     int err = 0;
 
     sync_acquire(proc_table_lock);
@@ -41,6 +43,12 @@ int proc_create(char *program_name) {
     uint32_t pid = (uint32_t)procs_head_free;
     procs_head_free = processes[procs_head_free].next_free;
     sync_release(proc_table_lock);
+
+    processes[pid].parent_proc = parent;
+    processes[pid].pid = pid;
+    processes[pid].size = 0;
+    processes[pid].stime = (unsigned)(time_stamp() / 1000);
+    strcpy(processes[pid].command, program_name);
 
     /* These required for setting up the TCB */
     seL4_UserContext context;

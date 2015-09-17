@@ -170,10 +170,10 @@ static int ps(int argc, char **argv) {
 
     processes = sos_process_status(process, MAX_PROCESSES);
 
-    printf("TID SIZE   STIME   CTIME COMMAND\n");
+    printf("TID SIZE STIME COMMAND\n");
 
     for (i = 0; i < processes; i++) {
-        printf("%3x %4x %7d %s\n", process[i].pid, process[i].size,
+        printf("%3x %4x %5d %s\n", process[i].pid, process[i].size,
                 process[i].stime, process[i].command);
     }
 
@@ -509,8 +509,8 @@ int main(void) {
 //
 //    return 0;
     in = open("console", O_RDONLY);
-    pt_test();
-    printf("IT WORKED\n");
+//    pt_test();
+//    printf("IT WORKED\n");
 
     //printf("a\n");
     char buf[BUF_SIZ];
@@ -548,6 +548,9 @@ int main(void) {
         found = 0;
 
         while (!found && !done) {
+            pt_test();
+            printf("IT WORKED\n");
+
             /* Make sure to flush so anything is visible while waiting for user input */
             fflush(stdout);
             r = read(in, bp, BUF_SIZ - 1 + buf - bp);

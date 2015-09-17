@@ -20,6 +20,14 @@ typedef int pid_t;
 
 struct fd_entry;
 
+typedef struct {
+    pid_t     pid;
+    unsigned  size;       /* in pages */
+    unsigned  stime;      /* start time in msec since booting */
+    char      command[N_NAME];    /* Name of exectuable */
+} sos_process_t;
+
+
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -43,6 +51,8 @@ typedef struct {
 
     cspace_t *croot;
 
+    pid_t parent_proc;
+
     struct addrspace *as;
 
     struct fd_entry *proc_files;
@@ -57,6 +67,6 @@ process_t processes[MAX_PROCESSES];
 
 void proc_init();
 
-int proc_create(char *program_name);
+int proc_create(pid_t parent, char *program_name);
 
 #endif /* _PROC_H_ */

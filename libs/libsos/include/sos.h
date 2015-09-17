@@ -58,19 +58,6 @@ typedef struct {
     unsigned  size;       /* in pages */
     unsigned  stime;      /* start time in msec since booting */
     char      command[N_NAME];    /* Name of exectuable */
-
-    seL4_Word tcb_addr;
-    seL4_TCB tcb_cap;
-
-    seL4_Word vroot_addr;
-    seL4_ARM_PageDirectory vroot;
-
-    seL4_Word ipc_buffer_addr;
-    seL4_CPtr ipc_buffer_cap;
-
-    seL4_CPtr user_ep_cap;
-
-    cspace_t *croot;
 } sos_process_t;
 
 /* NULL syscall */

@@ -39,7 +39,7 @@ struct addrspace {
 
 int as_init(struct addrspace **ret_as);
 
-int as_destroy(struct addrspace *as);
+int as_destroy(process_t *proc);
 
 int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x);
 
@@ -49,7 +49,7 @@ int as_add_heap(struct addrspace *as);
 
 int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *ret_insert_location);
 
-int as_remove_region(struct addrspace *as, seL4_Word addr);
+int as_remove_region(process_t *proc, seL4_Word addr);
 
 /* Returns the region that a virtual address lies within
  * NULL if not within a valid region

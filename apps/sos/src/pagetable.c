@@ -62,6 +62,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         // simply map page back in and set reference to true
         svaddr = proc->as->page_directory[tl_idx][sl_idx].frame;
     } else {
+        proc->size++;
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
             err = swapin(proc, vaddr, &svaddr);
@@ -118,7 +119,10 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     return 0;
 }
 
-void pt_remove_page(struct pt_entry *pe) {
+void pt_remove_page(process_t *proc, struct pt_entry *pe) {
+    proc->size--;
+    conditional_panic(proc->size < 0, "Negative memory usage?");
+
     sync_acquire(ft_lock);
     if (pe->frame < 0) {
         free_swap_entry(-pe->frame);

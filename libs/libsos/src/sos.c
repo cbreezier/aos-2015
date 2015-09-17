@@ -206,14 +206,28 @@ int sos_process_delete(pid_t pid) {
  */
 
 pid_t sos_my_id(void) {
-    printf("System call not implemented!\n");
-    return 0;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_getpid);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    return seL4_GetMR(0);
 }
 /* Returns ID of caller's process. */
 
 int sos_process_status(sos_process_t *processes, unsigned max) {
-    printf("System call not implemented!\n");
-    return 0;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, SYS_ustat);
+    seL4_SetMR(1, (seL4_Word)processes);
+    seL4_SetMR(2, (seL4_Word)max);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    long err = seL4_GetMR(0);
+    if (err) {
+        return -err;
+    }
+    return seL4_GetMR(1);
 }
 /* Returns through "processes" status of active processes (at most "max"),
  * returns number of process descriptors actually returned.

@@ -49,7 +49,8 @@ int as_init(struct addrspace **ret_as) {
     return 0;
 }
 
-int as_destroy(struct addrspace *as) {
+int as_destroy(process_t *proc) {
+    struct addrspace *as = proc->as;
     if (as == NULL) return 0;
     /* Free region list */
     struct region_entry *cur;
@@ -74,7 +75,7 @@ int as_destroy(struct addrspace *as) {
                 if (as->page_directory[l1][l2].frame == 0) {
                     continue;
                 }
-                pt_remove_page(&as->page_directory[l1][l2]);
+                pt_remove_page(proc, &as->page_directory[l1][l2]);
                 as->page_directory[l1][l2].frame = 0;
             }
             frame_free((seL4_Word)as->page_directory[l1]);
@@ -227,7 +228,9 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
 
 }
 
-int as_remove_region(struct addrspace *as, seL4_Word addr) {
+int as_remove_region(process_t *proc, seL4_Word addr) {
+    struct addrspace *as = proc->as;
+
     if (as == NULL) return 0;
     struct region_entry *prev = NULL;
     struct region_entry *cur;
@@ -272,7 +275,7 @@ int as_remove_region(struct addrspace *as, seL4_Word addr) {
                 if (as->page_directory[tl_idx][sl_idx].frame == 0) {
                     continue;
                 }
-                pt_remove_page(&as->page_directory[tl_idx][sl_idx]);
+                pt_remove_page(proc, &as->page_directory[tl_idx][sl_idx]);
                 as->page_directory[tl_idx][sl_idx].frame = 0;
             }
         }
