@@ -19,6 +19,8 @@ sync_mutex_t one_reader_lock;
 
 seL4_CPtr notify_async_ep;
 
+size_t num_newlines;
+
 void serial_callback_handler(struct serial *serial, char c) {
     sync_acquire(read_serial_lock);
 
@@ -32,14 +34,17 @@ void serial_callback_handler(struct serial *serial, char c) {
         ++buf_size;
     }
 
-    if ((c == '\n'/* || c == '\04' */|| buf_size >= reader_required_bytes) 
+    if (c == '\n') {
+        num_newlines++;
+    }
+
+    if ((num_newlines > 0 || buf_size >= reader_required_bytes) 
          && reader_required_bytes != 0
          && !has_notified) {
         has_notified = true;
         seL4_Notify(notify_async_ep, 0);
     }
     sync_release(read_serial_lock);
-
 }
 
 void console_init() {
@@ -59,6 +64,7 @@ void console_init() {
     has_notified = true;
 
     buf_pos = 0;
+    num_newlines = 0;
 }
 
 static int min(int a, int b) {
@@ -102,6 +108,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
             *read_newline = true;
             ++buf_pos;
             --buf_size;
+            --num_newlines;
             break;
         }
     }
@@ -125,7 +132,7 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
     int err = 0;
     while (nbytes_left > 0 && !read_newline) {
         sync_acquire(read_serial_lock);
-        if (buf_size < nbytes_left) {
+        if (buf_size < nbytes_left && num_newlines == 0) {
 
             size_t to_copy = min(nbytes_left, MAX_BUFF_SIZE);
             reader_required_bytes = to_copy;

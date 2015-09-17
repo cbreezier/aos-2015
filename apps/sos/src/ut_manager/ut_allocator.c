@@ -13,6 +13,7 @@
 
 #include "ut.h"
 #include "bitfield.h"
+#include "kmalloc.h"
 
 
 #define verbose 1
@@ -249,7 +250,7 @@ static suballocator_t* _new_suballocator(int sizebits){
 
     /* create the pool node */
     units = 1 << (PRIMARY_POOL_SIZEBITS - sizebits);
-    pool_node = (suballocator_t*)malloc(sizeof(suballocator_t));
+    pool_node = (suballocator_t*)kmalloc(sizeof(suballocator_t));
     if(pool_node == NULL){
         do_ut_free_from_bitfield(primary_addr, PRIMARY_POOL_SIZEBITS);
         return NULL;
