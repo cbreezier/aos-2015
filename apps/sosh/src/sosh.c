@@ -541,6 +541,8 @@ int main(void) {
 
 
     while (!done) {
+        pt_test();
+        printf("IT WORKED\n");
         if (new) {
             printf("$ ");
         }
@@ -548,8 +550,6 @@ int main(void) {
         found = 0;
 
         while (!found && !done) {
-            pt_test();
-            printf("IT WORKED\n");
 
             /* Make sure to flush so anything is visible while waiting for user input */
             fflush(stdout);

@@ -53,6 +53,9 @@ typedef struct {
 
     pid_t parent_proc;
 
+    /* Fields for wait_pid */
+    
+
     struct addrspace *as;
 
     struct fd_entry *proc_files;

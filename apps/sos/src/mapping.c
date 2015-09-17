@@ -36,7 +36,6 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *
     /* Allocate a PT object */
     pt_addr = ut_alloc(seL4_PageTableBits);
     if(pt_addr == 0){
-        printf("makes sense?\n");
         return !0;
     }
     /* Create the frame cap */
@@ -46,7 +45,6 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *
                                  cur_cspace,
                                  &pt_cap);
     if(err){
-        printf("wtf\n");
         return !0;
     }
     /* Tell seL4 to map the PT in for us */

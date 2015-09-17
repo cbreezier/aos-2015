@@ -14,7 +14,9 @@ int as_init(struct addrspace **ret_as) {
     assert(ret_as != NULL);
 
     *ret_as = NULL;
+    printf("allocing addrspace\n");
     struct addrspace *new = malloc(sizeof(struct addrspace));
+    printf("done allocing addrspace\n");
     if (new == NULL) {
         return ENOMEM;
     }
