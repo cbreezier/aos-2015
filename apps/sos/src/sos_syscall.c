@@ -216,7 +216,6 @@ void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     }
 
     fd = proc->files_head_free;
-    /* Update next_free, free_head, free_tail */
     if (fd == -1) {
         sync_release(open_files_lock);
         err = EMFILE;
@@ -385,6 +384,7 @@ void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     int fd = (int) seL4_GetMR(1);
     void *buf = (void*) seL4_GetMR(2);
     size_t nbytes = (size_t) seL4_GetMR(3);
+    printf("fd %d, nbytes %u\n", fd, nbytes);
 
     int err = 0;
     int nwrite = 0;
@@ -557,3 +557,43 @@ sos_getdents_end:
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
+void sos_execve(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+    (void) num_args;
+
+    int err = 0;
+    int pid = 0;
+
+    void *usr_buf= (void*)seL4_GetMR(1);
+
+    /* Do copyin to get path */
+    char *path = malloc(NAME_MAX * sizeof(char));
+    if (path == NULL) {
+        err = ENOMEM;
+        goto sos_execve_end;
+    }
+
+    err = copyinstring(proc, path, usr_buf, NAME_MAX);
+    if (err) {
+        goto sos_execve_end;
+    }
+    path[NAME_MAX-1] = 0;
+
+    pid = proc_create(path);
+    if (pid < 0) {
+        err = -pid;
+        goto sos_execve_end;
+    }
+    
+sos_execve_end:
+    if (path != NULL) {
+        free(path);   
+    }
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
+
+    seL4_SetMR(0, err);
+    seL4_SetMR(1, pid);
+
+    seL4_Send(reply_cap, reply);
+
+    cspace_free_slot(cur_cspace, reply_cap);
+}

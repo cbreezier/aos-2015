@@ -74,14 +74,6 @@ static int swapout() {
     
     struct ft_entry *out_fte = &ft[_cur_ft_idx];
 
-//    if (out_fte->vaddr < 0x10000000) {
-//        _cur_ft_idx++;
-//        if (_cur_ft_idx >= _hi_ft_idx) {
-//            _cur_ft_idx = _lo_ft_idx;
-//        }
-//        return swapout();
-//    }
-
     if (swap_free_head == -1) {
         return -ENOMEM;
     }

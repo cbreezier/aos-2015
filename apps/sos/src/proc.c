@@ -132,27 +132,16 @@ int proc_create(char *program_name) {
         processes[pid].proc_files[i].used = false;
         processes[pid].proc_files[i].offset = 0;
         processes[pid].proc_files[i].open_file_idx = 0;
-        processes[pid].proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? 0 : i + 1;
+        processes[pid].proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? -1 : i + 1;
     }
     processes[pid].files_head_free = 3;
     processes[pid].files_tail_free = OPEN_FILE_MAX - 1;
 
-    /* TODO M7: Fix */
-    bool exists = false;
-    int open_entry = -1;
     sync_acquire(open_files_lock);
-    for (int i = OPEN_FILE_MAX; i >= 0; --i) {
-        if (open_files[i].ref_count > 0) {
-            if (strcmp(open_files[i].file_obj.name, "console") == 0) {
-                exists = true;
-                open_entry = i;
-                break;
-            }
-        } else {
-            open_entry = i;
-        }
-    }
-    assert(exists || open_entry != -1);
+
+    int open_entry = 0;
+    bool exists = (strcmp(open_files[open_entry].file_obj.name, "console") == 0);
+
     if (exists) {
         open_files[open_entry].ref_count += 3;
     } else {

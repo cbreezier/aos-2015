@@ -426,7 +426,7 @@ void open_close_benchmark(int num_opens) {
 }
 
 //#define NPAGES (4*1024)
-#define NPAGES 64
+#define NPAGES 32
 /* called from pt_test */
 static void
 do_pt_test( char *buf, int numpages )
@@ -508,6 +508,7 @@ int main(void) {
 //    }
 //
 //    return 0;
+    in = open("console", O_RDONLY);
     pt_test();
     printf("IT WORKED\n");
 
@@ -524,7 +525,6 @@ int main(void) {
 
     // printf("%d %d %d %ld %ld\n", buf2.st_type, buf2.st_fmode, buf2.st_size, buf2.st_ctime, buf2.st_atime);
 
-    in = open("console", O_RDWR);
     //in = 0;
     assert(in >= 0);
 
