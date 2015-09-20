@@ -30,6 +30,23 @@
 static int in;
 static sos_stat_t sbuf;
 
+static int kill(int argc, char **argv) {
+    if (argc != 2) {
+        printf("Usage: kill <proc>\n");
+        return 1;
+    }
+
+    pid_t proc = atoi(argv[1]);
+
+    int err = sos_process_delete(proc);
+
+    if (err != 0) {
+        printf("Error deleting process. err = %d\n", err);
+    }
+    
+    return 0;
+}
+
 static int sosh_open(int argc, char **argv) {
     if (argc != 3) {
         printf("Usage: open <file> <mode>\n");
@@ -304,7 +321,7 @@ struct command {
 
 struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} };
+        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} , {"kill", kill} };
 
 static uint64_t mtime(void) {
     struct timeval time;

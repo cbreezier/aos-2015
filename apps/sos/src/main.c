@@ -21,6 +21,7 @@
 #include <elf/elf.h>
 #include <clock/clock.h>
 #include <utils/number_allocator.h>
+#include <sel4/constants.h>
 //#include <sos.h>
 
 #include "proc.h"
@@ -77,7 +78,7 @@ process_t tty_test_process;
 
 
 #define NUM_SYSCALLS 378
-typedef void (*sos_syscall_t)(process_t *proc, seL4_CPtr reply_cap, int num_args);
+typedef seL4_MessageInfo_t (*sos_syscall_t)(process_t *proc, int num_args);
 
 sos_syscall_t syscall_jt[NUM_SYSCALLS];
 
@@ -128,10 +129,18 @@ void sync_free_ep(void *ep) {
     kut_free(to_free->ep_addr, seL4_EndpointBits);
 }
 
-void unknown_syscall(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t unknown_syscall(process_t *proc, int num_args) {
     printf("Unknown syscall %d\n", seL4_GetMR(0)); 
 
-    cspace_free_slot(cur_cspace, reply_cap);
+    seL4_MessageInfo_t reply;
+    return reply;
+}
+
+void copyMR(seL4_Word *buf, bool in, size_t num_args) {
+    for (int i = 0; i < num_args; ++i) {
+        if (in) buf[i] = seL4_GetMR(i);
+        else seL4_SetMR(i, buf[i]);
+    }
 }
 
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
@@ -142,12 +151,48 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     /* Process system call */
     printf("got syscall number %u\n", syscall_number);
 
+    seL4_MessageInfo_t reply;
     switch (syscall_number) {
     default:
         if (syscall_number >= NUM_SYSCALLS) {
-            unknown_syscall(NULL, 0, 0);   
+            unknown_syscall(NULL, 0);   
         } else {
-            syscall_jt[syscall_number](&processes[badge], reply_cap, num_args);
+            seL4_Word saved_mr[seL4_MsgMaxLength];
+            copyMR(saved_mr, true, num_args + 1);
+
+            process_t *proc = &processes[badge];
+
+            sync_acquire(proc->proc_lock);
+            if (proc->pid == -1) {
+                sync_release(proc->proc_lock);
+                goto handle_syscall_end;
+            }
+            proc->sos_thread_handling = true;
+            sync_release(proc->proc_lock);
+
+            copyMR(saved_mr, false, num_args + 1);
+
+            reply = syscall_jt[syscall_number](proc, num_args);
+
+            if (syscall_number != SYS_exit) {
+                copyMR(saved_mr, true, seL4_MessageInfo_get_length(reply));
+
+                sync_acquire(proc->proc_lock);
+                proc->sos_thread_handling = false;
+                sync_release(proc->proc_lock);
+
+                copyMR(saved_mr, false, seL4_MessageInfo_get_length(reply));
+
+                /* Check if zombie - if so kill the thread */
+                if (proc->zombie) {
+                    proc_exit(proc);    
+                } else {
+                    seL4_Send(reply_cap, reply);
+                }
+            }
+
+            handle_syscall_end:
+            cspace_free_slot(cur_cspace, reply_cap);
         }
         break;
     }
@@ -172,35 +217,60 @@ void syscall_loop(seL4_CPtr ep) {
             //printf("badge %d\n", badge);
 
             /* Interrupt */
-//            if (badge & IRQ_BADGE_TIMER) {
-//                timer_interrupt();
-//            }
+            if (badge & IRQ_BADGE_TIMER) {
+                timer_interrupt();
+            }
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             }
 
         }else if(label == seL4_VMFault){
+            seL4_Word vaddr = seL4_GetMR(1);
+
             /* Page fault */
             dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
                     seL4_GetMR(0),
                     seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
 
+            process_t *proc = &processes[badge];
+            sync_acquire(proc->proc_lock);
+            proc->sos_thread_handling = true;
+            sync_release(proc->proc_lock);
+
+
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
             assert(reply_cap != CSPACE_NULL);
             seL4_CPtr sos_cap;
-            int err = pt_add_page(&processes[badge], seL4_GetMR(1), NULL, &sos_cap);
+            int err = pt_add_page(&processes[badge], vaddr, NULL, &sos_cap);
+
+            switch(err) {
+                case ENOMEM:
+                case EACCES:
+                    conditional_panic(err, "Segmentation Fault");
+                default:
+                    break;
+            }
+
+            conditional_panic(err, "failed to add page(vm fault)");
 
             if (seL4_GetMR(2)) {
                 /* Flush cache entry */
                 seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
             }
 
-            conditional_panic(err, "failed to add page(vm fault)");
-
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
             seL4_SetMR(0, 0);
 
-            seL4_Send(reply_cap, reply);
+            sync_acquire(proc->proc_lock);
+            proc->sos_thread_handling = false;
+            sync_release(proc->proc_lock);
+
+            /* Check if zombie - if so kill the thread */
+            if (proc->zombie) {
+                proc_exit(proc);    
+            } else {
+                seL4_Send(reply_cap, reply);
+            }
             cspace_free_slot(cur_cspace, reply_cap);
         }else if(label == seL4_NoFault) {
             /* System call */

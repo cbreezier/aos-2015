@@ -92,7 +92,7 @@ int as_destroy(process_t *proc) {
     /* Free the kernel PageTable where relevant */
     for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
         if (as->pt_caps[l1]) {
-            int err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
+            err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
             conditional_panic(err, "Unable to revoke cap(as_destroy)");
 
             err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
@@ -101,6 +101,14 @@ int as_destroy(process_t *proc) {
             kut_free(as->pt_addrs[l1], seL4_PageTableBits);
         }
     }
+
+    err = frame_free((seL4_Word)as->pt_caps);
+    conditional_panic(err, "Cannot free pt_caps frame");
+    
+    err = frame_free((seL4_Word)as->pt_addrs);
+    conditional_panic(err, "Cannot free pt_addrs frame");
+    
+    kfree(as);
     return 0;
 }
 

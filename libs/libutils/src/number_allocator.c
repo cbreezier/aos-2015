@@ -16,7 +16,7 @@ sync_mutex_t allocator_lock;
 /* Returns the new root of the subtree after insertion */
 static struct allocation *insert_num(struct allocation *node, uint32_t num, bool *success) {
     if (node == NULL) {
-        node = malloc(sizeof(struct allocation));
+        node = kmalloc(sizeof(struct allocation));
         if (node == NULL) {
             *success = false;
             return NULL;
@@ -60,7 +60,7 @@ static struct allocation *remove_num(struct allocation *node, uint32_t num) {
     struct allocation *to_return = NULL;
     if (num == node->num) {
         if (node->left == NULL && node->right == NULL) {
-            free(node);
+            kfree(node);
             return NULL;
         }
         if (node->left != NULL && node->right != NULL) {
@@ -76,7 +76,7 @@ static struct allocation *remove_num(struct allocation *node, uint32_t num) {
             to_return = node->right;
         }
 
-        free(node);
+        kfree(node);
     } else if (num > node->num) {
         node->right = remove_num(node->right, num);
         to_return = node;
@@ -93,7 +93,7 @@ static void destroy_allocations(struct allocation *node) {
 
     destroy_allocations(node->left);
     destroy_allocations(node->right);
-    free(node);
+    kfree(node);
 }
 
 /* XORShift PRNG */
@@ -106,7 +106,7 @@ static uint32_t gen_random(struct number_allocator *na) {
 }
 
 struct number_allocator *init_allocator(uint32_t seed) {
-    struct number_allocator *na = malloc(sizeof(struct number_allocator));
+    struct number_allocator *na = kmalloc(sizeof(struct number_allocator));
     if (na == NULL) {
         return NULL;
     }
@@ -120,7 +120,7 @@ struct number_allocator *init_allocator(uint32_t seed) {
 
     allocator_lock = sync_create_mutex();
     if (allocator_lock == NULL) {
-        free(na);
+        kfree(na);
         return NULL;
     }
 
@@ -152,6 +152,6 @@ void allocator_release_num(struct number_allocator *na, uint32_t num) {
 
 void destroy_allocator(struct number_allocator *na) {
     destroy_allocations(na->root);
-    free(na);
+    kfree(na);
     sync_destroy_mutex(allocator_lock);
 }

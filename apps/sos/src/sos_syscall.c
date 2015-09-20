@@ -14,16 +14,14 @@
 #include "copy.h"
 #include "alloc_wrappers.h"
 
-void sos_null(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_null(process_t *proc, int num_args) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, 0);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_mmap2(process_t *proc, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
     size_t length = (size_t)seL4_GetMR(2); 
     int prot = (int)seL4_GetMR(3); 
@@ -45,12 +43,10 @@ void sos_mmap2(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     seL4_SetMR(0, err);
     seL4_SetMR(1, insert_location);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_munmap(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_munmap(process_t *proc, int num_args) {
     void *addr = (void*)seL4_GetMR(1); 
     size_t length = (size_t)seL4_GetMR(2); 
 
@@ -62,16 +58,14 @@ void sos_munmap(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
 void sos_nanosleep_notify(uint32_t id, void *data) {
     seL4_Notify(*((seL4_CPtr*)data), 0);
 }   
 
-void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_nanosleep(process_t *proc, int num_args) {
     (void) proc;
     (void) num_args;
 
@@ -88,20 +82,19 @@ void sos_nanosleep(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     } else {
         err = ENOMEM;
     }
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-
-    seL4_SetMR(0, err);
-
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
 
     if (data) {
         kfree(data);
     }
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    seL4_SetMR(0, err);
+
+    return reply;
 }
 
-void sos_clock_gettime(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_clock_gettime(process_t *proc, int num_args) {
     (void) proc;
     (void) num_args;
 
@@ -113,12 +106,10 @@ void sos_clock_gettime(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     seL4_SetMR(1, (seL4_Word)(timestamp & 0x00000000FFFFFFFF));
     seL4_SetMR(2, (seL4_Word)((timestamp >> 32) & 0x00000000FFFFFFFF));
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_brk(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_brk(process_t *proc, int num_args) {
     (void) num_args;
     
     seL4_Word new_top = seL4_GetMR(1);        
@@ -139,9 +130,7 @@ void sos_brk(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     seL4_SetMR(0, error);
     seL4_SetMR(1, new_top_align);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
 static fmode_t nfs_mode_to_sos(uint32_t mode) {
@@ -172,7 +161,7 @@ static uint32_t sos_mode_to_nfs(fmode_t mode) {
     return ret;
 }
 
-void sos_open(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
     (void) num_args;
 
     void *user_path = (void*) seL4_GetMR(1);
@@ -281,13 +270,11 @@ sos_open_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, (seL4_Word)fd);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 
 }
 
-void sos_close(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_close(process_t *proc, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -325,12 +312,10 @@ sos_close_end:
 
     seL4_SetMR(0, err);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_read(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_read(process_t *proc, int num_args) {
     (void) num_args;
     int fd = (int) seL4_GetMR(1);
     void *buf = (void*) seL4_GetMR(2);
@@ -375,12 +360,10 @@ sos_read_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, nread);
     
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_write(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_write(process_t *proc, int num_args) {
     (void) num_args;
     int fd = (int) seL4_GetMR(1);
     void *buf = (void*) seL4_GetMR(2);
@@ -426,14 +409,12 @@ sos_write_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, (seL4_Word)nwrite);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 
 }
 
 
-void sos_stat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_stat(process_t *proc, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -480,12 +461,10 @@ sos_stat_end:
 
     seL4_SetMR(0, err);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_getdents(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_getdents(process_t *proc, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -552,12 +531,10 @@ sos_getdents_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, file_name_size);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_execve(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -593,12 +570,10 @@ sos_execve_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, pid);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_getpid(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_getpid(process_t *proc, int num_args) {
     (void) num_args;
 
     pid_t pid = proc->pid;
@@ -607,12 +582,10 @@ void sos_getpid(process_t *proc, seL4_CPtr reply_cap, int num_args) {
 
     seL4_SetMR(0, pid);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_ustat(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_ustat(process_t *proc, int num_args) {
     (void) num_args;
     
     int err = 0;
@@ -653,12 +626,10 @@ sos_ustat_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, num_procs);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_waitid(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
     (void) num_args;
 
     int err = 0;
@@ -704,20 +675,45 @@ sos_waitid_end:
     seL4_SetMR(0, err);
     seL4_SetMR(1, proc->wait_pid);
 
-    seL4_Send(reply_cap, reply);
-
-    cspace_free_slot(cur_cspace, reply_cap);
+    return reply;
 }
 
-void sos_kill(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_kill(process_t *proc, int num_args) {
+    (void) num_args;
+    int err = 0;
 
+    pid_t pid = seL4_GetMR(1);
+
+    process_t *to_kill = &processes[pid];
+
+    sync_acquire(to_kill->proc_lock);
+    if (to_kill->pid == -1 || to_kill->zombie) {
+        err = ESRCH;
+        sync_release(to_kill->proc_lock);
+        goto sos_kill_end;
+    }
+    if (to_kill->sos_thread_handling) {
+        to_kill->zombie = true;
+    } else {
+        proc_exit(to_kill);
+    }
+    sync_release(to_kill->proc_lock);
+
+sos_kill_end:
+    asm("nop");
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    seL4_SetMR(0, err);
+
+    return reply;
 }
 
-void sos_exit(process_t *proc, seL4_CPtr reply_cap, int num_args) {
+seL4_MessageInfo_t sos_exit(process_t *proc, int num_args) {
     (void) num_args;
 
     proc_exit(proc);
     
-    cspace_free_slot(cur_cspace, reply_cap);
+    seL4_MessageInfo_t reply;
+    return reply; 
 }
 

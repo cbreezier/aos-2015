@@ -55,6 +55,8 @@ int proc_create(pid_t parent, char *program_name) {
     processes[pid].stime = (unsigned)(time_stamp() / 1000);
     strcpy(processes[pid].command, program_name);
     processes[pid].wait_ep = 0;
+    processes[pid].zombie = false;
+    processes[pid].sos_thread_handling = false;
 
     /* These required for setting up the TCB */
     seL4_UserContext context;
@@ -211,11 +213,11 @@ void proc_exit(process_t *proc) {
     kut_free(proc->tcb_addr, seL4_TCBBits);
 
     /* Destroy process ipc cap */
-    err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
-    conditional_panic(err, "unable to revoke user ep cap");
+    // err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
+    // conditional_panic(err, "unable to revoke user ep cap");
 
-    err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
-    conditional_panic(err, "unable to delete user ep cap");
+    // err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
+    // conditional_panic(err, "unable to delete user ep cap");
 
     /* Destroy process cspace */
     err = cspace_destroy(proc->croot);

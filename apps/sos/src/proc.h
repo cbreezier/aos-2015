@@ -66,6 +66,9 @@ typedef struct {
     int files_head_free, files_tail_free;
 
     int next_free;
+
+    bool zombie;
+    bool sos_thread_handling;
 } process_t;
 
 int procs_head_free, procs_tail_free;
