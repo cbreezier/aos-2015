@@ -9,7 +9,7 @@
 #include "network.h"
 #include "copy.h"
 #include "frametable.h"
-#include "kmalloc.h"
+#include "alloc_wrappers.h"
 
 struct token {
     seL4_CPtr async_ep;

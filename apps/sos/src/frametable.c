@@ -8,6 +8,7 @@
 #include <bits/errno.h>
 #include <string.h>
 #include "swap.h"
+#include "alloc_wrappers.h"
 
 #define ROUND_UP(n, b) (((((n) - 1ul) >> (b)) + 1ul) << (b))
 
@@ -47,7 +48,7 @@ void frametable_init() {
 
     /* Allocate all frames required to hold the frametable data */
     for (uint32_t i = 0; i < frametable_frames_required; ++i) {
-        seL4_Word id = ut_alloc(seL4_PageBits); 
+        seL4_Word id = kut_alloc(seL4_PageBits); 
         if (!id) {
             panic("Unable to init frametable(ut alloc)");
         }
@@ -90,7 +91,7 @@ seL4_Word frame_alloc(bool freeable, bool swappable) {
     }
     int idx = free_head;
     
-    ft[idx].paddr = ut_alloc(seL4_PageBits);
+    ft[idx].paddr = kut_alloc(seL4_PageBits);
     if (!ft[idx].paddr) {
         /* Paging stuff */
         sync_release(ft_lock);
@@ -160,13 +161,13 @@ int frame_free(seL4_Word svaddr) {
     err = cspace_delete_cap(cur_cspace, ft[idx].cap);
     conditional_panic(err, "unable to delete cap(free)");
 
-    ut_free(ft[idx].paddr, seL4_PageBits);
+    kut_free(ft[idx].paddr, seL4_PageBits);
 
     ft[idx].paddr = 0;
     ft[idx].user_cap = 0;
     ft[idx].cap = 0;
-//    ft[idx].vaddr_proc = NULL;
-//    ft[idx].vaddr = 0;
+    ft[idx].vaddr_proc = NULL;
+    ft[idx].vaddr = 0;
     ft[idx].referenced = false;
 
     sync_release(ft_lock);

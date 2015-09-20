@@ -6,7 +6,7 @@
 #include "addrspace.h"
 #include "pagetable.h"
 #include "frametable.h"
-#include "kmalloc.h"
+#include "alloc_wrappers.h"
 
 #define MEMORY_TOP (0xFFFFFFFF)
 #define STACK_SIZE (0x40000000)
@@ -65,6 +65,7 @@ int as_destroy(process_t *proc) {
         prev = cur;
     }
 
+    int err = 0;
     /*
      * Free all the frames allocated in the page table
      * as well as the page table itself
@@ -81,9 +82,11 @@ int as_destroy(process_t *proc) {
                 pt_remove_page(proc, &as->page_directory[l1][l2]);
                 as->page_directory[l1][l2].frame = 0;
             }
-            frame_free((seL4_Word)as->page_directory[l1]);
+            err = frame_free((seL4_Word)as->page_directory[l1]);
+            conditional_panic(err, "Unable to delete page table");
         }
-        frame_free((seL4_Word)as->page_directory);
+        err = frame_free((seL4_Word)as->page_directory);
+        conditional_panic(err, "Unable to delete page directory");
     }
 
     /* Free the kernel PageTable where relevant */
@@ -95,7 +98,7 @@ int as_destroy(process_t *proc) {
             err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
             conditional_panic(err, "Unable to delete cap(as_destroy)");
 
-            ut_free(as->pt_addrs[l1], seL4_PageTableBits);
+            kut_free(as->pt_addrs[l1], seL4_PageTableBits);
         }
     }
     return 0;

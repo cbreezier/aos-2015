@@ -12,7 +12,7 @@
 #include "thread.h"
 #include "nfs_sync.h"
 #include "copy.h"
-#include "kmalloc.h"
+#include "alloc_wrappers.h"
 
 void sos_null(process_t *proc, seL4_CPtr reply_cap, int num_args) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);

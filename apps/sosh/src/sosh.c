@@ -177,6 +177,9 @@ static int ps(int argc, char **argv) {
                 process[i].stime, process[i].command);
     }
 
+    pid_t pid = sos_my_id();
+    printf("My pid = %d\n", pid);
+
     free(process);
 
     return 0;

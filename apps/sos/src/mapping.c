@@ -9,10 +9,10 @@
  */
 
 //#include "mapping.h"
-#include <utils/mapping.h>
-
-#include <ut_manager/ut.h>
+#include "utils/mapping.h"
+#include "ut_manager/ut.h"
 #include "vmem_layout.h"
+#include "alloc_wrappers.h"
 
 #define verbose 0
 #include <sys/panic.h>
@@ -34,7 +34,7 @@ _map_page_table(seL4_ARM_PageDirectory pd, seL4_Word vaddr, seL4_ARM_PageTable *
     int err;
 
     /* Allocate a PT object */
-    pt_addr = ut_alloc(seL4_PageTableBits);
+    pt_addr = kut_alloc(seL4_PageTableBits);
     if(pt_addr == 0){
         return !0;
     }

@@ -194,7 +194,7 @@ static void reschedule(uint64_t delay) {
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     bool rescheduling = false;
 
-    struct list_node *node = malloc(sizeof(struct list_node));
+    struct list_node *node = kmalloc(sizeof(struct list_node));
     node->callback = callback;
     node->data = data;
     node->id = allocator_get_num(allocator);

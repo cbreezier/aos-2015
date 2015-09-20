@@ -66,6 +66,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
             err = swapin(proc, vaddr, &svaddr);
+            conditional_panic(!svaddr, "Swapin ret svaddr is 0");
             if (err) {
                 printf("warning warning a\n");
                 sync_release(ft_lock);
@@ -121,6 +122,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 }
 
 void pt_remove_page(process_t *proc, struct pt_entry *pe) {
+    conditional_panic(pe->frame == 0, "Trying to remove a non existing page");
+    /* Can only change own size - no lock needed */
     proc->size--;
     conditional_panic(proc->size < 0, "Negative memory usage?");
 
@@ -142,7 +145,8 @@ void pt_remove_page(process_t *proc, struct pt_entry *pe) {
         err = cspace_delete_cap(cur_cspace, user_cap);
         conditional_panic(err, "unable to delete cap(free)");
     }
-    frame_free(pe->frame);
+    int err = frame_free(pe->frame);
+    conditional_panic(err, "Unable to delete frame(pt_remove_page)");
     sync_release(ft_lock);
 }
 

@@ -19,12 +19,14 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
     _cur_ft_idx = lo_ft_idx;
 
     swap_table = (struct swap_entry *)frame_alloc_sos(true);
+
     void *prev = (void *)swap_table;
     conditional_panic(!swap_table, "Unable to allocate frame 0 of swap table");
+
     size_t num_entries = (hi_ft_idx - lo_ft_idx) * SWAP_MULTIPLIER;
     size_t mem_required = num_entries * sizeof(struct swap_entry);
-    /* frame_requires = ceil(mem_required / PAGE_SIZE) */
     size_t frames_required = (mem_required + PAGE_SIZE - 1) / PAGE_SIZE;
+
     for (size_t i = 1; i < frames_required; ++i) {
         void *cur = (void *)frame_alloc_sos(true);
         //printf("prev %x cur %x\n", prev, cur);
@@ -34,9 +36,11 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
     int err = nfs_create_sync("swap", S_IRUSR | S_IWUSR, num_entries * PAGE_SIZE, &swap_fh, NULL);
     conditional_panic(err, "Cannot create swap file");
 
-    swap_free_head = 0;
+    swap_free_head = 1;
     swap_free_tail = num_entries - 1;
-    for (size_t i = 0; i < num_entries; ++i) {
+    /* Location 0 is invalid */
+    swap_table[0].next_free = -1;
+    for (size_t i = 1; i < num_entries; ++i) {
         swap_table[i].next_free = (i == num_entries - 1) ? -1 : i + 1;
     }
 }

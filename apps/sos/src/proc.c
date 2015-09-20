@@ -17,7 +17,7 @@
 #include "addrspace.h"
 #include "proc.h"
 #include "console.h"
-#include "kmalloc.h"
+#include "alloc_wrappers.h"
 
 
 sync_mutex_t proc_table_lock;
@@ -40,6 +40,7 @@ int proc_create(pid_t parent, char *program_name) {
 
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1) {
+        sync_release(proc_table_lock);
         return ENOMEM;
     }
 
@@ -68,7 +69,7 @@ int proc_create(pid_t parent, char *program_name) {
 
     printf("allocating vroot addr\n");
     /* Create a VSpace */
-    processes[pid].vroot_addr = ut_alloc(seL4_PageDirBits);
+    processes[pid].vroot_addr = kut_alloc(seL4_PageDirBits);
     conditional_panic(!processes[pid].vroot_addr, 
                       "No memory for new Page Directory");
     err = cspace_ut_retype_addr(processes[pid].vroot_addr,
@@ -104,7 +105,7 @@ int proc_create(pid_t parent, char *program_name) {
 
     printf("tcb stuff\n");
     /* Create a new TCB object */
-    processes[pid].tcb_addr = ut_alloc(seL4_TCBBits);
+    processes[pid].tcb_addr = kut_alloc(seL4_TCBBits);
     conditional_panic(!processes[pid].tcb_addr, "No memory for new TCB");
     err =  cspace_ut_retype_addr(processes[pid].tcb_addr,
                                  seL4_TCBObject,
@@ -185,6 +186,8 @@ int proc_create(pid_t parent, char *program_name) {
 void proc_exit(process_t *proc) {
     int err;
 
+    printf("acquiring proc lock\n");
+
     sync_acquire(proc->proc_lock);
 
     pid_t pid_parent = proc->parent_proc;
@@ -193,7 +196,9 @@ void proc_exit(process_t *proc) {
     proc->pid = -1;
 
     /* Destroy address space */
+    printf("as destroying\n");
     err = as_destroy(proc);
+    printf("done\n");
     conditional_panic(err, "unable to destroy address space");
 
     /* Destroy tcb */
@@ -203,14 +208,14 @@ void proc_exit(process_t *proc) {
     err = cspace_delete_cap(cur_cspace, proc->tcb_cap);
     conditional_panic(err, "unable to delete tcb cap");
 
-    ut_free(proc->tcb_addr, seL4_TCBBits);
+    kut_free(proc->tcb_addr, seL4_TCBBits);
 
     /* Destroy process ipc cap */
-    //err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
-    //conditional_panic(err, "unable to revoke user ep cap");
+    err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
+    conditional_panic(err, "unable to revoke user ep cap");
 
-    //err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
-    //conditional_panic(err, "unable to delete user ep cap");
+    err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
+    conditional_panic(err, "unable to delete user ep cap");
 
     /* Destroy process cspace */
     err = cspace_destroy(proc->croot);
@@ -223,8 +228,9 @@ void proc_exit(process_t *proc) {
     err = cspace_delete_cap(cur_cspace, proc->vroot);
     conditional_panic(err, "unable to delete vroot");
 
-    ut_free(proc->vroot_addr, seL4_PageDirBits);
+    kut_free(proc->vroot_addr, seL4_PageDirBits);
 
+    printf("acquiring proc table lock\n");
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1 || procs_tail_free == -1) {
         assert(procs_head_free == -1 && procs_tail_free == -1);
@@ -246,6 +252,7 @@ void proc_exit(process_t *proc) {
 
     /* Signal possibly waiting parent */
     if (pid_parent != -1) {
+        printf("acquiring parent proc lock\n");
         sync_acquire(processes[pid_parent].proc_lock);
 
         if (processes[pid_parent].wait_ep) {
@@ -258,4 +265,5 @@ void proc_exit(process_t *proc) {
 
         sync_release(processes[pid_parent].proc_lock);
     }
+    printf("all done\n");
 }

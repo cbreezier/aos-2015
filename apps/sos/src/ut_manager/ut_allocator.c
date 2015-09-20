@@ -13,7 +13,7 @@
 
 #include "ut.h"
 #include "bitfield.h"
-#include "kmalloc.h"
+#include "alloc_wrappers.h"
 
 
 #define verbose 1

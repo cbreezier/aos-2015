@@ -1,18 +1,19 @@
-#include "thread.h"
-#include "frametable.h"
 #include <sys/panic.h>
 #include <cspace/cspace.h>
 #include <string.h>
 #include <stdio.h>
-#include <ut_manager/ut.h>
 #include <bits/limits.h>
 #include <bits/errno.h>
+#include "thread.h"
+#include "frametable.h"
+#include "ut_manager/ut.h"
+#include "alloc_wrappers.h"
 
 seL4_Word low_ipc_addr = 0, high_ipc_addr = 0;
 seL4_Word ipc_addr_diff = 0;
 
 static int create_ep(seL4_CPtr *ep, uint32_t *ep_addr) {
-    *ep_addr = ut_alloc(seL4_EndpointBits);
+    *ep_addr = kut_alloc(seL4_EndpointBits);
     if (*ep_addr == 0) {
         return ENOMEM;
     }
@@ -43,7 +44,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
 
 
         /* Create TCB */
-        thread.tcb_addr = ut_alloc(seL4_TCBBits);
+        thread.tcb_addr = kut_alloc(seL4_TCBBits);
         err = cspace_ut_retype_addr(thread.tcb_addr,
                                         seL4_TCBObject,
                                         seL4_TCBBits,

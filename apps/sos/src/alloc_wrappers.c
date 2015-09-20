@@ -1,13 +1,19 @@
 #include <sync/mutex.h>
 #include <sys/panic.h>
 #include <stdlib.h>
-#include "kmalloc.h"
+#include "ut_manager/ut.h"
+#include "alloc_wrappers.h"
 
 sync_mutex_t malloc_lock;
 
-void kmalloc_init() {
+sync_mutex_t ut_lock;
+
+void alloc_wrappers_init() {
     malloc_lock = sync_create_mutex();
     conditional_panic(!malloc_lock, "Cannot create malloc lock");
+
+    ut_lock = sync_create_mutex();
+    conditional_panic(!ut_lock, "Cannot create ut lock");
 }
 
 void *kmalloc(size_t n) {
@@ -30,3 +36,17 @@ void kfree(void *buf) {
     free(buf);
     if (malloc_lock) sync_release(malloc_lock);
 }
+
+seL4_Word kut_alloc(int sizebits) {
+    if (ut_lock) sync_acquire(ut_lock);
+    seL4_Word ret = ut_alloc(sizebits);
+    if (ut_lock) sync_release(ut_lock);
+    return ret;
+}
+
+void kut_free(seL4_Word addr, int sizebits) {
+    if (ut_lock) sync_acquire(ut_lock);
+    ut_free(addr, sizebits);
+    if (ut_lock) sync_release(ut_lock);
+}
+

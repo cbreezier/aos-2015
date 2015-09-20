@@ -34,7 +34,7 @@
 #include "console.h"
 #include "swap.h"
 #include "nfs_sync.h"
-#include "kmalloc.h"
+#include "alloc_wrappers.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
@@ -99,7 +99,7 @@ void* sync_new_ep(seL4_CPtr* ep, int badge) {
         return NULL;
     }   
 
-    ret->ep_addr = ut_alloc(seL4_EndpointBits);
+    ret->ep_addr = kut_alloc(seL4_EndpointBits);
     if (ret->ep_addr == 0) {
         kfree(ret);
         return NULL;
@@ -125,7 +125,7 @@ void sync_free_ep(void *ep) {
     err = cspace_delete_cap(cur_cspace, to_free->unminted);
     conditional_panic(err, "Unable to delete cap(sync_free_eP)");
 
-    ut_free(to_free->ep_addr, seL4_EndpointBits);
+    kut_free(to_free->ep_addr, seL4_EndpointBits);
 }
 
 void unknown_syscall(process_t *proc, seL4_CPtr reply_cap, int num_args) {
@@ -172,9 +172,9 @@ void syscall_loop(seL4_CPtr ep) {
             //printf("badge %d\n", badge);
 
             /* Interrupt */
-            if (badge & IRQ_BADGE_TIMER) {
-                timer_interrupt();
-            }
+//            if (badge & IRQ_BADGE_TIMER) {
+//                timer_interrupt();
+//            }
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             }
@@ -283,7 +283,7 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     int err;
 
     /* Create an Async endpoint for interrupts */
-    aep_addr = ut_alloc(seL4_EndpointBits);
+    aep_addr = kut_alloc(seL4_EndpointBits);
     conditional_panic(!aep_addr, "No memory for async endpoint");
     err = cspace_ut_retype_addr(aep_addr,
                                 seL4_AsyncEndpointObject,
@@ -298,7 +298,7 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
 
 
     /* Create an endpoint for user application IPC */
-    ep_addr = ut_alloc(seL4_EndpointBits);
+    ep_addr = kut_alloc(seL4_EndpointBits);
     conditional_panic(!ep_addr, "No memory for endpoint");
     err = cspace_ut_retype_addr(ep_addr, 
                                 seL4_EndpointObject,
@@ -335,8 +335,8 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     ut_allocator_init(low, high);
 
     /* Initialise the cspace manager */
-    err = cspace_root_task_bootstrap(ut_alloc, ut_free, ut_translate,
-                                     malloc, free);
+    err = cspace_root_task_bootstrap(kut_alloc, kut_free, ut_translate,
+                                     kmalloc, kfree);
     conditional_panic(err, "Failed to initialise the c space\n");
 
     /* Initialise DMA memory */
@@ -473,8 +473,8 @@ int main(void) {
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
-    /* Initialise kmalloc */
-    kmalloc_init();
+    /* Initialise alloc wrappers */
+    alloc_wrappers_init();
 
     frametable_init();
 
