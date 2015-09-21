@@ -12,16 +12,21 @@
 #define _DEBUG_H_
 
 #include <stdio.h>
+#include <alloc_wrappers.h>
+#include <sync/mutex.h>
 
+#define verbose 0
 
 void plogf(const char *msg, ...);
 
 #define _dprintf(v, col, args...) \
             do { \
                 if ((v) < verbose){ \
+                    if (printf_lock) sync_acquire(printf_lock); \
                     printf(col); \
                     plogf(args); \
                     printf("\033[0;0m"); \
+                    if (printf_lock) sync_release(printf_lock); \
                 } \
             } while (0)
 

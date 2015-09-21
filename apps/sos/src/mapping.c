@@ -14,7 +14,6 @@
 #include "vmem_layout.h"
 #include "alloc_wrappers.h"
 
-#define verbose 0
 #include <sys/panic.h>
 #include <sys/debug.h>
 #include <cspace/cspace.h>
@@ -83,18 +82,18 @@ usr_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
 
     /* Attempt the mapping */
     err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
-    //printf("sos map page err %d (seL4_FailedLookup is %d)\n", err, seL4_FailedLookup);
-    //printf("err = %u, %u\n", err, seL4_FailedLookup);
+    //dprintf(0, "sos map page err %d (seL4_FailedLookup is %d)\n", err, seL4_FailedLookup);
+    //dprintf(0, "err = %u, %u\n", err, seL4_FailedLookup);
     if(err == seL4_FailedLookup){
         /* Assume the error was because we have no page table */
         err = _map_page_table(pd, vaddr, pt_cap, pt_addr);
-    //printf("sos map page table err %d\n", err);
-        //printf("err = %u\n", err);
+    //dprintf(0, "sos map page table err %d\n", err);
+        //dprintf(0, "err = %u\n", err);
         if(!err){
             /* Try the mapping again */
-            //printf("err = %u\n", err);
+            //dprintf(0, "err = %u\n", err);
             err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
-    //printf("sos map page 2 %d\n", err);
+    //dprintf(0, "sos map page 2 %d\n", err);
         }
     }
 

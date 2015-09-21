@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/panic.h>
+#include <sys/debug.h>
 #include <ut_manager/ut.h>
 #include "vmem_layout.h"
 #include "addrspace.h"
@@ -15,9 +16,9 @@ int as_init(struct addrspace **ret_as) {
     assert(ret_as != NULL);
 
     *ret_as = NULL;
-    printf("allocing addrspace\n");
+    dprintf(0, "allocing addrspace\n");
     struct addrspace *new = kmalloc(sizeof(struct addrspace));
-    printf("done allocing addrspace\n");
+    dprintf(0, "done allocing addrspace\n");
     if (new == NULL) {
         return ENOMEM;
     }

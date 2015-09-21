@@ -43,7 +43,6 @@
 
 #include <autoconf.h>
 
-#define verbose 5
 #include <sys/debug.h>
 #include <sys/panic.h>
 #include <syscall.h>
@@ -68,6 +67,8 @@
 const seL4_BootInfo* _boot_info;
 
 process_t tty_test_process;
+
+sync_mutex_t network_irq_lock;
 
 
 /*
@@ -130,7 +131,7 @@ void sync_free_ep(void *ep) {
 }
 
 seL4_MessageInfo_t unknown_syscall(process_t *proc, int num_args) {
-    printf("Unknown syscall %d\n", seL4_GetMR(0)); 
+    dprintf(0, "Unknown syscall %d\n", seL4_GetMR(0)); 
 
     seL4_MessageInfo_t reply;
     return reply;
@@ -147,9 +148,12 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     seL4_Word syscall_number;
 
     syscall_number = seL4_GetMR(0);
-    
+
+    seL4_Word saved_mr[seL4_MsgMaxLength];
+    copyMR(saved_mr, true, num_args + 1);
+
     /* Process system call */
-    printf("got syscall number %u\n", syscall_number);
+    dprintf(0, "got syscall number %u\n", syscall_number);
 
     seL4_MessageInfo_t reply;
     switch (syscall_number) {
@@ -157,8 +161,6 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         if (syscall_number >= NUM_SYSCALLS) {
             unknown_syscall(NULL, 0);   
         } else {
-            seL4_Word saved_mr[seL4_MsgMaxLength];
-            copyMR(saved_mr, true, num_args + 1);
 
             process_t *proc = &processes[badge];
 
@@ -204,33 +206,39 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word badge;
         seL4_Word label;
         seL4_MessageInfo_t message;
-        //printf("waiting on syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
-        //printf("W %x\n", get_cur_thread()->wakeup_async_ep);
-        //printf("W\n");
+        //dprintf(0, "waiting on syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
+        //dprintf(0, "W %x\n", get_cur_thread()->wakeup_async_ep);
+        //dprintf(0, "W\n");
         message = seL4_Wait(ep, &badge);
-        //printf("G\n");
-        //printf("_");
-        //printf("got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
+        //dprintf(0, "G\n");
+        //dprintf(0, "_");
+        //dprintf(0, "got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         label = seL4_MessageInfo_get_label(message);
 
         if(badge & IRQ_EP_BADGE){
-            //printf("badge %d\n", badge);
+            //dprintf(0, "badge %d\n", badge);
 
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
                 timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
+                sync_acquire(network_irq_lock);
                 network_irq();
+                sync_release(network_irq_lock);
             }
 
         }else if(label == seL4_VMFault){
+            /* Save these as local variables, as message registers will change through lock acquiring */
+            seL4_Word pc = seL4_GetMR(0);
             seL4_Word vaddr = seL4_GetMR(1);
+            seL4_Word instruction_fault = seL4_GetMR(2);
+
 
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
-                    seL4_GetMR(0),
-                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
+            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", vaddr,
+                    pc,
+                    instruction_fault ? "Instruction Fault" : "Data fault");
 
             process_t *proc = &processes[badge];
             sync_acquire(proc->proc_lock);
@@ -253,13 +261,10 @@ void syscall_loop(seL4_CPtr ep) {
 
             conditional_panic(err, "failed to add page(vm fault)");
 
-            if (seL4_GetMR(2)) {
+            if (instruction_fault) {
                 /* Flush cache entry */
                 seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
             }
-
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, 0);
 
             sync_acquire(proc->proc_lock);
             proc->sos_thread_handling = false;
@@ -269,6 +274,8 @@ void syscall_loop(seL4_CPtr ep) {
             if (proc->zombie) {
                 proc_exit(proc);    
             } else {
+                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                seL4_SetMR(0, 0);
                 seL4_Send(reply_cap, reply);
             }
             cspace_free_slot(cur_cspace, reply_cap);
@@ -279,8 +286,10 @@ void syscall_loop(seL4_CPtr ep) {
 
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply_cap);
 
-        }else{
-            printf("Rootserver got an unknown message %d\n", label);
+        } else if (label == seL4_UserException) {
+            dprintf(0, "User exception, badge = %d\n", badge); 
+        } else{
+            dprintf(0, "Rootserver got an unknown message %d\n", label);
         }
     }
 }
@@ -450,7 +459,7 @@ void setup_tick_timer(uint32_t id, void *data) {
     timestamp_t t = time_stamp();
     timestamp_t diff = t - last_time;
     last_time = t;
-    printf("Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
+    dprintf(0, "Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
     register_timer(*((uint64_t*) data), setup_tick_timer, data);
 }
 
@@ -462,7 +471,7 @@ void nfs_tick(uint32_t id, void *data) {
 }
 
 //static void test0() {
-//    printf("Starting test0\n");
+//    dprintf(0, "Starting test0\n");
 //    /* Allocate 10 pages and make sure you can touch them all */
 //    for (int i = 0; i < 10; i++) {
 //        /* Allocate a page */
@@ -473,20 +482,20 @@ void nfs_tick(uint32_t id, void *data) {
 //        *((int*)vaddr) = 0x37;
 //        assert(*((int*)vaddr) == 0x37);
 //
-//        printf("Page #%d allocated at %p\n",  i, (void *) vaddr);
+//        dprintf(0, "Page #%d allocated at %p\n",  i, (void *) vaddr);
 //    }
-//    printf("test0 done\n");
+//    dprintf(0, "test0 done\n");
 //}
 //
 //static void test1() {
-//    printf("Starting test1\n");
+//    dprintf(0, "Starting test1\n");
 //    /* Test that you eventually run out of memory gracefully,
 //     *    and doesn't crash */
 //    for (int i = 0;; ++i) {
 //        /* Allocate a page */
 //        seL4_Word vaddr = frame_alloc(1, 1);
 //        if (!vaddr) {
-//            printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
+//            dprintf(0, "Page #%d allocated at %p\n",  i, (int*)vaddr);
 //            break;
 //        }
 //
@@ -495,11 +504,11 @@ void nfs_tick(uint32_t id, void *data) {
 //        *((int*)vaddr) = 0x37;
 //        assert(*((int*)vaddr) == 0x37);
 //    }
-//    printf("test1 done\n");
+//    dprintf(0, "test1 done\n");
 //}
 //
 //static void test2() {
-//    printf("Starting test2\n");
+//    dprintf(0, "Starting test2\n");
 //    /* Test that you never run out of memory if you always free frames. 
 //     *     This loop should never finish */
 //    for (int i = 0;; i++) {
@@ -511,22 +520,22 @@ void nfs_tick(uint32_t id, void *data) {
 //        *((int*)vaddr) = 0x37;
 //        assert(*((int*)vaddr) == 0x37);
 //
-//        if (i % 10000 == 0) printf("Page #%d allocated at %p\n",  i, (int*)vaddr);
+//        if (i % 10000 == 0) dprintf(0, "Page #%d allocated at %p\n",  i, (int*)vaddr);
 //
 //        frame_free(vaddr);
 //    }
-//    printf("test2 done\n");
+//    dprintf(0, "test2 done\n");
 //}
 
 void sos_sync_thread_entrypoint() {
-    printf("Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
+    dprintf(0, "Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
     syscall_loop(_sos_ipc_ep_cap);
 
     assert(!"SOS thread has exited");
 }
 
 void sos_async_thread_entrypoint() {
-    printf("Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
+    dprintf(0, "Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
     syscall_loop(_sos_interrupt_ep_cap);
 
     assert(!"SOS thread has exited");
@@ -543,15 +552,21 @@ int main(void) {
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
+    /* Initialise network irq lock */
+    network_irq_lock = sync_create_mutex();
+
     /* Initialise alloc wrappers */
     alloc_wrappers_init();
 
+    printf("frametable\n");
     frametable_init();
 
     /* Allocate all SOS threads */
+    printf("thread init\n");
     threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
 
     /* Initialise the network hardware */
+    printf("network init\n");
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Init open file table */
@@ -578,11 +593,11 @@ int main(void) {
     int pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
     //start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
-    printf("initial pid = %d\n", pid);
+    dprintf(0, "initial pid = %d\n", pid);
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
-    printf("Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
+    dprintf(0, "Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
 
     //syscall_loop(_sos_ipc_ep_cap);
     //seL4_Wait(sos_threads[0].wakeup_async_ep, NULL);

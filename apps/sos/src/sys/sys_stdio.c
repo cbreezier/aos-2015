@@ -75,6 +75,7 @@ sys_writev(va_list ap)
             ret += sel4_write(iov[i].iov_base, iov[i].iov_len);
         }
     } else {
+        printf("fildes = %d\n", fildes);
         assert(!"Not implemented");
         return -EBADF;
     }

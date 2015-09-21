@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <bits/limits.h>
 #include <bits/errno.h>
+#include <sys/debug.h>
 #include "thread.h"
 #include "frametable.h"
 #include "ut_manager/ut.h"
@@ -40,7 +41,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");
         thread.ipc_cap = ft[frame_idx].cap;
 
-        printf("Ipc addr = %x\n", (uint32_t)thread.ipc_addr);
+        dprintf(0, "Ipc addr = %x\n", (uint32_t)thread.ipc_addr);
 
 
         /* Create TCB */

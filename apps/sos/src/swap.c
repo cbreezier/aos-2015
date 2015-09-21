@@ -1,12 +1,15 @@
+#include <nfs/nfs.h>
+#include <sync/mutex.h>
+#include <sys/panic.h>
+#include <sys/debug.h>
+#include <string.h>
+#include <sys/stat.h>
 #include "swap.h"
 #include "frametable.h"
 #include "pagetable.h"
 #include "nfs_sync.h"
-#include <nfs/nfs.h>
-#include <sync/mutex.h>
-#include <sys/panic.h>
-#include <string.h>
-#include <sys/stat.h>
+#include "alloc_wrappers.h"
+
 
 size_t _lo_ft_idx, _hi_ft_idx, _cur_ft_idx;
 fhandle_t swap_fh;
@@ -29,7 +32,7 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
 
     for (size_t i = 1; i < frames_required; ++i) {
         void *cur = (void *)frame_alloc_sos(true);
-        //printf("prev %x cur %x\n", prev, cur);
+        //dprintf(0, "prev %x cur %x\n", prev, cur);
         conditional_panic(prev + PAGE_SIZE != cur, "Swap table frame not contiguous");
         prev += PAGE_SIZE;
     }
@@ -46,12 +49,13 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
 }
 
 static int swapout() {
+    size_t num_looped_entries = 0;
     /*
      * Find an un-referenced page in the frametable.
      * Any looped over page is un-referenced, and unmapped
      */
     while (ft[_cur_ft_idx].referenced || !ft[_cur_ft_idx].is_swappable) {
-        // printf("considering frame %d referenced %d swappable %d\n", _cur_ft_idx, ft[_cur_ft_idx].referenced, ft[_cur_ft_idx].is_swappable);
+        // dprintf(0, "considering frame %d referenced %d swappable %d\n", _cur_ft_idx, ft[_cur_ft_idx].referenced, ft[_cur_ft_idx].is_swappable);
         struct ft_entry *fte = &ft[_cur_ft_idx];
 
         if (fte->user_cap && fte->is_swappable) {
@@ -73,6 +77,9 @@ static int swapout() {
         if (_cur_ft_idx >= _hi_ft_idx) {
             _cur_ft_idx = _lo_ft_idx;
         }
+        ++num_looped_entries;
+        /* If we've looped over every entry twice, and still can't find one, simply panic */
+        conditional_panic(num_looped_entries > (_hi_ft_idx - _lo_ft_idx + 1)*2 + 1, "All frames are allocated to SOS. No user frames left");
     }
 
     
@@ -84,22 +91,22 @@ static int swapout() {
 
     /* Update swap free list */
     int disk_loc = swap_free_head;
-    //printf("disc loc = %d\n", disk_loc);
+    //dprintf(0, "disc loc = %d\n", disk_loc);
     swap_free_head = swap_table[swap_free_head].next_free;
 
-    //printf("vaddr in out ft idx %x\n", out_fte->vaddr);
+    //dprintf(0, "vaddr in out ft idx %x\n", out_fte->vaddr);
     conditional_panic(!out_fte, "Invalid ft_entry (swap)");
     conditional_panic(!out_fte->vaddr_proc, "a ft_entry (swap)");
     conditional_panic(!out_fte->vaddr_proc->as, "b ft_entry (swap)");
     struct pt_entry *out_pte = vaddr_to_pt_entry(out_fte->vaddr_proc->as, out_fte->vaddr);
     conditional_panic(!out_pte, "Swapped out page is not in page table");
-    //printf("out_pte->frame %d vaddr %d\n", out_pte->frame, frame_idx_to_svaddr(_cur_ft_idx));
+    //dprintf(0, "out_pte->frame %d vaddr %d\n", out_pte->frame, frame_idx_to_svaddr(_cur_ft_idx));
     conditional_panic(out_pte->frame != frame_idx_to_svaddr(_cur_ft_idx), "Page table and frametable are not synced");
 
     out_pte->frame = -disk_loc;
 
     seL4_Word svaddr = frame_idx_to_svaddr(_cur_ft_idx);
-    //printf("writing at loc %d\n", disk_loc * PAGE_SIZE);
+    //dprintf(0, "writing at loc %d\n", disk_loc * PAGE_SIZE);
     int nwritten = nfs_sos_write_sync(swap_fh, disk_loc * PAGE_SIZE, (void*)svaddr, PAGE_SIZE);
     if (nwritten < 0) {
         return nwritten;
@@ -112,7 +119,7 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
     assert(ret_svaddr != NULL);
     conditional_panic(vaddr % PAGE_SIZE != 0, "vaddr provided to swapin is not page aligned");
     sync_acquire(ft_lock);  
-    //printf("swapping in %x\n", vaddr);
+    //dprintf(0, "swapping in %x\n", vaddr);
 
     int frame_idx = -EFAULT;
     if (*ret_svaddr == 0) {
@@ -121,18 +128,18 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
         frame_idx = svaddr_to_frame_idx(*ret_svaddr);
     }
     if (frame_idx < 0) {
-        printf("warning warning swapout frame_idx %d\n", frame_idx);
+        dprintf(0, "warning warning swapout frame_idx %d\n", frame_idx);
         sync_release(ft_lock);
         return -frame_idx;
     }
 
     struct pt_entry *in_pte = vaddr_to_pt_entry(proc->as, vaddr);
     if (in_pte == NULL) {
-        printf("warning warning null pt_entry\n");
+        dprintf(0, "warning warning null pt_entry\n");
         sync_release(ft_lock);
         return EFAULT;
     }
-    //printf("in_pte->frame = %d\n", in_pte->frame);
+    //dprintf(0, "in_pte->frame = %d\n", in_pte->frame);
     conditional_panic(in_pte->frame > 0, "Trying to swap in a page which is already swapped in");
 
     *ret_svaddr = frame_idx_to_svaddr(frame_idx);
@@ -142,7 +149,7 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
         /* Fetch page from disk */   
         int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*ret_svaddr), PAGE_SIZE);
         if (nread < 0) {
-            printf("warning warning nfs read sucks %d\n", nread);
+            dprintf(0, "warning warning nfs read sucks %d\n", nread);
             sync_release(ft_lock);
             return -nread;
         }
@@ -163,7 +170,7 @@ int swapin_sos(seL4_Word *ret_svaddr) {
 
     int frame_idx = swapout();
     if (frame_idx < 0) {
-        printf("warning warning swapout_sos frame_idx %d\n", frame_idx);
+        dprintf(0, "warning warning swapout_sos frame_idx %d\n", frame_idx);
         return -frame_idx;
     }
 

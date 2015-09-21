@@ -34,10 +34,10 @@
 #include <cspace/cspace.h>
 
 #include "dma.h"
-#include <utils/mapping.h>
+#include "utils/mapping.h"
 #include "ut_manager/ut.h"
+#include "alloc_wrappers.h"
 
-#define verbose 0
 #include <sys/debug.h>
 #include <sys/panic.h>
 
@@ -174,16 +174,16 @@ network_init(seL4_CPtr interrupt_ep) {
     _irq_ep = interrupt_ep;
 
     /* Extract IP from .config */
-    printf("\nInitialising network...\n\n");
+    dprintf(0, "\nInitialising network...\n\n");
     err = 0;
     err |= !ipaddr_aton(CONFIG_SOS_GATEWAY,      &gw);
     err |= !ipaddr_aton(CONFIG_SOS_IP     ,  &ipaddr);
     err |= !ipaddr_aton(CONFIG_SOS_NETMASK, &netmask);
     conditional_panic(err, "Failed to parse IP address configuration");
-    printf("  Local IP Address: %s\n", ipaddr_ntoa( &ipaddr));
-    printf("Gateway IP Address: %s\n", ipaddr_ntoa(     &gw));
-    printf("      Network Mask: %s\n", ipaddr_ntoa(&netmask));
-    printf("\n");
+    dprintf(0, "  Local IP Address: %s\n", ipaddr_ntoa( &ipaddr));
+    dprintf(0, "Gateway IP Address: %s\n", ipaddr_ntoa(     &gw));
+    dprintf(0, "      Network Mask: %s\n", ipaddr_ntoa(&netmask));
+    dprintf(0, "\n");
 
     /* low level initialisation */
     lwip_iface = ethif_new_lwip_driver(io_ops, NULL, ethif_imx6_init, NULL);
@@ -215,14 +215,14 @@ network_init(seL4_CPtr interrupt_ep) {
     if(strlen(SOS_NFS_DIR)) {
         /* Initialise NFS */
         int err;
-        printf("\nMounting NFS\n");
+        dprintf(0, "\nMounting NFS\n");
         if(!(err = nfs_init(&gw))){
             /* Print out the exports on this server */
             nfs_print_exports();
             if ((err = nfs_mount(SOS_NFS_DIR, &mnt_point))){
-                printf("Error mounting path '%s'!\n", SOS_NFS_DIR);
+                dprintf(0, "Error mounting path '%s'!\n", SOS_NFS_DIR);
             }else{
-                printf("\nSuccessfully mounted '%s'\n", SOS_NFS_DIR);
+                dprintf(0, "\nSuccessfully mounted '%s'\n", SOS_NFS_DIR);
             }
         }
         if(err){

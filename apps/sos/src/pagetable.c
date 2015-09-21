@@ -4,9 +4,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/panic.h>
+#include <sys/debug.h>
 #include "swap.h"
 #include "pagetable.h"
 #include "frametable.h"
+#include "alloc_wrappers.h"
 
 int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CPtr *ret_frame_cap) {
 
@@ -20,7 +22,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
             break;
     }
     if (cur == NULL) {
-        printf("warning warning d\n");
+        dprintf(0, "warning warning d\n");
         /* TODO M7: segfault */
         return EINVAL;
     }
@@ -41,7 +43,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
         proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc_sos(true);
         if (proc->as->page_directory[tl_idx] == NULL) {
-            printf("warning warning e\n");
+            dprintf(0, "warning warning e\n");
             return ENOMEM;
         }
         memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
@@ -54,7 +56,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         svaddr = frame_alloc(1, 1);
         swapin(proc, vaddr, &svaddr);
         if (err) {
-            printf("warning warning f\n");
+            dprintf(0, "warning warning f\n");
             sync_release(ft_lock);
             return err;
         }
@@ -68,7 +70,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
             err = swapin(proc, vaddr, &svaddr);
             conditional_panic(!svaddr, "Swapin ret svaddr is 0");
             if (err) {
-                printf("warning warning a\n");
+                dprintf(0, "warning warning a\n");
                 sync_release(ft_lock);
                 return err;
             }
@@ -77,7 +79,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     uint32_t frame_idx = svaddr_to_frame_idx(svaddr);
     if (frame_idx == 0) {
-        printf("warning warning b\n");
+        dprintf(0, "warning warning b\n");
         sync_release(ft_lock);
         return ENOMEM;
     }
@@ -95,10 +97,10 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     seL4_Word pt_addr = 0;
 
     seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
-    //printf("%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
+    //dprintf(0, "%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
     err = usr_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
     if (err) {
-        printf("warning warning c err %d\n", err);
+        dprintf(0, "warning warning c err %d\n", err);
         frame_free(svaddr);
         sync_release(ft_lock);
         return err;

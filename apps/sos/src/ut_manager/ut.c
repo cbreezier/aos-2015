@@ -9,13 +9,13 @@
  */
 
 #include "ut.h"
+#include "alloc_wrappers.h"
 #include <cspace/cspace.h>
 #include <stdlib.h>
 #include <assert.h>
 
 #include <autoconf.h>
 
-#define verbose 0
 #include <sys/debug.h>
 
 #define ALIGN(x, base)     ((x) & ~((base) - 1))

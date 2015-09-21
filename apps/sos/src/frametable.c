@@ -7,6 +7,7 @@
 #include <utils/mapping.h>
 #include <bits/errno.h>
 #include <string.h>
+#include <sys/debug.h>
 #include "swap.h"
 #include "alloc_wrappers.h"
 
@@ -31,7 +32,7 @@ seL4_Word low_addr, hi_addr, first_valid_frame, num_frames;
 void frametable_init() {
     ut_find_memory(&low_addr, &hi_addr);
     hi_addr -= PAGE_SIZE*128;
-    printf("low addr = %x, high = %x\n", low_addr, hi_addr);
+    dprintf(0, "low addr = %x, high = %x\n", low_addr, hi_addr);
 
     seL4_Word memory_size = hi_addr - low_addr;
 
@@ -81,7 +82,7 @@ void frametable_init() {
 }
 
 seL4_Word frame_alloc(bool freeable, bool swappable) { 
-    //printf("allocating frame %d %d\n", freeable, swappable);
+    //dprintf(0, "allocating frame %d %d\n", freeable, swappable);
     sync_acquire(ft_lock);
 
     if (free_head == 0) {
@@ -103,7 +104,7 @@ seL4_Word frame_alloc(bool freeable, bool swappable) {
     int err = cspace_ut_retype_addr(ft[idx].paddr, seL4_ARM_SmallPageObject, seL4_PageBits, cur_cspace, &(ft[idx].cap));
     conditional_panic(err, "Unable to alloc frame(retype)");
 
-    //printf("frame alloc cap %u\n", (uint32_t)ft[idx].cap);
+    //dprintf(0, "frame alloc cap %u\n", (uint32_t)ft[idx].cap);
     err = map_page(ft[idx].cap, seL4_CapInitThreadPD, svaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to alloc frame(map)");
 
@@ -191,6 +192,7 @@ int frame_change_swappable(seL4_Word svaddr, bool swappable) {
     if (!idx) {
         return EFAULT;
     }
+    conditional_panic(idx >= num_frames, "frame_change_swappable invalid idx");
     
     sync_acquire(ft_lock);
     ft[idx].is_swappable = swappable;

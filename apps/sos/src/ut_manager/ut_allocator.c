@@ -16,7 +16,6 @@
 #include "alloc_wrappers.h"
 
 
-#define verbose 1
 #include <sys/debug.h>
 #include <sys/panic.h>
  

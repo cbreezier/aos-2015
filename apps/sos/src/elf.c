@@ -19,10 +19,10 @@
 #include "frametable.h"
 #include "vmem_layout.h"
 #include "ut_manager/ut.h"
+#include "alloc_wrappers.h"
 
 #include <utils/mapping.h>
 
-#define verbose 0
 #include <sys/debug.h>
 #include <sys/panic.h>
 
@@ -85,7 +85,7 @@ static int load_segment_into_vspace(process_t *proc,
 
     */
 
-    printf("Loading segment into %lu of size %lu\n", dst, segment_size);
+    dprintf(0, "Loading segment into %lu of size %lu\n", dst, segment_size);
 
 
     assert(file_size <= segment_size);
@@ -101,7 +101,7 @@ static int load_segment_into_vspace(process_t *proc,
     if (err) {
         return err;
     }
-    //printf("region added\n");
+    //dprintf(0, "region added\n");
 
     /* We work a page at a time in the destination vspace. */
     pos = 0;
@@ -115,7 +115,7 @@ static int load_segment_into_vspace(process_t *proc,
         seL4_CPtr sos_cap;
         err = pt_add_page(proc, kvpage, &kaddr, &sos_cap);
         if (err) {
-            //printf("error is %u\n", err);
+            //dprintf(0, "error is %u\n", err);
             return err;
         }
         nbytes = PAGESIZE - (dst & PAGEMASK);

@@ -1,5 +1,6 @@
 #include "sos_syscall.h"
 #include <sys/mman.h>
+#include <sys/debug.h>
 #include <vmem_layout.h>
 #include <clock/clock.h>
 #include <limits.h>
@@ -542,6 +543,7 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
 
     void *usr_buf= (void*)seL4_GetMR(1);
 
+    dprintf(0, "allocing path\n");
     /* Do copyin to get path */
     char *path = kmalloc(N_NAME * sizeof(char));
     if (path == NULL) {
@@ -549,21 +551,26 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
         goto sos_execve_end;
     }
 
+    dprintf(0, "copying in string\n");
     err = copyinstring(proc, path, usr_buf, NAME_MAX);
     if (err) {
         goto sos_execve_end;
     }
     path[N_NAME-1] = 0;
 
+    dprintf(0, "proc creating\n");
     pid = proc_create(proc->pid, path);
     if (pid < 0) {
         err = -pid;
         goto sos_execve_end;
     }
+    dprintf(0, "all done\n");
     
 sos_execve_end:
     if (path != NULL) {
+        dprintf(0, "kfreeing\n");
         kfree(path);   
+        dprintf(0, "done kfreeing\n");
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 

@@ -1,6 +1,7 @@
 #include <bits/errno.h>
 #include <stdio.h>
 #include <sys/panic.h>
+#include <sys/debug.h>
 #include <cspace/cspace.h>
 #include <cpio/cpio.h>
 #include <utils/mapping.h>
@@ -38,6 +39,7 @@ void proc_init() {
 int proc_create(pid_t parent, char *program_name) {
     int err = 0;
 
+    dprintf(0, "acquiring proc table lock\n");
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1) {
         sync_release(proc_table_lock);
@@ -48,6 +50,7 @@ int proc_create(pid_t parent, char *program_name) {
     procs_head_free = processes[procs_head_free].next_free;
     sync_release(proc_table_lock);
 
+    dprintf(0, "acquiring proc lock\n");
     sync_acquire(processes[pid].proc_lock);
     processes[pid].parent_proc = parent;
     processes[pid].pid = pid;
@@ -65,11 +68,11 @@ int proc_create(pid_t parent, char *program_name) {
     char* elf_base;
     unsigned long elf_size;
 
-    printf("as initing\n");
+    dprintf(0, "as initing\n");
     /* Initialise address space */
     as_init(&processes[pid].as);
 
-    printf("allocating vroot addr\n");
+    dprintf(0, "allocating vroot addr\n");
     /* Create a VSpace */
     processes[pid].vroot_addr = kut_alloc(seL4_PageDirBits);
     conditional_panic(!processes[pid].vroot_addr, 
@@ -81,20 +84,20 @@ int proc_create(pid_t parent, char *program_name) {
                                 &processes[pid].vroot);
     conditional_panic(err, "Failed to allocate page directory cap for client");
 
-    printf("cspace create\n");
+    dprintf(0, "cspace create\n");
     /* Create a simple 1 level CSpace */
     processes[pid].croot = cspace_create(1);
     assert(processes[pid].croot != NULL);
 
-    printf("adding IPC region\n");
+    dprintf(0, "adding IPC region\n");
     as_add_region(processes[pid].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
-    printf("Added IPC region\n");
+    dprintf(0, "Added IPC region\n");
 
     /* Create an IPC buffer */
     err = pt_add_page(&processes[pid], PROCESS_IPC_BUFFER, NULL, &processes[pid].ipc_buffer_cap);
     conditional_panic(err, "Unable to add page table page for ipc buffer\n");
 
-    printf("minting ep\n");
+    dprintf(0, "minting ep\n");
     /* Copy the fault endpoint to the user app to enable IPC */
     processes[pid].user_ep_cap = cspace_mint_cap(processes[pid].croot,
                                   cur_cspace,
@@ -105,7 +108,7 @@ int proc_create(pid_t parent, char *program_name) {
     assert(processes[pid].user_ep_cap == 1);
     assert(processes[pid].user_ep_cap == USER_EP_CAP);
 
-    printf("tcb stuff\n");
+    dprintf(0, "tcb stuff\n");
     /* Create a new TCB object */
     processes[pid].tcb_addr = kut_alloc(seL4_TCBBits);
     conditional_panic(!processes[pid].tcb_addr, "No memory for new TCB");
@@ -117,7 +120,7 @@ int proc_create(pid_t parent, char *program_name) {
     conditional_panic(err, "Failed to create TCB");
 
     /* Configure the TCB */
-    printf("more tcb stuff\n");
+    dprintf(0, "more tcb stuff\n");
     err = seL4_TCB_Configure(processes[pid].tcb_cap, processes[pid].user_ep_cap, USER_PRIORITY,
                              processes[pid].croot->root_cnode, seL4_NilData,
                              processes[pid].vroot, seL4_NilData, PROCESS_IPC_BUFFER,
@@ -131,14 +134,14 @@ int proc_create(pid_t parent, char *program_name) {
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
     /* load the elf image */
-    printf("elf load\n");
+    dprintf(0, "elf load\n");
     err = elf_load(&processes[pid], elf_base);
     conditional_panic(err, "Failed to load elf image");
 
 
     /* Create a stack frame */
     /* Define stack */
-    printf("adding heap and stack regions\n");
+    dprintf(0, "adding heap and stack regions\n");
     as_add_heap(processes[pid].as);
     as_add_stack(&processes[pid]);
 
@@ -176,7 +179,7 @@ int proc_create(pid_t parent, char *program_name) {
     sync_release(processes[pid].proc_lock);
 
     /* Start the new process */
-    printf("almost done!\n");
+    dprintf(0, "almost done!\n");
     memset(&context, 0, sizeof(context));
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
@@ -188,7 +191,7 @@ int proc_create(pid_t parent, char *program_name) {
 void proc_exit(process_t *proc) {
     int err;
 
-    printf("acquiring proc lock\n");
+    dprintf(0, "acquiring proc lock\n");
 
     sync_acquire(proc->proc_lock);
 
@@ -198,9 +201,9 @@ void proc_exit(process_t *proc) {
     proc->pid = -1;
 
     /* Destroy address space */
-    printf("as destroying\n");
+    dprintf(0, "as destroying\n");
     err = as_destroy(proc);
-    printf("done\n");
+    dprintf(0, "done\n");
     conditional_panic(err, "unable to destroy address space");
 
     /* Destroy tcb */
@@ -216,8 +219,8 @@ void proc_exit(process_t *proc) {
     // err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
     // conditional_panic(err, "unable to revoke user ep cap");
 
-    // err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
-    // conditional_panic(err, "unable to delete user ep cap");
+    err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
+    conditional_panic(err, "unable to delete user ep cap");
 
     /* Destroy process cspace */
     err = cspace_destroy(proc->croot);
@@ -232,7 +235,7 @@ void proc_exit(process_t *proc) {
 
     kut_free(proc->vroot_addr, seL4_PageDirBits);
 
-    printf("acquiring proc table lock\n");
+    dprintf(0, "acquiring proc table lock\n");
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1 || procs_tail_free == -1) {
         assert(procs_head_free == -1 && procs_tail_free == -1);
@@ -254,7 +257,7 @@ void proc_exit(process_t *proc) {
 
     /* Signal possibly waiting parent */
     if (pid_parent != -1) {
-        printf("acquiring parent proc lock\n");
+        dprintf(0, "acquiring parent proc lock\n");
         sync_acquire(processes[pid_parent].proc_lock);
 
         if (processes[pid_parent].wait_ep) {
@@ -267,5 +270,5 @@ void proc_exit(process_t *proc) {
 
         sync_release(processes[pid_parent].proc_lock);
     }
-    printf("all done\n");
+    dprintf(0, "all done\n");
 }

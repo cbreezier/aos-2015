@@ -21,12 +21,12 @@
 
 #include <sel4/types.h>
 #include <cspace/cspace.h>
-#include <dma.h>
-#include <utils/mapping.h>
-#include <ut_manager/ut.h>
-#include <vmem_layout.h>
+#include "dma.h"
+#include "utils/mapping.h"
+#include "ut_manager/ut.h"
+#include "vmem_layout.h"
+#include "alloc_wrappers.h"
 
-#define verbose 5
 #include <sys/debug.h>
 #include <sys/panic.h>
 

@@ -563,7 +563,6 @@ int main(void) {
 
     while (!done) {
         //pt_test();
-        printf("IT WORKED\n");
         if (new) {
             printf("$ ");
         }

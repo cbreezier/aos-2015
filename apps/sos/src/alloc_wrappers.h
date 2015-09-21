@@ -3,6 +3,9 @@
 
 #include <sel4/sel4.h>
 #include <stdlib.h>
+#include <sync/mutex.h>
+
+sync_mutex_t printf_lock;
 
 void alloc_wrappers_init();
 
