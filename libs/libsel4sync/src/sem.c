@@ -1,6 +1,7 @@
 #include <sync/sem.h>
 #include <sync/mutex.h>
 #include <stdlib.h>
+#include <utils/alloc_wrappers.h>
 
 struct sync_sem_ {
     sync_mutex_t mutex;
@@ -10,19 +11,19 @@ struct sync_sem_ {
 
 sync_sem_t
 sync_create_sem(int value) {
-    sync_sem_t sem = (sync_sem_t)malloc(sizeof(struct sync_sem_));
+    sync_sem_t sem = (sync_sem_t)kmalloc(sizeof(struct sync_sem_));
     if (!sem){
         return NULL;
     }
     sem->mutex=sync_create_mutex();
     if (!sem->mutex) {
-        free(sem);
+        kfree(sem);
         return NULL;
     }
     sem->delay=sync_create_mutex();
     if(!sem->delay) {
         sync_destroy_mutex(sem->mutex);
-        free(sem);
+        kfree(sem);
         return NULL;
     }
     // Delay starts at 0
@@ -36,7 +37,7 @@ void
 sync_destroy_sem(sync_sem_t sem) {
     sync_destroy_mutex(sem->mutex);
     sync_destroy_mutex(sem->delay);
-    free(sem);
+    kfree(sem);
 }
 
 void

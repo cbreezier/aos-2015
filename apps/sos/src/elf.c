@@ -107,22 +107,21 @@ static int load_segment_into_vspace(process_t *proc,
     pos = 0;
     while(pos < segment_size) {
         int nbytes;
-        seL4_Word kdst = dst;
-        seL4_Word kvpage = PAGE_ALIGN(kdst);
+        seL4_Word vaddr = PAGE_ALIGN(dst);
 
         /* Now copy our data into the destination vspace. */
-        seL4_Word kaddr;
+        seL4_Word svaddr;
         seL4_CPtr sos_cap;
-        err = pt_add_page(proc, kvpage, &kaddr, &sos_cap);
+        err = pt_add_page(proc, vaddr, &svaddr, &sos_cap);
         if (err) {
             //dprintf(0, "error is %u\n", err);
             return err;
         }
         nbytes = PAGESIZE - (dst & PAGEMASK);
         if (pos < file_size){
-            memcpy((void*)kaddr + (PAGE_SIZE - nbytes), (void*)src, MIN(nbytes, file_size - pos));
+            memcpy((void*)svaddr + (PAGE_SIZE - nbytes), (void*)src, MIN(nbytes, file_size - pos));
         }
-        frame_change_swappable(kaddr, 1);
+        frame_change_swappable(svaddr, 1);
 
         /* Not observable to I-cache yet so flush the frame */
         seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);

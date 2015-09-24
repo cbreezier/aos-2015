@@ -69,6 +69,7 @@ const seL4_BootInfo* _boot_info;
 process_t tty_test_process;
 
 sync_mutex_t network_irq_lock;
+sync_mutex_t lock_lock;
 
 
 /*
@@ -95,7 +96,7 @@ struct mutex_ep {
 };
 
 void* sync_new_ep(seL4_CPtr* ep, int badge) {
-    struct mutex_ep *ret = malloc(sizeof(struct mutex_ep));
+    struct mutex_ep *ret = kmalloc(sizeof(struct mutex_ep));
 
     if (!ret) {
         return NULL;
@@ -153,7 +154,9 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     copyMR(saved_mr, true, num_args + 1);
 
     /* Process system call */
-    dprintf(0, "got syscall number %u\n", syscall_number);
+    dprintf(-1, "got syscall number %u\n", syscall_number);
+
+    sync_acquire(lock_lock);
 
     seL4_MessageInfo_t reply;
     switch (syscall_number) {
@@ -198,6 +201,8 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         }
         break;
     }
+
+    sync_release(lock_lock);
 }
 
 void syscall_loop(seL4_CPtr ep) {
@@ -234,10 +239,11 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_Word vaddr = seL4_GetMR(1);
             seL4_Word instruction_fault = seL4_GetMR(2);
 
+            sync_acquire(lock_lock);
 
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", vaddr,
-                    pc,
+            dprintf(-1, "vm fault at 0x%08x, pc = 0x%08x, pid = %d, %s\n", vaddr,
+                    pc, badge,
                     instruction_fault ? "Instruction Fault" : "Data fault");
 
             process_t *proc = &processes[badge];
@@ -261,7 +267,7 @@ void syscall_loop(seL4_CPtr ep) {
 
             conditional_panic(err, "failed to add page(vm fault)");
 
-            if (instruction_fault) {
+            if (1) {
                 /* Flush cache entry */
                 seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
             }
@@ -279,6 +285,7 @@ void syscall_loop(seL4_CPtr ep) {
                 seL4_Send(reply_cap, reply);
             }
             cspace_free_slot(cur_cspace, reply_cap);
+            sync_release(lock_lock);
         }else if(label == seL4_NoFault) {
             /* System call */
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -287,9 +294,9 @@ void syscall_loop(seL4_CPtr ep) {
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply_cap);
 
         } else if (label == seL4_UserException) {
-            dprintf(0, "User exception, badge = %d\n", badge); 
+            dprintf(0, "User exception, pid = %d\n", badge); 
         } else{
-            dprintf(0, "Rootserver got an unknown message %d\n", label);
+            dprintf(0, "Rootserver got an unknown message %d, pid = %d\n", label, badge);
         }
     }
 }
@@ -554,6 +561,7 @@ int main(void) {
 
     /* Initialise network irq lock */
     network_irq_lock = sync_create_mutex();
+    lock_lock = sync_create_mutex();
 
     /* Initialise alloc wrappers */
     alloc_wrappers_init();

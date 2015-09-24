@@ -195,7 +195,7 @@ network_init(seL4_CPtr interrupt_ep) {
 
     /* Setup the network interface */
     lwip_init();
-    struct netif *netif = malloc(sizeof(*netif));
+    struct netif *netif = kmalloc(sizeof(*netif));
     assert(netif);
     lwip_iface->netif = netif_add(netif, &ipaddr, &netmask, &gw,
                          lwip_iface, ethif_get_ethif_init(lwip_iface), ethernet_input);

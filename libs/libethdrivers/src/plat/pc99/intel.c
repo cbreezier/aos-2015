@@ -674,15 +674,15 @@ static void free_desc_ring(e1000_dev_t *dev, ps_dma_man_t *dma_man) {
         dev->tx_ring = NULL;
     }
     if (dev->rx_cookies) {
-        free(dev->rx_cookies);
+        kfree(dev->rx_cookies);
         dev->rx_cookies = NULL;
     }
     if (dev->tx_cookies) {
-        free(dev->tx_cookies);
+        kfree(dev->tx_cookies);
         dev->tx_cookies = NULL;
     }
     if (dev->tx_lengths) {
-        free(dev->tx_lengths);
+        kfree(dev->tx_lengths);
         dev->tx_lengths = NULL;
     }
 }
@@ -700,18 +700,18 @@ static int initialize_desc_ring(e1000_dev_t *dev, ps_dma_man_t *dma_man) {
         free_desc_ring(dev, dma_man);
         return -1;
     }
-    dev->rx_cookies = malloc(sizeof(void*) * dev->rx_size);
-    dev->tx_cookies = malloc(sizeof(void*) * dev->tx_size);
-    dev->tx_lengths = malloc(sizeof(unsigned int) * dev->tx_size);
+    dev->rx_cookies = kmalloc(sizeof(void*) * dev->rx_size);
+    dev->tx_cookies = kmalloc(sizeof(void*) * dev->tx_size);
+    dev->tx_lengths = kmalloc(sizeof(unsigned int) * dev->tx_size);
     if (!dev->rx_cookies || !dev->tx_cookies || !dev->tx_lengths) {
         if (dev->rx_cookies) {
-            free(dev->rx_cookies);
+            kfree(dev->rx_cookies);
         }
         if (dev->tx_cookies) {
-            free(dev->tx_cookies);
+            kfree(dev->tx_cookies);
         }
         if (dev->tx_lengths) {
-            free(dev->tx_lengths);
+            kfree(dev->tx_lengths);
         }
         LOG_ERROR("Failed to malloc");
         free_desc_ring(dev, dma_man);
@@ -946,7 +946,7 @@ common_init(struct eth_driver *driver, ps_io_ops_t io_ops, void *config, e1000_d
         disable_all_interrupts(dev);
         reset_device(dev);
         /* Free memory */
-        free(dev);
+        kfree(dev);
         return -1;
     }
     /* the transmit and receive initialization functions assume
@@ -964,7 +964,7 @@ common_init(struct eth_driver *driver, ps_io_ops_t io_ops, void *config, e1000_d
 
 int
 ethif_e82580_init(struct eth_driver *driver, ps_io_ops_t io_ops, void *config) {
-    e1000_dev_t *dev = malloc(sizeof(*dev));
+    e1000_dev_t *dev = kmalloc(sizeof(*dev));
     if (!dev) {
         LOG_ERROR("Failed to malloc");
         return -1;
@@ -976,7 +976,7 @@ ethif_e82580_init(struct eth_driver *driver, ps_io_ops_t io_ops, void *config) {
 
 int
 ethif_e82574_init(struct eth_driver *driver, ps_io_ops_t io_ops, void *config) {
-    e1000_dev_t *dev = malloc(sizeof(*dev));
+    e1000_dev_t *dev = kmalloc(sizeof(*dev));
     if (!dev) {
         LOG_ERROR("Failed to malloc");
         return -1;

@@ -5,8 +5,7 @@
 #include <sel4/sel4.h>
 #include <stdint.h>
 #include <stdbool.h>
-
-
+#include <utils/alloc_wrappers.h>
 
 struct allocation;
 struct number_allocator {

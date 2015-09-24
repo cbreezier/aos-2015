@@ -39,6 +39,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../unimplemented.h"
+#include <utils/alloc_wrappers.h>
+
 
 #define BUG_ON(x) do {} while(0)
 
@@ -132,7 +134,7 @@ void miiphy_register(const char *name,
 
 	/* allocate memory */
 	new_dev = mdio_alloc();
-	ldev = malloc(sizeof(*ldev));
+	ldev = kmalloc(sizeof(*ldev));
 
 	if (new_dev == NULL || ldev == NULL) {
 		printf("miiphy_register: cannot allocate memory for '%s'\n",
@@ -163,7 +165,7 @@ struct mii_dev *mdio_alloc(void)
 {
 	struct mii_dev *bus;
 
-	bus = malloc(sizeof(*bus));
+	bus = kmalloc(sizeof(*bus));
 	if (!bus)
 		return bus;
 

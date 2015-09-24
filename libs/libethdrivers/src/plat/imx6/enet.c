@@ -16,6 +16,7 @@
 #include "unimplemented.h"
 #include "../../debug.h"
 #include <stdlib.h>
+#include <utils/alloc_wrappers.h>
 
 #define IMX6_ENET_PADDR 0x02188000
 #define IMX6_ENET_SIZE  0x00004000
@@ -496,7 +497,7 @@ enet_init(struct desc_data desc_data, ps_io_ops_t *io_ops) {
     regs->eir  = 0xffffffff;
 
     /* Set the ethernet clock frequency */
-    clock_sys_t *clk_sys = malloc(sizeof(clock_sys_t));
+    clock_sys_t *clk_sys = kmalloc(sizeof(clock_sys_t));
     clock_sys_init(io_ops, clk_sys);
     enet_clk = clk_get_clock(clk_sys, CLK_ENET);
     clk_set_freq(enet_clk, ENET_FREQ);

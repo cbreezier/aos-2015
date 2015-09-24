@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <utils/alloc_wrappers.h>
 
 
 //#define DEBUG_RPC
@@ -281,7 +282,7 @@ my_recv(void *arg, struct udp_pcb *upcb, struct pbuf *p,
         q_item->func(q_item->callback, q_item->arg, p);
         /* Clean up the queue item */
         pbuf_free(q_item->pbuf);
-        free(q_item);
+        kfree(q_item);
     }
     /* Done with the incoming packet so free it */
     pbuf_free(p);

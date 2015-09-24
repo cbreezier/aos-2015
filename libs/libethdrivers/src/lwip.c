@@ -19,15 +19,16 @@
 #include <netif/etharp.h>
 #include <lwip/stats.h>
 #include "debug.h"
+#include <utils/alloc_wrappers.h>
 
 static void initialize_free_bufs(lwip_iface_t *iface) {
     dma_addr_t *dma_bufs = NULL;
-    dma_bufs = malloc(sizeof(dma_addr_t) * CONFIG_LIB_ETHDRIVER_NUM_PREALLOCATED_BUFFERS);
+    dma_bufs = kmalloc(sizeof(dma_addr_t) * CONFIG_LIB_ETHDRIVER_NUM_PREALLOCATED_BUFFERS);
     if (!dma_bufs) {
         goto error;
     }
     memset(dma_bufs, 0, sizeof(dma_addr_t) * CONFIG_LIB_ETHDRIVER_NUM_PREALLOCATED_BUFFERS);
-    iface->bufs = malloc(sizeof(dma_addr_t*) * CONFIG_LIB_ETHDRIVER_NUM_PREALLOCATED_BUFFERS);
+    iface->bufs = kmalloc(sizeof(dma_addr_t*) * CONFIG_LIB_ETHDRIVER_NUM_PREALLOCATED_BUFFERS);
     if (!iface->bufs) {
         goto error;
     }
@@ -43,7 +44,7 @@ static void initialize_free_bufs(lwip_iface_t *iface) {
     return;
 error:
     if (iface->bufs) {
-        free(iface->bufs);
+        kfree(iface->bufs);
     }
     if (dma_bufs) {
         for (int i = 0; i < CONFIG_LIB_ETHDRIVER_NUM_PREALLOCATED_BUFFERS; i++) {
@@ -51,7 +52,7 @@ error:
                 dma_unpin_free(&iface->dma_man, dma_bufs[i].virt, CONFIG_LIB_ETHDRIVER_PREALLOCATED_BUF_SIZE);
             }
         }
-        free(dma_bufs);
+        kfree(dma_bufs);
     }
     iface->bufs = NULL;
 }
@@ -453,14 +454,14 @@ error:
 
 lwip_iface_t *ethif_new_lwip_driver(ps_io_ops_t io_ops, ps_dma_man_t *pbuf_dma, ethif_driver_init driver, void *driver_config) {
     lwip_iface_t *ret;
-    lwip_iface_t *iface = malloc(sizeof(*iface));
+    lwip_iface_t *iface = kmalloc(sizeof(*iface));
     if (!iface) {
         LOG_ERROR("Failed to malloc");
         return NULL;
     }
     ret = ethif_new_lwip_driver_no_malloc(io_ops, pbuf_dma, driver, driver_config, iface);
     if (!ret) {
-        free(iface);
+        kfree(iface);
     }
     return ret;
 }

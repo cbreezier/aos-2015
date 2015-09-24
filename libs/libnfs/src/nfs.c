@@ -18,6 +18,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <utils/alloc_wrappers.h>
 
 
 //#define DEBUG_NFS 1
@@ -253,7 +254,7 @@ _nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
             pb_read_arrl(pbuf, (uint32_t*)&pattrs, sizeof(pattrs), &pos);
             pb_readl(pbuf, &size, &pos);
             /* malloc for data since pbuf may be part of a chain */
-            data = malloc(size);
+            data = kmalloc(size);
             assert(data != NULL);
             pb_read(pbuf, data, size, &pos);
         }
@@ -262,7 +263,7 @@ _nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
     cb(token, status, &pattrs, size, data);
 
     if(data){
-        free(data);
+        kfree(data);
     }
 }
 
@@ -317,7 +318,7 @@ _nfs_write_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 
     cb(t->token, status, &pattrs, t->count);
 
-    free(t);
+    kfree(t);
 }
 
 enum rpc_stat
@@ -330,7 +331,7 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
     int pos;
     int err;
 
-    t = (struct write_token_wrapper*)malloc(sizeof(*t));
+    t = (struct write_token_wrapper*)kmalloc(sizeof(*t));
     if(t == NULL){
         return RPCERR_NOMEM;
     }
@@ -338,7 +339,7 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
     /* now the user data struct is setup, do some call stuff! */
     pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_WRITE, &pos);
     if(pbuf == NULL){
-        free(t);
+        kfree(t);
         return RPCERR_NOBUF;
     }
 
@@ -362,7 +363,7 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
     t->count = count;
     err = rpc_send(pbuf, pos, _nfs_pcb, &_nfs_write_cb, func, (uintptr_t)t);
     if(err){
-        free(t);
+        kfree(t);
     }
     return err;
 }
@@ -495,7 +496,7 @@ _nfs_readdir_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
                 pb_readl(pbuf, &fileid, &pos);
                 /* Read in the file name length and file name */
                 pb_readl(pbuf, &size, &pos);
-                name = (char*)malloc(size + 1);
+                name = (char*)kmalloc(size + 1);
                 pb_read(pbuf, name, size, &pos);
                 name[size] = '\0';
                 pb_alignl(&pos);
@@ -503,14 +504,14 @@ _nfs_readdir_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
                  * next call call to nfs_readdir for more file names */
                 pb_readl(pbuf, &next_cookie, &pos);
                 /* update records */
-                *tail = (struct filelist*)malloc(sizeof(struct filelist));
+                *tail = (struct filelist*)kmalloc(sizeof(struct filelist));
                 (*tail)->file = name;
                 (*tail)->next = NULL;
                 tail = &(*tail)->next;
                 num_entries++;
             }
             /* Now flatten the chain */
-            entries = (char**)malloc(sizeof(char*)*num_entries);
+            entries = (char**)kmalloc(sizeof(char*)*num_entries);
             assert(entries);
             for(i = 0; i < num_entries; i++){
                 struct filelist *old_head;
@@ -518,7 +519,7 @@ _nfs_readdir_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
                 old_head = head;
                 head = head->next;
                 entries[i] = old_head->file;
-                free(old_head);
+                kfree(old_head);
             }
         }
     }
@@ -529,9 +530,9 @@ _nfs_readdir_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
     if (entries){
         int i;
         for(i = 0; i < num_entries; i++){
-            free(entries[i]);
+            kfree(entries[i]);
         }
-        free(entries);
+        kfree(entries);
     }
 }
 

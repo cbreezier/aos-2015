@@ -319,10 +319,6 @@ struct command {
     int (*command)(int argc, char **argv);
 };
 
-struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
-        "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} , {"kill", kill} };
-
 static uint64_t mtime(void) {
     struct timeval time;
     gettimeofday(&time, NULL);
@@ -469,8 +465,8 @@ do_pt_test( char *buf, int numpages )
     }
 }
 
-static void
-pt_test( void )
+static int 
+pt_test(int argc, char *argv[])
 {
     /* need a decent sized stack */
     char buf1[NPAGES * 4096], *buf2 = NULL;
@@ -500,8 +496,13 @@ pt_test( void )
     free(buf3);
     free(buf2);
     printf("Heap test ok\n");
-
+    return 0;
 }
+
+struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
+        "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
+        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} , {"kill", kill}, {"pt_test", pt_test} };
+
 int main(void) {
     /* Testing mapped pages */
 

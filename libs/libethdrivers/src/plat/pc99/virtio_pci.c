@@ -119,15 +119,15 @@ static void free_desc_ring(virtio_dev_t *dev, ps_dma_man_t *dma_man) {
         dev->tx_ring.desc = NULL;
     }
     if (dev->rx_cookies) {
-        free(dev->rx_cookies);
+        kfree(dev->rx_cookies);
         dev->rx_cookies = NULL;
     }
     if (dev->tx_cookies) {
-        free(dev->tx_cookies);
+        kfree(dev->tx_cookies);
         dev->tx_cookies = NULL;
     }
     if (dev->tx_lengths) {
-        free(dev->tx_lengths);
+        kfree(dev->tx_lengths);
         dev->tx_lengths = NULL;
     }
 }
@@ -150,9 +150,9 @@ static int initialize_desc_ring(virtio_dev_t *dev, ps_dma_man_t *dma_man) {
     memset(tx_ring.virt, 0, vring_size(dev->tx_size, VIRTIO_PCI_VRING_ALIGN));
     vring_init(&dev->tx_ring, dev->tx_size, tx_ring.virt, VIRTIO_PCI_VRING_ALIGN);
     dev->tx_ring_phys = tx_ring.phys;
-    dev->rx_cookies = malloc(sizeof(void*) * dev->rx_size);
-    dev->tx_cookies = malloc(sizeof(void*) * dev->tx_size);
-    dev->tx_lengths = malloc(sizeof(unsigned int) * dev->tx_size);
+    dev->rx_cookies = kmalloc(sizeof(void*) * dev->rx_size);
+    dev->tx_cookies = kmalloc(sizeof(void*) * dev->tx_size);
+    dev->tx_lengths = kmalloc(sizeof(unsigned int) * dev->tx_size);
     if (!dev->rx_cookies || !dev->tx_cookies || !dev->tx_lengths) {
         LOG_ERROR("Failed to malloc");
         free_desc_ring(dev, dma_man);
@@ -360,7 +360,7 @@ static struct raw_iface_funcs iface_fns = {
 int ethif_virtio_pci_init(struct eth_driver *eth_driver, ps_io_ops_t io_ops, void *config) {
     int err;
     ethif_virtio_pci_config_t *virtio_config = (ethif_virtio_pci_config_t*)config;
-    virtio_dev_t *dev = (virtio_dev_t*)malloc(sizeof(*dev));
+    virtio_dev_t *dev = (virtio_dev_t*)kmalloc(sizeof(*dev));
     if (!dev) {
         return -1;
     }
@@ -391,6 +391,6 @@ int ethif_virtio_pci_init(struct eth_driver *eth_driver, ps_io_ops_t io_ops, voi
 error:
     set_status(dev, VIRTIO_CONFIG_S_FAILED);
     free_desc_ring(dev, &io_ops.dma_manager);
-    free(dev);
+    kfree(dev);
     return -1;
 }

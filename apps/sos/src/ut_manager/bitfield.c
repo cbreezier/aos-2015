@@ -44,13 +44,13 @@ bitfield_t* new_bitfield(int size, enum bf_init_state state){
     int bytes;
 
     /* Allocate memory */
-    bf = (bitfield_t*)malloc(sizeof(bitfield_t));
+    bf = (bitfield_t*)kmalloc(sizeof(bitfield_t));
     if(bf == NULL){
         return NULL;
     }
 
     bytes = CEILING(size)/BITS_PER_BYTE;
-    bf->b = (char*)malloc(bytes);
+    bf->b = (char*)kmalloc(bytes);
     if(bf->b == NULL){
         free(bf);
         return NULL;

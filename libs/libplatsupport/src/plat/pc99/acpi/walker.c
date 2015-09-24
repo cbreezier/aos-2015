@@ -20,6 +20,7 @@
 #include <string.h>
 #define _GNU_SOURCE /* for getpagesize() */
 #include <unistd.h>
+#include <utils/alloc_wrappers.h>
 
 #define SIG_SEARCH_STEP (16) /* value from ACPIAC RSDP search */
 
@@ -119,7 +120,7 @@ acpi_parse_table(acpi_t *acpi, void *table_paddr)
 
     /* now create a copy of the table for us to keep */
     uint32_t length = acpi_table_length(header_vaddr);
-    acpi_header_t *copy = (acpi_header_t *) malloc(length);
+    acpi_header_t *copy = (acpi_header_t *) kmalloc(length);
     if (copy == NULL) {
         fprintf(stderr, "Failed to malloc object size %u\n", length);
         assert(copy != NULL);

@@ -83,7 +83,7 @@ dma_init(seL4_Word dma_paddr_start, int sizebits){
 
     _dma_pstart = _dma_pnext = dma_paddr_start;
     _dma_pend = dma_paddr_start + (1 << sizebits);
-    _dma_caps = (seL4_CPtr*)malloc(sizeof(seL4_CPtr) * DMA_PAGES);
+    _dma_caps = (seL4_CPtr*)kmalloc(sizeof(seL4_CPtr) * DMA_PAGES);
     conditional_panic(!_dma_caps, "Not enough heap space for dma frame caps");
 
     memset(_dma_caps, 0, sizeof(seL4_CPtr) * DMA_PAGES);

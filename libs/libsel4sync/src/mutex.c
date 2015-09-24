@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <bits/limits.h>
+#include <utils/alloc_wrappers.h>
 
 
 #define MUTEX_MAGIC 0x5EED
@@ -16,7 +17,7 @@ sync_create_mutex() {
 
     mutex->ep = sync_new_ep(&mutex->mapping, MUTEX_MAGIC);
     if(mutex->ep == NULL){
-        free(mutex);
+        kfree(mutex);
         return NULL;
     }
 
@@ -29,7 +30,7 @@ sync_create_mutex() {
 void
 sync_destroy_mutex(sync_mutex_t mutex) {
     sync_free_ep(mutex->ep);
-    free(mutex);
+    kfree(mutex);
 }
 
 static uint32_t get_thread_id() {

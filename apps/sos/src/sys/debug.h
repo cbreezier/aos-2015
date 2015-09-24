@@ -15,22 +15,24 @@
 #include <alloc_wrappers.h>
 #include <sync/mutex.h>
 
-#define verbose 0
+#define verbose 2
 
 void plogf(const char *msg, ...);
+                    //if (printf_lock) sync_acquire(printf_lock); 
+                    //if (printf_lock) sync_release(printf_lock); 
 
 #define _dprintf(v, col, args...) \
             do { \
                 if ((v) < verbose){ \
-                    if (printf_lock) sync_acquire(printf_lock); \
                     printf(col); \
                     plogf(args); \
                     printf("\033[0;0m"); \
-                    if (printf_lock) sync_release(printf_lock); \
                 } \
             } while (0)
 
-#define dprintf(v, ...) _dprintf(v, "\033[22;33m", __VA_ARGS__)
+//#define dprintf(v, ...) _dprintf(v, "\033[22;33m", __VA_ARGS__)
+
+#define dprintf(v, ...) printf(__VA_ARGS__)
 
 #define WARN(...) _dprintf(-1, "\033[1;31mWARNING: ", __VA_ARGS__)
 

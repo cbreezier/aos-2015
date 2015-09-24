@@ -63,6 +63,7 @@ void frametable_init() {
 
         ft[i].paddr = id;
         ft[i].cap = cap;
+        ft[i].user_cap = 0;
         ft[i].next_free = 0;
         ft[i].is_freeable = 0;
         ft[i].is_swappable = 0;
@@ -72,6 +73,7 @@ void frametable_init() {
     for (uint32_t i = frametable_frames_required; i < num_frames; ++i) {
         ft[i].paddr = 0;
         ft[i].cap = 0;
+        ft[i].user_cap = 0;
 
         ft[i].next_free = (i == num_frames - 1) ? 0 : i+1;
         ft[i].is_freeable = 1;

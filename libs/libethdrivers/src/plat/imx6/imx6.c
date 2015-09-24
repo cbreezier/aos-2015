@@ -20,6 +20,8 @@
 #include "uboot/mx6qsabrelite.h"
 #include "uboot/micrel.h"
 #include "unimplemented.h"
+#include <utils/alloc_wrappers.h>
+
 
 #define DEFAULT_MAC "\x00\x19\xb8\x00\xf0\xa3"
 
@@ -138,15 +140,15 @@ static void free_desc_ring(struct imx6_eth_data *dev, ps_dma_man_t *dma_man) {
         dev->tx_ring = NULL;
     }
     if (dev->rx_cookies) {
-        free(dev->rx_cookies);
+        kfree(dev->rx_cookies);
         dev->rx_cookies = NULL;
     }
     if (dev->tx_cookies) {
-        free(dev->tx_cookies);
+        kfree(dev->tx_cookies);
         dev->tx_cookies = NULL;
     }
     if (dev->tx_lengths) {
-        free(dev->tx_lengths);
+        kfree(dev->tx_lengths);
         dev->tx_lengths = NULL;
     }
 }
@@ -167,18 +169,18 @@ static int initialize_desc_ring(struct imx6_eth_data *dev, ps_dma_man_t *dma_man
     }
     ps_dma_cache_clean_invalidate(dma_man, rx_ring.virt, sizeof(struct descriptor) * dev->rx_size);
     ps_dma_cache_clean_invalidate(dma_man, tx_ring.virt, sizeof(struct descriptor) * dev->tx_size);
-    dev->rx_cookies = malloc(sizeof(void*) * dev->rx_size);
-    dev->tx_cookies = malloc(sizeof(void*) * dev->tx_size);
-    dev->tx_lengths = malloc(sizeof(unsigned int) * dev->tx_size);
+    dev->rx_cookies = kmalloc(sizeof(void*) * dev->rx_size);
+    dev->tx_cookies = kmalloc(sizeof(void*) * dev->tx_size);
+    dev->tx_lengths = kmalloc(sizeof(unsigned int) * dev->tx_size);
     if (!dev->rx_cookies || !dev->tx_cookies || !dev->tx_lengths) {
         if (dev->rx_cookies) {
-            free(dev->rx_cookies);
+            kfree(dev->rx_cookies);
         }
         if (dev->tx_cookies) {
-            free(dev->tx_cookies);
+            kfree(dev->tx_cookies);
         }
         if (dev->tx_lengths) {
-            free(dev->tx_lengths);
+            kfree(dev->tx_lengths);
         }
         LOG_ERROR("Failed to malloc");
         free_desc_ring(dev, dma_man);
@@ -342,7 +344,7 @@ int ethif_imx6_init(struct eth_driver *eth_driver, ps_io_ops_t io_ops, void *con
     struct imx6_eth_data *eth_data = NULL;
     uint8_t mac[6];
 
-    eth_data = (struct imx6_eth_data*)malloc(sizeof(struct imx6_eth_data));
+    eth_data = (struct imx6_eth_data*)kmalloc(sizeof(struct imx6_eth_data));
     if (eth_data == NULL) {
         LOG_ERROR("Failed to allocate eth data struct");
         goto error;
@@ -411,7 +413,7 @@ error:
         ocotp_free(ocotp, &io_ops.io_mapper);
     }
     if (eth_data) {
-        free(eth_data);
+        kfree(eth_data);
     }
     free_desc_ring(eth_data, &io_ops.dma_manager);
     return -1;

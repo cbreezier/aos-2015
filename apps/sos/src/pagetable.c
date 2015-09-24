@@ -96,27 +96,32 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     seL4_ARM_PageTable pt_cap = 0;
     seL4_Word pt_addr = 0;
 
-    seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
-    //dprintf(0, "%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
-    err = usr_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
-    if (err) {
-        dprintf(0, "warning warning c err %d\n", err);
-        frame_free(svaddr);
-        sync_release(ft_lock);
-        return err;
+    printf("user cap = %u\n", ft[frame_idx].user_cap);
+    // Only map in if not already mapped in
+    if (!ft[frame_idx].user_cap) {
+        seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
+        //dprintf(0, "%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
+        err = usr_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
+        if (err) {
+            dprintf(0, "warning warning c err %d\n", err);
+            frame_free(svaddr);
+            sync_release(ft_lock);
+            return err;
+        }
+
+        if (pt_cap && pt_addr) {
+            proc->as->pt_caps[tl_idx] = pt_cap;
+            proc->as->pt_addrs[tl_idx] = pt_addr;
+        }
+
+        ft[frame_idx].user_cap = cap;
+
+        ft[frame_idx].referenced = true;
+        ft[frame_idx].vaddr_proc = proc;
+        ft[frame_idx].vaddr = vaddr;
+
+        proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
     }
-
-    if (pt_cap && pt_addr) {
-        proc->as->pt_caps[tl_idx] = pt_cap;
-        proc->as->pt_addrs[tl_idx] = pt_addr;
-    }
-
-    ft[frame_idx].user_cap = cap;
-    ft[frame_idx].referenced = true;
-    ft[frame_idx].vaddr_proc = proc;
-    ft[frame_idx].vaddr = vaddr;
-
-    proc->as->page_directory[tl_idx][sl_idx].frame = svaddr;
 
     sync_release(ft_lock);
 

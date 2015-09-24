@@ -159,7 +159,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
         return EFAULT;
     }
 
-    printf("Finished initialising timer\n");
+    // printf("Finished initialising timer\n");
 
     return 0;
 }
@@ -312,7 +312,7 @@ int remove_timer(uint32_t id) {
 
         if (head->next == NULL) {
             allocator_release_num(allocator, head->id); 
-            free(head);
+            kfree(head);
             sync_release(timer_lock);
             return 0;
         }
@@ -326,7 +326,7 @@ int remove_timer(uint32_t id) {
         struct list_node *to_free = head;
         head = head->next;
         allocator_release_num(allocator, to_free->id);
-        free(to_free);
+        kfree(to_free);
 
         /* Must reschedule timer since we modified the head */
         reschedule(head->delay);
@@ -391,7 +391,7 @@ int timer_interrupt(void) {
             }
             to_free->callback(to_free->id, to_free->data);
             allocator_release_num(allocator, to_free->id);
-            free(to_free);
+            kfree(to_free);
         }
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
         assert(!err);
@@ -433,8 +433,8 @@ int stop_timer(void) {
     epit_clocks[0]->sr = 0xFFFFFFFF;
     epit_clocks[1]->sr = 0xFFFFFFFF;
 
-    free((struct epit_clocks*)epit_clocks[0]);
-    free((struct epit_clocks*)epit_clocks[1]);
+    kfree((struct epit_clocks*)epit_clocks[0]);
+    kfree((struct epit_clocks*)epit_clocks[1]);
 
     destroy_allocator(allocator);
 
@@ -445,7 +445,7 @@ int stop_timer(void) {
     while (cur != NULL) {
         prev = cur;
         cur = cur->next;
-        free(prev);
+        kfree(prev);
     }
     return 0;
 }

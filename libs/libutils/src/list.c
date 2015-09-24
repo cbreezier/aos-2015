@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <utils/list.h>
+#include <utils/alloc_wrappers.h>
 
 typedef struct list_node node_t;
 
@@ -22,7 +23,7 @@ int list_init(list_t *l) {
 }
 
 static node_t *make_node(void *data) {
-    node_t *n = malloc(sizeof(*n));
+    node_t *n = kmalloc(sizeof(*n));
     if (n != NULL) {
         n->data = data;
         n->next = NULL;
@@ -120,7 +121,7 @@ int list_remove_all(list_t *l) {
     assert(l != NULL);
     for (node_t *n = l->head; n != NULL;) {
         node_t *temp = n->next;
-        free(n);
+        kfree(n);
         n = temp;
     }
     l->head = NULL;

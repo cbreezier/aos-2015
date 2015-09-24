@@ -37,6 +37,7 @@
 #include "bitops.h"
 #include "../unimplemented.h"
 #include "string.h"
+#include <utils/alloc_wrappers.h>
 
 /* Generic PHY support and helper functions */
 
@@ -477,7 +478,7 @@ static struct phy_device *phy_device_create(struct mii_dev *bus, int addr,
 
 	/* We allocate the device, and initialize the
 	 * default values */
-	dev = malloc(sizeof(*dev));
+	dev = kmalloc(sizeof(*dev));
 	if (!dev) {
 		printf("Failed to allocate PHY device for %s:%d\n",
 			bus->name, addr);

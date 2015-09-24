@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <utils/alloc_wrappers.h>
 
 #include "walker.h"
 #include "acpi.h"
@@ -338,19 +339,19 @@ acpi_init(ps_io_mapper_t io_mapper)
     LOG_ERROR("Warning: acpi tables are not exported on the master kernel\n");
 #endif
 
-    acpi_t *acpi = (acpi_t *) malloc(sizeof(acpi_t));
+    acpi_t *acpi = (acpi_t *) kmalloc(sizeof(acpi_t));
     if (acpi == NULL) {
         fprintf(stderr, "Failed to allocate memory of size %u\n", sizeof(acpi));
         assert(acpi != NULL);
         return NULL;
     }
 
-    acpi->regions = (RegionList_t *) malloc(sizeof(RegionList_t));
+    acpi->regions = (RegionList_t *) kmalloc(sizeof(RegionList_t));
 
     if (acpi->regions == NULL) {
         fprintf(stderr, "Failed to allocate memory of size %u\n", sizeof(acpi));
         assert(acpi->regions != NULL);
-        free(acpi);
+        kfree(acpi);
         return NULL;
     }
 
@@ -362,8 +363,8 @@ acpi_init(ps_io_mapper_t io_mapper)
                                  (void *) BIOS_PADDR_START, (void *) BIOS_PADDR_END);
     if (acpi->rsdp == NULL) {
         fprintf(stderr, "Failed to find rsdp\n");
-        free(acpi->regions);
-        free(acpi);
+        kfree(acpi->regions);
+        kfree(acpi);
         assert(acpi->rsdp != NULL);
         return NULL;
     }
