@@ -69,7 +69,6 @@ const seL4_BootInfo* _boot_info;
 process_t tty_test_process;
 
 sync_mutex_t network_irq_lock;
-sync_mutex_t lock_lock;
 
 
 /*
@@ -156,8 +155,6 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
     /* Process system call */
     dprintf(-1, "got syscall number %u\n", syscall_number);
 
-    sync_acquire(lock_lock);
-
     seL4_MessageInfo_t reply;
     switch (syscall_number) {
     default:
@@ -202,7 +199,6 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
         break;
     }
 
-    sync_release(lock_lock);
 }
 
 void syscall_loop(seL4_CPtr ep) {
@@ -239,7 +235,6 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_Word vaddr = seL4_GetMR(1);
             seL4_Word instruction_fault = seL4_GetMR(2);
 
-            sync_acquire(lock_lock);
 
             /* Page fault */
             dprintf(-1, "vm fault at 0x%08x, pc = 0x%08x, pid = %d, %s\n", vaddr,
@@ -285,7 +280,6 @@ void syscall_loop(seL4_CPtr ep) {
                 seL4_Send(reply_cap, reply);
             }
             cspace_free_slot(cur_cspace, reply_cap);
-            sync_release(lock_lock);
         }else if(label == seL4_NoFault) {
             /* System call */
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -561,7 +555,6 @@ int main(void) {
 
     /* Initialise network irq lock */
     network_irq_lock = sync_create_mutex();
-    lock_lock = sync_create_mutex();
 
     /* Initialise alloc wrappers */
     alloc_wrappers_init();

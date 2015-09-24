@@ -18,8 +18,6 @@
 #define verbose 2
 
 void plogf(const char *msg, ...);
-                    //if (printf_lock) sync_acquire(printf_lock); 
-                    //if (printf_lock) sync_release(printf_lock); 
 
 #define _dprintf(v, col, args...) \
             do { \
@@ -32,7 +30,12 @@ void plogf(const char *msg, ...);
 
 //#define dprintf(v, ...) _dprintf(v, "\033[22;33m", __VA_ARGS__)
 
-#define dprintf(v, ...) printf(__VA_ARGS__)
+#define dprintf(v, ...) \
+    if ((v) < verbose) { \
+        if (printf_lock) sync_acquire(printf_lock); \
+        printf(__VA_ARGS__); \
+        if (printf_lock) sync_release(printf_lock); \
+    }
 
 #define WARN(...) _dprintf(-1, "\033[1;31mWARNING: ", __VA_ARGS__)
 

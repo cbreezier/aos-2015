@@ -642,12 +642,14 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
     int err = 0;
     int pid = (int)seL4_GetMR(1);
 
+    dprintf(0, "wait piding\n");
     if (pid < -1 || pid >= MAX_PROCESSES) {
         err = EINVAL;
         goto sos_waitid_end;
     }
 
     if (pid != -1) {
+        dprintf(0, "acquiring proc lock\n");
         sync_acquire(processes[pid].proc_lock);
         /* Process we want to wait on does not exist */
         if (processes[pid].pid == -1) {
@@ -662,13 +664,16 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
             sync_release(processes[pid].proc_lock);
             goto sos_waitid_end;
         }
+        dprintf(0, "releasing proc lock\n");
         sync_release(processes[pid].proc_lock);
     }
 
+    dprintf(0, "doing ??\n");
     seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
     proc->wait_ep = async_ep;
     proc->wait_pid = pid;
 
+    dprintf(0, "waiting\n");
     seL4_Wait(async_ep, NULL);
     /* 
      * At this point, our wait_pid is the child that exited (set by
@@ -677,6 +682,7 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
 
 sos_waitid_end:
     asm("nop");
+    dprintf(0, "at the end\n");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);

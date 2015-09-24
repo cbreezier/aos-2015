@@ -531,6 +531,7 @@ int main(void) {
 //
 //    return 0;
     in = open("console", O_RDONLY);
+    printf("in = %d\n", in);
 //    pt_test();
 //    printf("IT WORKED\n");
 
