@@ -436,6 +436,9 @@ cspace_t *cspace_create(int levels) /* either 1 or 2 level */
                                     c->guard);
     assert(c->root_cnode != CSPACE_NULL);
     cspace_delete_cap(cur_cspace,slot); /* delete the old 'short' cap to the cnode */ 
+
+    c->lock = sync_create_mutex();
+    sel4_error(!c->lock, "Cannot initialise cspace lock");
     return c;
 }
 
@@ -449,6 +452,7 @@ cspace_err_t cspace_destroy(cspace_t *c)
 
     assert(cur_cspace != c); /* suicide is not supported */
     assert(cur_cspace != NULL);
+    if (c->lock) sync_acquire(c->lock);
     
     /*
      * we don't do anything clever here:
@@ -480,6 +484,7 @@ cspace_err_t cspace_destroy(cspace_t *c)
     cspace_delete_cap(cur_cspace, c->root_cnode); /* expectation is that this is last cap to cnode */
     cspace_ut_free(c->addr,CSPACE_NODE_SIZE_IN_MEM_BITS); 
     
+    if (c->lock) sync_destroy_mutex(c->lock);
     cspace_free(c);
     return CSPACE_NOERROR;
 }
@@ -504,6 +509,7 @@ seL4_CPtr cspace_alloc_slot(cspace_t *c)
      */
     seL4_CPtr r;
     assert(c != NULL);
+    if (c->lock) sync_acquire(c->lock);
     
     switch(c->levels) {
     case 1:
@@ -520,11 +526,14 @@ seL4_CPtr cspace_alloc_slot(cspace_t *c)
             c->num_free_slots--;
             r = cspace_alloc_level1_index(c); /* index same as CPtr for single level */
             if (r == CSPACE_NOSLOT){
+                if (c->lock) sync_release(c->lock);
                 return CSPACE_NULL;
             }
+            if (c->lock) sync_release(c->lock);
             return r;
         }
         else {
+            if (c->lock) sync_release(c->lock);
             return CSPACE_NULL; /* we've fill the single level cspace */
         }
         break;
@@ -533,13 +542,17 @@ seL4_CPtr cspace_alloc_slot(cspace_t *c)
 	 * for the level 2, the alloc function does everything, including potentially allocating new
 	 * level-2 cnodes to make space. 
 	 */ 
-        return cspace_alloc_level2_slot(c);
+        asm("nop");
+        seL4_CPtr ret = cspace_alloc_level2_slot(c);
+        if (c->lock) sync_release(c->lock);
+        return ret;
         break;
         
     default:
         assert(0); /* should never get here */
         break;
     }
+    if (c->lock) sync_release(c->lock);
     return CSPACE_NULL;
 
 }
@@ -547,6 +560,7 @@ cspace_err_t cspace_free_slot(cspace_t *c, seL4_CPtr slot)
 {
     assert(c != NULL);
     assert(slot != CSPACE_NULL);
+    if (c->lock) sync_acquire(c->lock);
 
     /*
      * Mark appropriate slot as free.
@@ -558,14 +572,17 @@ cspace_err_t cspace_free_slot(cspace_t *c, seL4_CPtr slot)
     switch(c->levels) {
     case 1:
         c->num_free_slots++;
+        if (c->lock) sync_release(c->lock);
         return cspace_free_level1_index(c,slot); /* index same as CPtr for single level */
         break;
     case 2:
+        if (c->lock) sync_release(c->lock);
         return cspace_free_level2_slot(c,slot);
         break;
     default:
         assert(0); /* should never get here */
     }
+    if (c->lock) sync_release(c->lock);
     return CSPACE_NOERROR;
 }
 
@@ -580,9 +597,11 @@ seL4_Error cspace_ut_retype_addr(seL4_Word addr,
     seL4_CPtr new;
     seL4_Error err;
 
+    if (c->lock) sync_acquire(c->lock);
                                          
     new = cspace_alloc_slot(c);
     if (new == CSPACE_NULL) {
+        if (c->lock) sync_release(c->lock);
         return seL4_NotEnoughMemory; /* Nearest sane error */
     }
     assert(p != NULL);
@@ -590,6 +609,7 @@ seL4_Error cspace_ut_retype_addr(seL4_Word addr,
     
     err = cspace_ut_translate(addr, &ut_cptr,&offset);
     if(err){
+        if (c->lock) sync_release(c->lock);
         return err;
     }
 
@@ -615,6 +635,7 @@ seL4_Error cspace_ut_retype_addr(seL4_Word addr,
            err    
            );
 #endif
+    if (c->lock) sync_release(c->lock);
     return err;
 }
 
@@ -627,6 +648,14 @@ seL4_CPtr cspace_copy_cap(cspace_t *dest,
     seL4_Error err;
 
     assert(dest != NULL && src != NULL);
+    /* Enforce arbitrary locking order -- avoid deadlocking */
+    if (dest < src) {
+        if (dest->lock) sync_acquire(dest->lock);    
+        if (src->lock) sync_acquire(src->lock);
+    } else {
+        if (src->lock) sync_acquire(src->lock);
+        if (dest->lock) sync_acquire(dest->lock);    
+    }
         
     slot = cspace_alloc_slot(dest);
     assert(slot != CSPACE_NULL);
@@ -639,6 +668,8 @@ seL4_CPtr cspace_copy_cap(cspace_t *dest,
                           CSPACE_DEPTH, 
                           rights);
     sel4_error(err, "Copying cap");
+    if (dest->lock) sync_release(dest->lock);
+    if (src->lock) sync_release(src->lock);
     
     return slot;
 }
@@ -647,12 +678,14 @@ cspace_err_t cspace_delete_cap(cspace_t *c, seL4_CPtr cap)
 {
     seL4_Error err;
     assert(c != NULL);
+    if (c->lock) sync_acquire(c->lock);
     
     err = seL4_CNode_Delete(c->root_cnode,
                             cap,
                             CSPACE_DEPTH);
     sel4_error(err, "Copying cap");
     
+    if (c->lock) sync_release(c->lock);
     return cspace_free_slot(c,cap);
 }
 
@@ -666,7 +699,15 @@ seL4_CPtr cspace_mint_cap(cspace_t *dest,
     seL4_Error err;
 
     assert(dest != NULL && src != NULL);
-    
+    /* Enforce arbitrary locking order -- avoid deadlocking */
+    if (dest < src) {
+        if (dest->lock) sync_acquire(dest->lock);    
+        if (src->lock) sync_acquire(src->lock);
+    } else {
+        if (src->lock) sync_acquire(src->lock);
+        if (dest->lock) sync_acquire(dest->lock);    
+    }
+ 
     slot = cspace_alloc_slot(dest);
     assert(slot != CSPACE_NULL);
     
@@ -680,6 +721,8 @@ seL4_CPtr cspace_mint_cap(cspace_t *dest,
                           badge);
     sel4_error(err, "Minting a cap");
     
+    if (dest->lock) sync_release(dest->lock);
+    if (src->lock) sync_release(src->lock);
     return slot;
 }
 
@@ -688,7 +731,15 @@ seL4_CPtr cspace_move_cap(cspace_t *dest, cspace_t *src, seL4_CPtr src_cap)
     seL4_CPtr slot;
     seL4_Error err;
     assert(dest != NULL && src != NULL);
-    
+    /* Enforce arbitrary locking order -- avoid deadlocking */
+    if (dest < src) {
+        if (dest->lock) sync_acquire(dest->lock);    
+        if (src->lock) sync_acquire(src->lock);
+    } else {
+        if (src->lock) sync_acquire(src->lock);
+        if (dest->lock) sync_acquire(dest->lock);    
+    }
+
     slot = cspace_alloc_slot(dest);
     assert(slot != CSPACE_NULL);
     
@@ -700,6 +751,8 @@ seL4_CPtr cspace_move_cap(cspace_t *dest, cspace_t *src, seL4_CPtr src_cap)
                           CSPACE_DEPTH);
     sel4_error(err, "Moving cap");
     
+    if (dest->lock) sync_release(dest->lock);
+    if (src->lock) sync_release(src->lock);
     return slot;
 }
 
@@ -711,7 +764,15 @@ seL4_CPtr cspace_mutate_cap(cspace_t *dest,
     seL4_CPtr slot;
     seL4_Error err;
     assert(dest != NULL && src != NULL);
-    
+    /* Enforce arbitrary locking order -- avoid deadlocking */
+    if (dest < src) {
+        if (dest->lock) sync_acquire(dest->lock);    
+        if (src->lock) sync_acquire(src->lock);
+    } else {
+        if (src->lock) sync_acquire(src->lock);
+        if (dest->lock) sync_acquire(dest->lock);    
+    }
+
     slot = cspace_alloc_slot(dest);
     assert(slot != CSPACE_NULL);
     
@@ -724,6 +785,8 @@ seL4_CPtr cspace_mutate_cap(cspace_t *dest,
                             badge);
     sel4_error(err,"Mutating cap");
     
+    if (dest->lock) sync_release(dest->lock);
+    if (src->lock) sync_release(src->lock);
     return slot;
 }
 
@@ -733,11 +796,13 @@ cspace_err_t cspace_recycle_cap(cspace_t *c,
     seL4_Error err;
     assert(c != NULL);
     
+    if (c->lock) sync_acquire(c->lock);
     err = seL4_CNode_Recycle(c->root_cnode,
                              cap,
                              CSPACE_DEPTH);
     sel4_error(err, "Recycling cap");
     
+    if (c->lock) sync_release(c->lock);
     return CSPACE_NOERROR;
 }
 
@@ -747,12 +812,14 @@ cspace_err_t cspace_revoke_cap(cspace_t *c,
 {
     seL4_Error err;
     assert(c != NULL);
+    if (c->lock) sync_acquire(c->lock);
     
     err = seL4_CNode_Revoke(c->root_cnode,
                             cap,
                             CSPACE_DEPTH);
     sel4_error(err, "Revoking cap");
 
+    if (c->lock) sync_release(c->lock);
     return CSPACE_NOERROR;
 }
 
@@ -774,6 +841,7 @@ seL4_CPtr cspace_save_reply_cap(cspace_t *c)
     
     seL4_CPtr slot;
     seL4_Error err;
+    if (c->lock) sync_acquire(c->lock);
     slot = cspace_alloc_slot(c);
     assert(slot != CSPACE_NULL);
     
@@ -782,6 +850,7 @@ seL4_CPtr cspace_save_reply_cap(cspace_t *c)
                                 CSPACE_DEPTH);
     sel4_error(err, "Saving reply cap");
     
+    if (c->lock) sync_release(c->lock);
     return slot;
 }
 seL4_CPtr cspace_irq_control_get_cap(cspace_t *dest, 
@@ -790,6 +859,7 @@ seL4_CPtr cspace_irq_control_get_cap(cspace_t *dest,
 {
     seL4_CPtr slot;
     seL4_Error err;
+    if (dest->lock) sync_acquire(dest->lock);
     slot = cspace_alloc_slot(dest);
     assert(slot != CSPACE_NULL);
     
@@ -799,6 +869,7 @@ seL4_CPtr cspace_irq_control_get_cap(cspace_t *dest,
                               CSPACE_DEPTH);
     sel4_error(err, "Getting an IRQ control cap");
     
+    if (dest->lock) sync_release(dest->lock);
     return slot;
     
 }

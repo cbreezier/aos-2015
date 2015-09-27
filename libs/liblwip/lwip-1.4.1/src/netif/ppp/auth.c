@@ -358,7 +358,7 @@ set_noauth_addr(char **argv)
     int l = strlen(addr);
     struct wordlist *wp;
 
-    wp = (struct wordlist *) malloc(sizeof(struct wordlist) + l + 1);
+    wp = (struct wordlist *) kmalloc(sizeof(struct wordlist) + l + 1);
     if (wp == NULL)
       novm("allow-ip argument");
     wp->word = (char *) (wp + 1);
@@ -1270,7 +1270,7 @@ free_wordlist(struct wordlist *wp)
 
   while (wp != NULL) {
     next = wp->next;
-    free(wp);
+    kfree(wp);
     wp = next;
   }
 }

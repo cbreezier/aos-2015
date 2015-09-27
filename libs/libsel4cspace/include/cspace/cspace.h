@@ -39,6 +39,7 @@
 #include <stdint.h>
 #include <sel4/types.h>
 #include <stdlib.h>
+#include <sync/mutex.h>
 
 /* #define CSPACE_DEBUG */
 
@@ -82,6 +83,8 @@ typedef struct {
 							       * An array of dynamically allocated
 							       * arrays to manage free slots.
 							       */
+
+    sync_mutex_t lock;
 } cspace_t;
 
 /**

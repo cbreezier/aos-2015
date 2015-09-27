@@ -105,7 +105,7 @@ static int remove(list_t *l, void *data, int (*cmp)(void*, void*),
                 prev->next = n->next;
             }
             if (should_free) {
-                free(n);
+                kfree(n);
             }
             return 0;
         }

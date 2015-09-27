@@ -19,6 +19,7 @@
 #include "proc.h"
 #include "console.h"
 #include "alloc_wrappers.h"
+#include "frametable.h"
 
 
 sync_mutex_t proc_table_lock;
@@ -94,8 +95,10 @@ int proc_create(pid_t parent, char *program_name) {
     dprintf(0, "Added IPC region\n");
 
     /* Create an IPC buffer */
-    err = pt_add_page(&processes[pid], PROCESS_IPC_BUFFER, NULL, &processes[pid].ipc_buffer_cap);
+    seL4_Word ipcbuf_svaddr;
+    err = pt_add_page(&processes[pid], PROCESS_IPC_BUFFER, &ipcbuf_svaddr, &processes[pid].ipc_buffer_cap);
     conditional_panic(err, "Unable to add page table page for ipc buffer\n");
+    frame_change_swappable(ipcbuf_svaddr, 0);
 
     dprintf(0, "minting ep\n");
     /* Copy the fault endpoint to the user app to enable IPC */

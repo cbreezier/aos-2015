@@ -1,11 +1,11 @@
 #include <stdio.h>
+#include <sys/debug.h>
 #include <sys/panic.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include "ut_manager/ut.h"
 #include "alloc_wrappers.h"
 
-sync_mutex_t malloc_lock;
 sync_mutex_t ut_lock;
 
 void alloc_wrappers_init() {
@@ -25,8 +25,10 @@ void *kmalloc(size_t n) {
      * in order to also use kmalloc when sos is initing.
      */
     if (malloc_lock) sync_acquire(malloc_lock);
+    else dprintf(0, "malloc lock null\n");
     void *ret = malloc(n);
     if (malloc_lock) sync_release(malloc_lock);
+    else dprintf(0, "2nd malloc lock null\n");
     return ret;
 }
 

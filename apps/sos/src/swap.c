@@ -112,7 +112,7 @@ static int swapout() {
         return nwritten;
     }
 
-    return _cur_ft_idx;
+    return _cur_ft_idx++;
 }
 
 int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {

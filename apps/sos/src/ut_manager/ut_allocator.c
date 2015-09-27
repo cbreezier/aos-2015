@@ -261,7 +261,7 @@ static suballocator_t* _new_suballocator(int sizebits){
     /* Create the bitfield */
     pool_node->bitfield = new_bitfield(units, BITFIELD_INIT_EMPTY);
     if(pool_node->bitfield == NULL){
-        free(pool_node);
+        kfree(pool_node);
         do_ut_free_from_bitfield(primary_addr, PRIMARY_POOL_SIZEBITS);
         return NULL;
     }
@@ -335,7 +335,7 @@ static void do_ut_free_from_list(seL4_Word addr, int sizebits){
         _pool_list_detach(pool_node);
         do_ut_free_from_bitfield(pool_node->base, PRIMARY_POOL_SIZEBITS);
         destroy_bitfield(pool_node->bitfield);
-        free(pool_node);
+        kfree(pool_node);
     }
 }
 

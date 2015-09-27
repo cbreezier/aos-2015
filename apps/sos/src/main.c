@@ -144,13 +144,10 @@ void copyMR(seL4_Word *buf, bool in, size_t num_args) {
     }
 }
 
-void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap) {
+void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Word *saved_mr) {
     seL4_Word syscall_number;
 
-    syscall_number = seL4_GetMR(0);
-
-    seL4_Word saved_mr[seL4_MsgMaxLength];
-    copyMR(saved_mr, true, num_args + 1);
+    syscall_number = saved_mr[0];
 
     /* Process system call */
     dprintf(-1, "got syscall number %u\n", syscall_number);
@@ -282,10 +279,15 @@ void syscall_loop(seL4_CPtr ep) {
             cspace_free_slot(cur_cspace, reply_cap);
         }else if(label == seL4_NoFault) {
             /* System call */
+            
+            size_t num_args = seL4_MessageInfo_get_length(message) - 1;
+            seL4_Word saved_mr[seL4_MsgMaxLength];
+            copyMR(saved_mr, true, num_args + 1);
+
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
             assert(reply_cap != CSPACE_NULL);
 
-            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply_cap);
+            handle_syscall(badge, num_args, reply_cap, saved_mr);
 
         } else if (label == seL4_UserException) {
             dprintf(0, "User exception, pid = %d\n", badge); 
@@ -350,7 +352,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 
         data = cpio_get_entry(_cpio_archive, i, &name, &size);
         if(data != NULL){
-            dprintf(1,"| %3d   | %16s | %p | %12d |\n", i, name, data, size);
+            dprintf(1,"| %3d   | %16s | %p | %12lu |\n", i, name, data, size);
         }else{
             break;
         }
@@ -465,10 +467,12 @@ void setup_tick_timer(uint32_t id, void *data) {
 }
 
 void nfs_tick(uint32_t id, void *data) {
+    if(malloc_lock) sync_acquire(malloc_lock);
     sync_acquire(nfs_lock);
     nfs_timeout();
     sync_release(nfs_lock);
     register_timer(NFS_TICK_TIME, nfs_tick, data);
+    if(malloc_lock) sync_release(malloc_lock);
 }
 
 //static void test0() {
@@ -553,8 +557,12 @@ int main(void) {
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
+    cur_cspace->lock = sync_create_mutex();
+    conditional_panic(!cur_cspace->lock, "Cannot create cur_cspace lock");
+
     /* Initialise network irq lock */
     network_irq_lock = sync_create_mutex();
+    conditional_panic(!network_irq_lock, "Cannot create network irq lock");
 
     /* Initialise alloc wrappers */
     alloc_wrappers_init();

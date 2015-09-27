@@ -31,7 +31,8 @@ seL4_Word low_addr, hi_addr, first_valid_frame, num_frames;
 
 void frametable_init() {
     ut_find_memory(&low_addr, &hi_addr);
-    hi_addr -= PAGE_SIZE*128;
+    //hi_addr -= PAGE_SIZE*128;
+    hi_addr -= PAGE_SIZE*78;
     dprintf(0, "low addr = %x, high = %x\n", low_addr, hi_addr);
 
     seL4_Word memory_size = hi_addr - low_addr;

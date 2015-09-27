@@ -197,7 +197,7 @@ rpc_timeout(int ms)
     for (q_item = queue; q_item != NULL; q_item = q_item->next) {
         q_item->timeout += ms;
         if (q_item->timeout > RETRANSMIT_DELAY_MS) {
-            debug("rpc_timeout: Retransmission of 0x%08x\n", q_item->xid);
+            //debug("rpc_timeout: Retransmission of 0x%08x\n", q_item->xid);
             if(my_udp_send(q_item->pcb, q_item->pbuf)){
                 /* Try again later */
             }else{
@@ -216,7 +216,7 @@ add_to_queue(struct pbuf *pbuf, struct udp_pcb* pcb,
     /* Need a lock here */
     struct rpc_queue *q_item;
     struct rpc_queue *tmp;
-    q_item = malloc(sizeof(struct rpc_queue));
+    q_item = kmalloc(sizeof(struct rpc_queue));
     assert(q_item != NULL);
 
     q_item->next = NULL;
@@ -368,7 +368,7 @@ rpc_call(struct pbuf *pbuf, int len, struct udp_pcb *pcb,
     q_item = get_from_queue(xid);
     assert(q_item);
     pbuf_free(q_item->pbuf);
-    free(q_item);
+    kfree(q_item);
     return RPCERR_COMM;
 }
 

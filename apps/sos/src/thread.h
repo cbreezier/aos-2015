@@ -6,7 +6,7 @@
 #define NUM_SYNC_SOS_THREADS 3
 #define NUM_ASYNC_SOS_THREADS 4
 #define NUM_SOS_THREADS (NUM_ASYNC_SOS_THREADS + NUM_SYNC_SOS_THREADS)
-#define STACK_NUM_FRAMES 1
+#define STACK_NUM_FRAMES 10
 
 struct sos_thread {
     uint32_t tcb_addr;

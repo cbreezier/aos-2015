@@ -145,15 +145,16 @@ void pt_remove_page(process_t *proc, struct pt_entry *pe) {
         seL4_ARM_Page_Unmap(user_cap);
 
         /* Remove all child capabilities */
-        int err = cspace_revoke_cap(cur_cspace, user_cap);
-        conditional_panic(err, "unable to revoke cap(free)");
+        //int err = cspace_revoke_cap(cur_cspace, user_cap);
+        //conditional_panic(err, "unable to revoke cap(free)");
 
         /* Remove the capability itself */
-        err = cspace_delete_cap(cur_cspace, user_cap);
+        int err = cspace_delete_cap(cur_cspace, user_cap);
         conditional_panic(err, "unable to delete cap(free)");
     }
     int err = frame_free(pe->frame);
     conditional_panic(err, "Unable to delete frame(pt_remove_page)");
+    conditional_panic(ft[svaddr_to_frame_idx(pe->frame)].user_cap, "user cap not set to NULL");
     sync_release(ft_lock);
 }
 

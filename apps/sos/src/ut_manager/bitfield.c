@@ -52,7 +52,7 @@ bitfield_t* new_bitfield(int size, enum bf_init_state state){
     bytes = CEILING(size)/BITS_PER_BYTE;
     bf->b = (char*)kmalloc(bytes);
     if(bf->b == NULL){
-        free(bf);
+        kfree(bf);
         return NULL;
     }
 
@@ -78,8 +78,8 @@ bitfield_t* new_bitfield(int size, enum bf_init_state state){
 }
 
 void destroy_bitfield(bitfield_t* bf){
-    free(bf->b);
-    free(bf);
+    kfree(bf->b);
+    kfree(bf);
 }
 
 
