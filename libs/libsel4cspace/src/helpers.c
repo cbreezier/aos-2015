@@ -14,8 +14,6 @@
 #include <assert.h>
 #include <stdio.h>
 
-
-
 int cspace_retype_depth(cspace_t *c)
 {
     if (c->levels == 1) {

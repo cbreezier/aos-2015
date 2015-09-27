@@ -410,11 +410,6 @@ int timer_interrupt(void) {
 timestamp_t time_stamp(void) {
     uint32_t epit1_cnr = epit_clocks[1]->cnr;
     if (epit_clocks[1]->sr) {
-        /* 
-         * Call twice to handle the possibility that epit1 might also
-         * have a queued interrupt.
-         */
-        timer_interrupt();
         timer_interrupt();
         epit1_cnr = epit_clocks[1]->cnr;
     } 

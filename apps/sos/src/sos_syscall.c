@@ -567,7 +567,7 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
     dprintf(0, "all done\n");
     
 sos_execve_end:
-    if (path != NULL) {
+    if (path) {
         dprintf(0, "kfreeing\n");
         kfree(path);   
         dprintf(0, "done kfreeing\n");

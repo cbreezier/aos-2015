@@ -222,7 +222,7 @@ void proc_exit(process_t *proc) {
     // err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
     // conditional_panic(err, "unable to revoke user ep cap");
 
-    err = cspace_delete_cap(cur_cspace, proc->user_ep_cap);
+    err = cspace_delete_cap(proc->croot, proc->user_ep_cap);
     conditional_panic(err, "unable to delete user ep cap");
 
     /* Destroy process cspace */

@@ -165,7 +165,7 @@ static int cp(int argc, char **argv) {
         num_written = write(fd_out, buf, num_read);
 
     if (num_read == -1 || num_written == -1) {
-        printf("error on cp\n");
+        perror("error on cp");
         return 1;
     }
 

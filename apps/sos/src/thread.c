@@ -56,7 +56,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
 
         seL4_Uint8 priority = (i < NUM_ASYNC_SOS_THREADS) ? 255 : 254;
         err = seL4_TCB_Configure(thread.tcb_cap,
-                                 sos_interrupt_ep_cap, 
+                                 0, 
                                  priority,
                                  cur_cspace->root_cnode,
                                  cur_cspace->guard,
@@ -112,7 +112,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
 
         /* Name thread (for debugging only) */
         char buf[20];
-        sprintf(buf, "Thread %d", i);
+        sprintf(buf, "Thread %d - %s", i, i < NUM_ASYNC_SOS_THREADS ? "async" : "sync");
         seL4_DebugNameThread(thread.tcb_cap, buf);
     }
 }

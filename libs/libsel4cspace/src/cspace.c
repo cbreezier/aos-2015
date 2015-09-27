@@ -307,17 +307,22 @@ cspace_t *cspace_create(int levels) /* either 1 or 2 level */
 
     
     c = cspace_malloc(sizeof(cspace_t));
+    printf("done maloc, c = %x\n", c);
     assert(c != NULL);
     
     addr = cspace_ut_alloc(CSPACE_NODE_SIZE_IN_MEM_BITS);
+    printf("done cspace ut alloc, addr = %x\n", addr);
     assert(addr != 0);
     c->addr = addr;
     err = cspace_ut_translate(addr, &ut_cptr, &offset);
+    printf("done translate, cptr = %u, offset = %u\n", ut_cptr, offset);
     assert(err == CSPACE_NOERROR);
     
     slot = cspace_alloc_slot(cur_cspace);
+    printf("done alloc slot, slot = %u\n", slot);
     assert(slot != CSPACE_NULL);
     
+    printf("cur_cspace->root-cnode = %u\n", cur_cspace->root_cnode);
     r = seL4_Untyped_RetypeAtOffset(ut_cptr, 
                                     seL4_CapTableObject,
                                     offset,
@@ -510,6 +515,10 @@ seL4_CPtr cspace_alloc_slot(cspace_t *c)
     seL4_CPtr r;
     assert(c != NULL);
     if (c->lock) sync_acquire(c->lock);
+
+#ifdef CSPACE_DEBUG
+    printf("cspace levels = %u\n", c->levels);
+#endif
     
     switch(c->levels) {
     case 1:
@@ -638,6 +647,7 @@ seL4_Error cspace_ut_retype_addr(seL4_Word addr,
     if (c->lock) sync_release(c->lock);
     return err;
 }
+#define CSPACE_DEBUG
 
 seL4_CPtr cspace_copy_cap(cspace_t *dest,
                           cspace_t *src, 

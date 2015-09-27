@@ -218,7 +218,7 @@ void syscall_loop(seL4_CPtr ep) {
 
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
-                timer_interrupt();
+                ;//timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
                 sync_acquire(network_irq_lock);
@@ -469,7 +469,7 @@ void setup_tick_timer(uint32_t id, void *data) {
 void nfs_tick(uint32_t id, void *data) {
     if(malloc_lock) sync_acquire(malloc_lock);
     sync_acquire(nfs_lock);
-    nfs_timeout();
+    //nfs_timeout();
     sync_release(nfs_lock);
     register_timer(NFS_TICK_TIME, nfs_tick, data);
     if(malloc_lock) sync_release(malloc_lock);
@@ -610,6 +610,8 @@ int main(void) {
 
     //syscall_loop(_sos_ipc_ep_cap);
     //seL4_Wait(sos_threads[0].wakeup_async_ep, NULL);
+
+    printf("cur cpsace levels = %u\n", cur_cspace->levels);
     syscall_loop(_sos_interrupt_ep_cap);
 
     /* Not reached */
