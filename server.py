@@ -51,6 +51,7 @@ while running:
                     else:
                         print 'warning warning'
                 count += numReady
+                print '<<Run % starting>>' % (count)
 
                 if state != 'done' and count >= NUM_RUNS:
                     print 'Finished ' + str(count) + ' runs successfully!'

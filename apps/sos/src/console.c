@@ -89,15 +89,16 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
             buf_pos -= MAX_BUFF_SIZE;
         }
         if (!can_read) {
+            sync_release(read_serial_lock);
             if (svaddr != 0) {
                 frame_change_swappable(svaddr, true);
             }
             err = usr_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
             if (err) {
-                sync_release(read_serial_lock);
                 return -err;
             }
             assert(can_read && "Should be able to read after translating page");
+            sync_acquire(read_serial_lock);
         }
 
         ((char*)svaddr)[i] = buf[buf_pos];
@@ -112,12 +113,12 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
             break;
         }
     }
+    reader_required_bytes = 0;
+    sync_release(read_serial_lock);
+
     if (svaddr != 0) {
         frame_change_swappable(svaddr, true);
     }
-
-    reader_required_bytes = 0;
-    sync_release(read_serial_lock);
     return num_read;
 }
 
@@ -150,8 +151,8 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
             nbytes_left -= err; 
 
         } else {
-            err = read_buf(proc, dest, nbytes_left, &read_newline);
             sync_release(read_serial_lock);
+            err = read_buf(proc, dest, nbytes_left, &read_newline);
             if (err < 0) {
                 sync_release(one_reader_lock);
                 return err;

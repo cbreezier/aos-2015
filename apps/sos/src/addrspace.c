@@ -65,6 +65,9 @@ int as_destroy(process_t *proc) {
         }
         prev = cur;
     }
+    if (prev != NULL) {
+        kfree(prev);
+    }
 
     int err = 0;
     /*
@@ -273,7 +276,7 @@ int as_remove_region(process_t *proc, seL4_Word addr) {
         /* Second level index begin */
         seL4_Word sl_idx_b = (addr << TOP_LEVEL_SIZE) >> (TOP_LEVEL_SIZE + OFFSET_SIZE);
 
-        addr += size;
+        addr += size - 1;
 
         /* Top level index end */
         seL4_Word tl_idx_e = addr >> (SECOND_LEVEL_SIZE + OFFSET_SIZE);

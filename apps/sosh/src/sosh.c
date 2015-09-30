@@ -542,6 +542,25 @@ int main(void) {
     char *bp, *p;
     //printf("b\n");
 
+    char large_buf[32*4096];
+    char a = 0;
+    for (int i = 0; i < 32; i += 4096) {
+        large_buf[i] = 'a';
+    }
+    for (int i = 0; i < 32; i += 4096) {
+        a += large_buf[i];
+    }
+    printf("%c\n", a);
+    for (int i = 0; i < 1000000; i++) {
+        a += large_buf[i % 32];
+    }
+    int b = a + 10;
+    a = b - 5;
+    printf("pls fail %d %d\n", a, b);
+
+    sos_sys_null();
+    sos_sys_null();
+
     // sos_stat_t buf2;
     // int err = sos_stat("bootimg.elf", &buf2);
     // assert(!err);
@@ -560,7 +579,7 @@ int main(void) {
 //
 //    printf("buf2 = %s\n", buf2 + 4096 + 30);
 
-    printf("\n[SOS Starting]\n");
+    printf("\n[SOSH Starting]\n");
 
 
     while (!done) {
@@ -577,7 +596,7 @@ int main(void) {
             fflush(stdout);
             r = read(in, bp, BUF_SIZ - 1 + buf - bp);
             if (r < 0) {
-                printf("Console read failed!\n");
+                printf("Console read failed! %d\n", -r);
                 done = 1;
                 break;
             }
@@ -677,5 +696,5 @@ int main(void) {
             }
         }
     }
-    printf("[SOS Exiting]\n");
+    printf("[SOSH Exiting]\n");
 }

@@ -203,6 +203,17 @@ void proc_exit(process_t *proc) {
 
     proc->pid = -1;
 
+    /* Close all fd and free related data structures */
+    sync_acquire(open_files_lock);
+    for (int i = 0; i < OPEN_FILE_MAX; ++i) {
+        struct fd_entry *fd_entry = &proc->proc_files[i];
+        if (fd_entry->used) {
+            open_files[fd_entry->open_file_idx].ref_count--;
+        }
+    }
+    sync_release(open_files_lock);
+    kfree(proc->proc_files);
+
     /* Destroy address space */
     dprintf(0, "as destroying\n");
     err = as_destroy(proc);

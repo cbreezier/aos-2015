@@ -5,6 +5,7 @@
 #include <utils/mapping.h>
 
 #include <stdio.h>
+#include <assert.h>
 
 #include <utils/number_allocator.h>
 
@@ -195,6 +196,8 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     bool rescheduling = false;
 
     struct list_node *node = kmalloc(sizeof(struct list_node));
+    assert(node != NULL);
+
     node->callback = callback;
     node->data = data;
     node->id = allocator_get_num(allocator);

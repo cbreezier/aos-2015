@@ -467,12 +467,10 @@ void setup_tick_timer(uint32_t id, void *data) {
 }
 
 void nfs_tick(uint32_t id, void *data) {
-    if(malloc_lock) sync_acquire(malloc_lock);
     sync_acquire(nfs_lock);
-    //nfs_timeout();
+    nfs_timeout();
     sync_release(nfs_lock);
     register_timer(NFS_TICK_TIME, nfs_tick, data);
-    if(malloc_lock) sync_release(malloc_lock);
 }
 
 //static void test0() {
