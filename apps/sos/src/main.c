@@ -216,15 +216,16 @@ void syscall_loop(seL4_CPtr ep) {
         if(badge & IRQ_EP_BADGE){
             //dprintf(0, "badge %d\n", badge);
 
-            /* Interrupt */
-            if (badge & IRQ_BADGE_TIMER) {
-                timer_interrupt();
-            }
             if (badge & IRQ_BADGE_NETWORK) {
                 sync_acquire(network_irq_lock);
                 network_irq();
                 sync_release(network_irq_lock);
             }
+            /* Interrupt */
+            if (badge & IRQ_BADGE_TIMER) {
+                timer_interrupt();
+            }
+
 
         }else if(label == seL4_VMFault){
             /* Save these as local variables, as message registers will change through lock acquiring */
@@ -471,6 +472,7 @@ void nfs_tick(uint32_t id, void *data) {
     nfs_timeout();
     sync_release(nfs_lock);
     register_timer(NFS_TICK_TIME, nfs_tick, data);
+    printf("registered\n");
 }
 
 //static void test0() {

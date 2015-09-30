@@ -21,7 +21,12 @@ sabreAddr = False
 state = 'exec'
 count = 0
 NUM_RUNS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-print 'Attempting %s runs' % (NUM_RUNS)
+print 'Attempting %d runs' % (NUM_RUNS)
+
+#commands = ['ps', 'ls', 'cat a.cpp', 'time']
+commands = ['ps', 'time']
+
+numCommands = 1
 
 while running:
     # when there's something in input, then we move forward
@@ -39,26 +44,57 @@ while running:
 
                 numReady = data.count('$')
 
-                #time.sleep(random.uniform(0.01, 0.03))
-                for i in range(numReady):
-                    if state == 'exec':
-                        print 'exec sosh'
-                        s.sendto('exec sosh\n', sabreAddr)
-                        state = 'exit'
-                    elif state == 'exit':
-                        print 'exit'
-                        s.sendto('exit\n', sabreAddr)
-                        state = 'exec'
-                    elif state == 'done':
-                        pass
-                    else:
-                        print 'warning warning'
-                count += numReady
-                print '<<Run % starting>>' % (count)
+                numCommands -= numReady
+                if numCommands != 0:
+                    continue
 
-                if state != 'done' and count >= NUM_RUNS:
+                print 'exec sosh &'
+                s.sendto('exec sosh &\n', sabreAddr)
+
+                numCommands = random.randint(1, 5)
+
+                for i in range(numCommands):
+                    command = commands[random.randint(0, len(commands)-1)]
+                    print command
+                    command += '\n'
+                    s.sendto(command, sabreAddr)
+
+                print 'exit'
+                s.sendto('exit\n', sabreAddr)
+
+                count += numReady
+                if numReady:
+                    print '<<Run %d starting>>' % (count)
+
+                if count >= NUM_RUNS:
                     print 'Finished ' + str(count) + ' runs successfully!'
                     state = 'done'
+
+                
+
+#                #time.sleep(random.uniform(0.01, 0.03))
+#                for i in range(numReady):
+#                    if state == 'exec':
+#                        print 'exec sosh'
+#                        s.sendto('exec sosh\n', sabreAddr)
+#                        state = 'exit'
+#                    elif state == 'exit':
+#                        print 'exit'
+#                        s.sendto('exit\n', sabreAddr)
+#                        state = 'exec'
+#                    elif state == 'done':
+#                        pass
+#                    else:
+#                        print 'warning warning'
+#                
+#
+#                count += numReady
+#                if numReady:
+#                    print '<<Run %d starting>>' % (count)
+#
+#                if state != 'done' and count >= NUM_RUNS:
+#                    print 'Finished ' + str(count) + ' runs successfully!'
+#                    state = 'done'
             else:
                 time.sleep(0.01)
         elif x == sys.stdin:

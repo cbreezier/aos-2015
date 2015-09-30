@@ -219,6 +219,7 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
 
     epit_clocks[0]->cr |= BIT(EN);
 
+    assert(head == NULL);
     if (head == NULL) {
         node->next = NULL;
         head = node; 
@@ -362,42 +363,45 @@ int timer_interrupt(void) {
      */
     if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
-        //if (head == NULL) {
-        //    assert(!"Timer interrupt with no queued timers");
-        //    //int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
-        //    //assert(!err);
-        //    sync_release(timer_lock);
-        //    return 0;
-        //}
 
-        ///*
-        // * Timer isn't finished - just one loop of the EPIT
-        // * needs to be decremented.
-        // */
-        //if (head->delay > MAX_US_EPIT) {
-        //    head->delay -= MAX_US_EPIT;
-        //    if (head->delay <= MAX_US_EPIT) {
-        //        reschedule(head->delay);
-        //    }
-        //} else {
-        //    struct list_node *to_free = head;
-        //    head = head->next;
-        //    /* 
-        //     * Rescheduling must be done prior to callback, for
-        //     * efficiency, and to handle the possibility that
-        //     * the callback registers a new timer
-        //     */
-        //    if (head != NULL) {
-        //        reschedule(head->delay);
-        //    } else {
-        //        epit_clocks[0]->cr &= ~(BIT(EN));
-        //    }
-        //    to_free->callback(to_free->id, to_free->data);
-        //    allocator_release_num(allocator, to_free->id);
-        //    kfree(to_free);
-        //}
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
         assert(!err);
+        // if (head == NULL) {
+        //     assert(!"Timer interrupt with no queued timers");
+        //     //int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
+        //     //assert(!err);
+        //     sync_release(timer_lock);
+        //     return 0;
+        // }
+
+        // /*
+        //  * Timer isn't finished - just one loop of the EPIT
+        //  * needs to be decremented.
+        //  */
+        // if (head->delay > MAX_US_EPIT) {
+        //     head->delay -= MAX_US_EPIT;
+        //     if (head->delay <= MAX_US_EPIT) {
+        //         reschedule(head->delay);
+        //     }
+        // } else {
+        //     struct list_node *to_free = head;
+        //     head = head->next;
+        //     /* 
+        //      * Rescheduling must be done prior to callback, for
+        //      * efficiency, and to handle the possibility that
+        //      * the callback registers a new timer
+        //      */
+        //     if (head != NULL) {
+        //         reschedule(head->delay);
+        //     } else {
+        //         epit_clocks[0]->cr &= ~(BIT(EN));
+        //     }
+        //     allocator_release_num(allocator, to_free->id);
+        //     to_free->callback(to_free->id, to_free->data);
+        //     printf("kfreeing %x\n", to_free);
+        //     kfree(to_free);
+        //     printf("done kfreeing\n");
+        // }
     }
     if (epit_clocks[1]->sr) {
     

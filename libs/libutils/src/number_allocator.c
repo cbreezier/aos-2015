@@ -48,7 +48,7 @@ static uint32_t tree_min(struct allocation *node) {
     if (node == NULL) {
         return -1;
     }
-    return min(tree_min(node->left), tree_min(node->right));
+    return (node->left == NULL) ? node->num : tree_min(node->left);
 }
 
 /* Returns the new root of the subtree after removal */
@@ -63,9 +63,11 @@ static struct allocation *remove_num(struct allocation *node, uint32_t num) {
             kfree(node);
             return NULL;
         }
+        assert(!"Should never remove_num up to here");
         if (node->left != NULL && node->right != NULL) {
             uint32_t smallest = tree_min(node->right);
-            remove_num(node->right, smallest);
+            if (smallest == -1) return node;
+            node->right = remove_num(node->right, smallest);
             node->num = smallest;
             return node;
         }

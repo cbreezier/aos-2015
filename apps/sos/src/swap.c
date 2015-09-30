@@ -61,6 +61,8 @@ static int swapout() {
         if (fte->user_cap && fte->is_swappable) {
             fte->referenced = false;
 
+            seL4_ARM_Page_Unify_Instruction(fte->user_cap, 0, PAGE_SIZE);
+
             int err = seL4_ARM_Page_Unmap(fte->user_cap);
             conditional_panic(err, "Unable to unmap page (swapout)");
 
@@ -148,6 +150,7 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
         int disk_loc_in = -(in_pte->frame);
         /* Fetch page from disk */   
         int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*ret_svaddr), PAGE_SIZE);
+        seL4_ARM_Page_Unify_Instruction(ft[frame_idx].cap, 0, PAGE_SIZE);
         if (nread < 0) {
             dprintf(0, "warning warning nfs read sucks %d\n", nread);
             sync_release(ft_lock);
@@ -177,6 +180,7 @@ int swapin_sos(seL4_Word *ret_svaddr) {
     *ret_svaddr = frame_idx_to_svaddr(frame_idx);
 
     memset((void*)(*ret_svaddr), 0, PAGE_SIZE);
+    seL4_ARM_Page_Unify_Instruction(ft[frame_idx].cap, 0, PAGE_SIZE);
     frame_change_swappable(*ret_svaddr, false);
 
     sync_release(ft_lock);
