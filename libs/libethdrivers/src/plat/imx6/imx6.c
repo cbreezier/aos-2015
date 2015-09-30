@@ -20,7 +20,7 @@
 #include "uboot/mx6qsabrelite.h"
 #include "uboot/micrel.h"
 #include "unimplemented.h"
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 
 #define DEFAULT_MAC "\x00\x19\xb8\x00\xf0\xa3"

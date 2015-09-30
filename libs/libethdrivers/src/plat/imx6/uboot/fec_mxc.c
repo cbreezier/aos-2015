@@ -38,7 +38,7 @@
 #include <string.h>
 #include "../enet.h"
 #include "../ocotp_ctrl.h"
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 /*
  * Timeout the transfer after 5 mS. This is usually a bit more, since

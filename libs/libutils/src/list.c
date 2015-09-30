@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <utils/list.h>
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 typedef struct list_node node_t;
 

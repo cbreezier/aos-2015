@@ -20,7 +20,7 @@
 #include <string.h>
 #define _GNU_SOURCE /* for getpagesize() */
 #include <unistd.h>
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 #define SIG_SEARCH_STEP (16) /* value from ACPIAC RSDP search */
 

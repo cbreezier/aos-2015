@@ -218,7 +218,7 @@ void syscall_loop(seL4_CPtr ep) {
 
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
-                ;//timer_interrupt();
+                timer_interrupt();
             }
             if (badge & IRQ_BADGE_NETWORK) {
                 sync_acquire(network_irq_lock);

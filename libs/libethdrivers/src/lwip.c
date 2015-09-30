@@ -19,7 +19,7 @@
 #include <netif/etharp.h>
 #include <lwip/stats.h>
 #include "debug.h"
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 static void initialize_free_bufs(lwip_iface_t *iface) {
     dma_addr_t *dma_bufs = NULL;

@@ -1,7 +1,7 @@
 #include <sync/sem.h>
 #include <sync/mutex.h>
 #include <stdlib.h>
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 struct sync_sem_ {
     sync_mutex_t mutex;

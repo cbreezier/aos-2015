@@ -37,7 +37,7 @@
 #include "bitops.h"
 #include "../unimplemented.h"
 #include "string.h"
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 /* Generic PHY support and helper functions */
 

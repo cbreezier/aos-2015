@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <bits/limits.h>
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 
 #define MUTEX_MAGIC 0x5EED

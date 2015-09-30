@@ -1,6 +1,8 @@
 import socket
 import select
 import sys
+import random
+import time
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -37,6 +39,7 @@ while running:
 
                 numReady = data.count('$')
 
+                #time.sleep(random.uniform(0.01, 0.03))
                 for i in range(numReady):
                     if state == 'exec':
                         print 'exec sosh'
@@ -57,7 +60,7 @@ while running:
                     print 'Finished ' + str(count) + ' runs successfully!'
                     state = 'done'
             else:
-                sleep(0.01)
+                time.sleep(0.01)
         elif x == sys.stdin:
             # handle standard input
             stuff = sys.stdin.readline()

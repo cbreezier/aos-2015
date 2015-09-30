@@ -39,7 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../unimplemented.h"
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 
 #define BUG_ON(x) do {} while(0)

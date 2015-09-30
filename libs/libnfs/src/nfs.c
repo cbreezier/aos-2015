@@ -18,7 +18,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 
 //#define DEBUG_NFS 1

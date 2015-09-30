@@ -16,7 +16,7 @@
 #include "unimplemented.h"
 #include "../../debug.h"
 #include <stdlib.h>
-#include <utils/alloc_wrappers.h>
+#include <sync/alloc_wrappers.h>
 
 #define IMX6_ENET_PADDR 0x02188000
 #define IMX6_ENET_SIZE  0x00004000
