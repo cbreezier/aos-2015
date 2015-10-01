@@ -6,8 +6,11 @@
 #include "ut_manager/ut.h"
 #include "alloc_wrappers.h"
 
+#define DEBUG 
+
 sync_mutex_t ut_lock;
 
+#ifdef DEBUG
 int count;
 
 struct _entry {
@@ -19,8 +22,12 @@ struct _entry {
 struct _entry *m_head;
 
 struct _entry *free_m_head;
+#endif
+
+sync_mutex_t malloc_lock;
 
 void alloc_wrappers_init() {
+#ifdef DEBUG
     count = 0;
     m_head = NULL;
     free_m_head = &malloc_entries[0];
@@ -28,6 +35,7 @@ void alloc_wrappers_init() {
         malloc_entries[i].next = &malloc_entries[i+1];
     }
     malloc_entries[999].next = NULL;
+#endif
 
     malloc_lock = sync_create_mutex();
     conditional_panic(!malloc_lock, "Cannot create malloc lock");
@@ -42,7 +50,6 @@ void alloc_wrappers_init() {
 
 void *kmalloc(size_t n) {
 
-    int a;
     /* 
      * If the lock doesn't exist, don't acquire it. This is checked
      * in order to also use kmalloc when sos is initing.
@@ -52,8 +59,8 @@ void *kmalloc(size_t n) {
         sync_acquire(malloc_lock);
 
         ret = malloc(n);
+#ifdef DEBUG
         printf("malloc %p %d\n", ret, ++count);
-
         struct _entry *new = free_m_head;
         assert(new);
         free_m_head = free_m_head->next;
@@ -62,25 +69,24 @@ void *kmalloc(size_t n) {
         new->size = n;
         new->next = m_head;
         m_head = new;
+#endif
     } else {
-        dprintf(0, "malloc lock null\n");
         ret = malloc(n);
+#ifdef DEBUG
+        dprintf(0, "malloc lock null\n");
         printf("lockless malloc %p %d\n", ret, ++count);
+#endif
     }
     
     if (malloc_lock) sync_release(malloc_lock);
+#ifdef DEBUG
     else dprintf(0, "2nd malloc lock null\n");
+#endif
 
     // // Print all mallocs so far
     // for (struct _entry *e = m_head; e != NULL; e = e->next) {
     //     printf(" > %p %u\n", e->addr, e->size);
     // }
-
-    if (ret == 0x115950) {
-        for (int i = 0; i < 12; i++) {
-            printf("a + %d is %p, value %x\n", i, (&a) + i, *((&a) + i));
-        }
-    }
     return ret;
 }
 
@@ -89,9 +95,9 @@ void kfree(void *buf) {
      * If the lock doesn't exist, don't acquire it. This is checked
      * in order to also use kfree when sos is initing.
      */
-    int a;
     if (malloc_lock) {
         sync_acquire(malloc_lock);
+#ifdef DEBUG
         struct _entry *prev = NULL;
         struct _entry *found = NULL;
         for (struct _entry *e = m_head; e != NULL; e = e->next) {
@@ -103,13 +109,15 @@ void kfree(void *buf) {
         }
         if (!found) {
             printf("WARNING WARNING double free at %p\n", buf);
-            for (int i = 0; i < 32; i++) {
-                printf("a + %d is %p, value %x\n", i, (&a) + i, *((&a) + i));
-            }
+//            for (int i = 0; i < 32; i++) {
+//                printf("a + %d is %p, value %x\n", i, (&a) + i, *((&a) + i));
+//            }
             assert(false);
             while (true);
         }
+#endif
         free(buf);
+#ifdef DEBUG
         printf("free %p %d\n", buf, --count);
 
         if (prev) {
@@ -120,9 +128,12 @@ void kfree(void *buf) {
 
         found->next = free_m_head;
         free_m_head = found;
+#endif
     } else {
         free(buf);
+#ifdef DEBUG
         printf("lockless free %p %d\n", buf, --count);
+#endif
     }
 
     if (malloc_lock) sync_release(malloc_lock);
@@ -132,11 +143,6 @@ void kfree(void *buf) {
     //     printf(" < %p %u\n", e->addr, e->size);
     // }
 
-    if (buf == 0x115950) {
-        for (int i = 0; i < 12; i++) {
-            printf("a + %d is %p, value %x\n", i, (&a) + i, *((&a) + i));
-        }
-    }
 }
 
 seL4_Word kut_alloc(int sizebits) {

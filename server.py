@@ -45,19 +45,22 @@ while running:
                 numReady = data.count('$')
 
                 numCommands -= numReady
-                if numCommands != 0:
+                if numCommands != 0 or state == 'done':
                     continue
 
-                print 'exec sosh &'
-                s.sendto('exec sosh &\n', sabreAddr)
+                print 'exec sosh'
+                s.sendto('exec sosh\n', sabreAddr)
 
                 numCommands = random.randint(1, 5)
+                numCommands = 0
 
                 for i in range(numCommands):
                     command = commands[random.randint(0, len(commands)-1)]
                     print command
                     command += '\n'
                     s.sendto(command, sabreAddr)
+
+                numCommands += 2
 
                 print 'exit'
                 s.sendto('exit\n', sabreAddr)

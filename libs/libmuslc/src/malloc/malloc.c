@@ -451,7 +451,7 @@ void *realloc(void *p, size_t n)
 
 void free(void *p)
 {
-	struct chunk *self = MEM_TO_CHUNK(p);
+    struct chunk *self = MEM_TO_CHUNK(p);
 	struct chunk *next;
 	size_t final_size, new_size, size;
 	int reclaim=0;

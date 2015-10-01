@@ -11,7 +11,7 @@ sync_mutex_t
 sync_create_mutex() {
     sync_mutex_t mutex;
 
-    mutex = (sync_mutex_t) malloc(sizeof(struct sync_mutex_));
+    mutex = (sync_mutex_t) kmalloc(sizeof(struct sync_mutex_));
     if (!mutex)
         return NULL;
 

@@ -223,6 +223,7 @@ void syscall_loop(seL4_CPtr ep) {
             }
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
+                seL4_DebugPutChar('W');
                 timer_interrupt();
             }
 
@@ -468,11 +469,12 @@ void setup_tick_timer(uint32_t id, void *data) {
 }
 
 void nfs_tick(uint32_t id, void *data) {
+    seL4_DebugPutChar('X');
     sync_acquire(nfs_lock);
-    nfs_timeout();
+    seL4_DebugPutChar('Z');
+    //nfs_timeout();
     sync_release(nfs_lock);
-    register_timer(NFS_TICK_TIME, nfs_tick, data);
-    printf("registered\n");
+    //register_timer(NFS_TICK_TIME, nfs_tick, data);
 }
 
 //static void test0() {
@@ -589,7 +591,8 @@ int main(void) {
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    nfs_tick(0, NULL);
+    //nfs_tick(0, NULL);
+    register_timer(NFS_TICK_TIME, nfs_tick, NULL);
 
     /* Initialise swap table */
     size_t ft_lo_idx, ft_hi_idx;
@@ -612,7 +615,8 @@ int main(void) {
     //seL4_Wait(sos_threads[0].wakeup_async_ep, NULL);
 
     printf("cur cpsace levels = %u\n", cur_cspace->levels);
-    syscall_loop(_sos_interrupt_ep_cap);
+    //syscall_loop(_sos_interrupt_ep_cap);
+    syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */
     return 0;

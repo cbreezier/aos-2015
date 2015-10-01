@@ -17,7 +17,11 @@ int as_init(struct addrspace **ret_as) {
 
     *ret_as = NULL;
     dprintf(0, "allocing addrspace\n");
+
+    seL4_DebugPutChar('A');
     struct addrspace *new = kmalloc(sizeof(struct addrspace));
+    seL4_DebugPutChar('B');
+    fflush(0);
     dprintf(0, "done allocing addrspace\n");
     if (new == NULL) {
         return ENOMEM;

@@ -6,7 +6,6 @@
 #include <sync/mutex.h>
 
 sync_mutex_t printf_lock;
-sync_mutex_t malloc_lock;
 
 void alloc_wrappers_init();
 
