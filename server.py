@@ -23,8 +23,8 @@ count = 0
 NUM_RUNS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 print 'Attempting %d runs' % (NUM_RUNS)
 
-#commands = ['ps', 'ls', 'cat a.cpp', 'time']
-commands = ['ps', 'time']
+commands = ['ps', 'ls', 'cat a.cpp', 'time']
+#commands = ['ps', 'time']
 
 numCommands = 1
 
@@ -48,8 +48,8 @@ while running:
                 if numCommands != 0 or state == 'done':
                     continue
 
-                print 'exec sosh'
-                s.sendto('exec sosh\n', sabreAddr)
+                print 'exec sosh &'
+                s.sendto('exec sosh &\n', sabreAddr)
                 #print 'exec sosh'
                 #s.sendto('exec sosh\n', sabreAddr)
 

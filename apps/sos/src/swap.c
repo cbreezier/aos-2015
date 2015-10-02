@@ -61,7 +61,7 @@ static int swapout() {
         if (fte->user_cap && fte->is_swappable) {
             fte->referenced = false;
 
-            seL4_ARM_Page_Unify_Instruction(fte->user_cap, 0, PAGE_SIZE);
+            //seL4_ARM_Page_Unify_Instruction(fte->user_cap, 0, PAGE_SIZE);
 
             int err = seL4_ARM_Page_Unmap(fte->user_cap);
             conditional_panic(err, "Unable to unmap page (swapout)");
@@ -180,7 +180,7 @@ int swapin_sos(seL4_Word *ret_svaddr) {
     *ret_svaddr = frame_idx_to_svaddr(frame_idx);
 
     memset((void*)(*ret_svaddr), 0, PAGE_SIZE);
-    seL4_ARM_Page_Unify_Instruction(ft[frame_idx].cap, 0, PAGE_SIZE);
+    //seL4_ARM_Page_Unify_Instruction(ft[frame_idx].cap, 0, PAGE_SIZE);
     frame_change_swappable(*ret_svaddr, false);
 
     sync_release(ft_lock);

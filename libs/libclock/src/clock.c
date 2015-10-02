@@ -402,9 +402,9 @@ int timer_interrupt(void) {
             }
             //allocator_release_num(allocator, to_free->id);
             to_free->callback(to_free->id, to_free->data);
-            seL4_DebugPutChar('P');
+            //seL4_DebugPutChar('P');
             //kfree(to_free);
-            seL4_DebugPutChar('H');
+            //seL4_DebugPutChar('H');
         }
     }
     if (epit_clocks[1]->sr) {

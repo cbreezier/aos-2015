@@ -221,7 +221,7 @@ void syscall_loop(seL4_CPtr ep) {
             }
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
-                seL4_DebugPutChar('W');
+                //seL4_DebugPutChar('W');
                 timer_interrupt();
             }
 
@@ -467,13 +467,13 @@ void setup_tick_timer(uint32_t id, void *data) {
 }
 
 void nfs_tick(uint32_t id, void *data) {
-    seL4_DebugPutChar('X');
+    //seL4_DebugPutChar('X');
     sync_acquire(network_lock);
-    seL4_DebugPutChar('Z');
+    //seL4_DebugPutChar('Z');
     nfs_timeout();
     sync_release(network_lock);
     //register_timer(NFS_TICK_TIME, nfs_tick, data);
-    printf("registered\n");
+    //printf("registered\n");
 }
 
 //static void test0() {
