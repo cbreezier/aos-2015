@@ -33,6 +33,7 @@ void frametable_init() {
     ut_find_memory(&low_addr, &hi_addr);
     //hi_addr -= PAGE_SIZE*128;
     //hi_addr -= PAGE_SIZE*78 + (1 << 23);
+    hi_addr -= PAGE_SIZE * 512;
     dprintf(0, "low addr = %x, high = %x\n", low_addr, hi_addr);
 
     seL4_Word memory_size = hi_addr - low_addr;
@@ -127,7 +128,11 @@ seL4_Word frame_alloc_sos(bool freeable) {
     sync_acquire(ft_lock);
     seL4_Word svaddr = frame_alloc(freeable, false);
     if (svaddr == 0) {
-        swapin_sos(&svaddr);
+        int err = swapin_sos(&svaddr);
+        if (err) {
+            sync_release(ft_lock);
+            return 0;
+        }
     }
     sync_release(ft_lock);
     return svaddr;

@@ -22,6 +22,6 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr);
 
 int swapin_sos(seL4_Word *ret_svaddr);
 
-int free_swap_entry(int entry_idx);
+void free_swap_entry(int entry_idx);
 
 #endif /* _SWAP_H_ */

@@ -22,9 +22,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
             break;
     }
     if (cur == NULL) {
-        dprintf(0, "warning warning d\n");
-        /* TODO M7: segfault */
-        return EINVAL;
+        dprintf(0, "warning warning invalid region\n");
+        return EACCES;
     }
 
     seL4_CapRights cap_rights = 0;
@@ -43,8 +42,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
         proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc_sos(true);
         if (proc->as->page_directory[tl_idx] == NULL) {
-            dprintf(0, "warning warning e\n");
-            return ENOMEM;
+            
         }
         memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
     }
@@ -54,10 +52,10 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     /* Swapped out page */
     if (proc->as->page_directory[tl_idx][sl_idx].frame < 0) {
         svaddr = frame_alloc(1, 1);
-        swapin(proc, vaddr, &svaddr);
+        int err = swapin(proc, vaddr, &svaddr);
         if (err) {
-            dprintf(0, "warning warning f\n");
             sync_release(ft_lock);
+            dprintf(0, "warning warning swapped out page swapin");
             return err;
         }
     } else if (proc->as->page_directory[tl_idx][sl_idx].frame > 0) {
@@ -67,27 +65,23 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         proc->size++;
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
-            err = swapin(proc, vaddr, &svaddr);
-            conditional_panic(!svaddr, "Swapin ret svaddr is 0");
+            int err = swapin(proc, vaddr, &svaddr);
             if (err) {
-                dprintf(0, "warning warning a\n");
                 sync_release(ft_lock);
+                dprintf(0, "warning warning new page swapin");
                 return err;
             }
+            conditional_panic(!svaddr, "Swapin ret svaddr is 0");
         }
     }
 
     uint32_t frame_idx = svaddr_to_frame_idx(svaddr);
-    if (frame_idx == 0) {
-        dprintf(0, "warning warning b\n");
-        sync_release(ft_lock);
-        return ENOMEM;
-    }
+    conditional_panic(!frame_idx, "Invalid svaddr/frame_idx (pt_add_page)");
+
     if (ret_svaddr != NULL) {
         *ret_svaddr = svaddr;
         frame_change_swappable(svaddr, 0);
     }
-
 
     if (ret_frame_cap != NULL) {
         *ret_frame_cap = ft[frame_idx].cap;
@@ -100,14 +94,14 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     // Only map in if not already mapped in
     if (!ft[frame_idx].user_cap) {
         seL4_CPtr cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
-        //dprintf(0, "%x %x %x %u %u\n", cap, proc->vroot, vaddr, cap_rights, cap_attr);
         err = usr_map_page(cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);
-        if (err) {
-            dprintf(0, "warning warning c err %d\n", err);
+        if (err == seL4_NotEnoughMemory) {
             frame_free(svaddr);
             sync_release(ft_lock);
-            return err;
+            return ENOMEM;
         }
+        /* Panic on all other errors */
+        conditional_panic(err, "User page cannot be mapped in (pt_add_page");
 
         if (pt_cap && pt_addr) {
             proc->as->pt_caps[tl_idx] = pt_cap;
@@ -144,13 +138,8 @@ void pt_remove_page(process_t *proc, struct pt_entry *pe) {
     if (user_cap) {
         seL4_ARM_Page_Unmap(user_cap);
 
-        int err;
-        /* Remove all child capabilities */
-        //err = cspace_revoke_cap(cur_cspace, user_cap);
-        //conditional_panic(err, "unable to revoke cap(free)");
-
         /* Remove the capability itself */
-        err = cspace_delete_cap(cur_cspace, user_cap);
+        int err = cspace_delete_cap(cur_cspace, user_cap);
         conditional_panic(err, "unable to delete cap(free)");
     }
     int err = frame_free(pe->frame);

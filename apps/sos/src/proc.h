@@ -48,7 +48,6 @@ typedef struct {
     seL4_Word vroot_addr;
     seL4_ARM_PageDirectory vroot;
 
-    seL4_Word ipc_buffer_addr;
     seL4_CPtr ipc_buffer_cap;
 
     seL4_CPtr user_ep_cap;

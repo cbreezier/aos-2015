@@ -18,10 +18,7 @@ int as_init(struct addrspace **ret_as) {
     *ret_as = NULL;
     dprintf(0, "allocing addrspace\n");
 
-    seL4_DebugPutChar('A');
     struct addrspace *new = kmalloc(sizeof(struct addrspace));
-    seL4_DebugPutChar('B');
-    fflush(0);
     dprintf(0, "done allocing addrspace\n");
     if (new == NULL) {
         return ENOMEM;
@@ -97,24 +94,30 @@ int as_destroy(process_t *proc) {
         conditional_panic(err, "Unable to delete page directory");
     }
 
-    /* Free the kernel PageTable where relevant */
-    for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
-        if (as->pt_caps[l1]) {
-            //err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
-            //conditional_panic(err, "Unable to revoke cap(as_destroy)");
+    if (as->pt_caps) {
+        /* Free the kernel PageTable where relevant */
+        for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
+            if (as->pt_caps[l1]) {
+                //err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
+                //conditional_panic(err, "Unable to revoke cap(as_destroy)");
 
-            err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
-            conditional_panic(err, "Unable to delete cap(as_destroy)");
+                err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
+                conditional_panic(err, "Unable to delete cap(as_destroy)");
 
-            kut_free(as->pt_addrs[l1], seL4_PageTableBits);
+                kut_free(as->pt_addrs[l1], seL4_PageTableBits);
+            }
         }
     }
 
-    err = frame_free((seL4_Word)as->pt_caps);
-    conditional_panic(err, "Cannot free pt_caps frame");
+    if (as->pt_caps) {
+        err = frame_free((seL4_Word)as->pt_caps);
+        conditional_panic(err, "Cannot free pt_caps frame");
+    }
     
-    err = frame_free((seL4_Word)as->pt_addrs);
-    conditional_panic(err, "Cannot free pt_addrs frame");
+    if (as->pt_addrs) {
+        err = frame_free((seL4_Word)as->pt_addrs);
+        conditional_panic(err, "Cannot free pt_addrs frame");
+    }
     
     kfree(as);
     return 0;

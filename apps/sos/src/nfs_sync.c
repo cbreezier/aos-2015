@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sync/mutex.h>
 #include <sys/panic.h>
+#include <sys/debug.h>
 
 #include "thread.h"
 #include "nfs_sync.h"
@@ -184,6 +185,7 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
             return -err;
         }
         
+        dprintf(0, "copying to %x\n", usr_buf + before_count);
         err = copyout(proc, usr_buf + before_count, sos_buf, t.count - before_count);
     }
     kfree(sos_buf);

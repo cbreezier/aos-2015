@@ -252,14 +252,22 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_CPtr sos_cap;
             int err = pt_add_page(&processes[proc_idx], vaddr, NULL, &sos_cap);
 
+            bool has_killed_proc = false;
             switch(err) {
                 case ENOMEM:
                 case EACCES:
-                    conditional_panic(err, "Segmentation Fault");
+                    proc_exit(proc);
+                    cspace_free_slot(cur_cspace, reply_cap);
+                    has_killed_proc = true;
+                    break;
                 default:
                     break;
             }
+            if (has_killed_proc) {
+                continue;
+            }
 
+            /* Panic in all other cases */
             conditional_panic(err, "failed to add page(vm fault)");
 
             if (1) {
@@ -601,7 +609,7 @@ int main(void) {
 
     /* Start the user application */
     int pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
-    //start_first_process(TTY_NAME, _sos_ipc_ep_cap);
+    conditional_panic(pid < 0, "Cannot start first process");
 
     dprintf(0, "initial pid = %d\n", pid);
 

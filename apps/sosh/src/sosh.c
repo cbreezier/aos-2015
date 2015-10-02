@@ -30,6 +30,53 @@
 static int in;
 static sos_stat_t sbuf;
 
+int htoi(char *s) {
+    int ret = 0;
+    for (int i = 0; s[i]; ++i) {
+        if (s[i] >= 'a' && s[i] <= 'f') {
+            ret = ret*16 + s[i] - 'a' + 10;
+        } else {
+            ret = ret*16 + s[i] - '0';
+        }
+    }
+    return ret;
+}
+
+static int mem(int argc, char **argv) {
+    if (argc != 3) {
+        printf("Usage: mem <address> <words>\n");
+        return 1;
+    }
+
+    unsigned int *addr = (unsigned int*)(argv[1][1] == 'x' ? htoi(argv[1] + 2) : atoi(argv[1]));
+    int words = atoi(argv[2]);
+
+    for (int i = 0; i < words; ++i) {
+        printf("%p: 0x%x\n", addr + i, *(addr + i));
+    }
+    
+    return 0;
+}
+
+static int wait(int argc, char **argv) {
+    if (argc != 2) {
+        printf("Usage: wait <proc>\n");
+        return 1;
+    }
+
+    pid_t proc = atoi(argv[1]);
+
+    pid_t waited_on = sos_process_wait(proc);
+
+    if (waited_on < 0) {
+        printf("Wait: %s\n", strerror(waited_on));
+    } else {
+        printf("Waited on %d\n", waited_on);
+    }
+    
+    return 0;
+}
+
 static int kill(int argc, char **argv) {
     if (argc != 2) {
         printf("Usage: kill <proc>\n");
@@ -501,7 +548,7 @@ pt_test(int argc, char *argv[])
 
 struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} , {"kill", kill}, {"pt_test", pt_test} };
+        {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} , {"kill", kill}, {"pt_test", pt_test}, {"wait", wait}, {"mem", mem} };
 
 int main(void) {
     /* Testing mapped pages */
@@ -542,33 +589,6 @@ int main(void) {
     char *bp, *p;
     //printf("b\n");
 
-    //char large_buf[32*4096];
-    //char a = 0;
-    //for (int i = 0; i < 32; i += 4096) {
-    //    large_buf[i] = 'a';
-    //}
-    //for (int i = 0; i < 32; i += 4096) {
-    //    a += large_buf[i];
-    //}
-    //printf("%c\n", a);
-    //for (int i = 0; i < 1000000; i++) {
-    //    a += large_buf[i % 32];
-    //}
-    //for (int i = 0; i < 1000000; ++i) {
-    //    a += (char)i;
-    //}
-    //int b = a + 10;
-    //a = b - 5;
-    //printf("pls fail %d %d\n", a, b);
-
-    //sos_sys_null();
-    //sos_sys_null();
-
-    // sos_stat_t buf2;
-    // int err = sos_stat("bootimg.elf", &buf2);
-    // assert(!err);
-
-    // printf("%d %d %d %ld %ld\n", buf2.st_type, buf2.st_fmode, buf2.st_size, buf2.st_ctime, buf2.st_atime);
 
     //in = 0;
     assert(in >= 0);

@@ -164,7 +164,9 @@ int elf_load(process_t *proc, char *elf_file) {
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
         err = load_segment_into_vspace(proc, source_addr, segment_size, file_size, vaddr,
                                        get_sel4_rights_from_elf(flags) & seL4_AllRights);
-        conditional_panic(err != 0, "Elf loading failed!\n");
+        if (err) {
+            return err;
+        }
     }
 
     return 0;

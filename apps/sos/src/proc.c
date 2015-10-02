@@ -51,7 +51,18 @@ int proc_create(pid_t parent, char *program_name) {
     uint32_t idx = (uint32_t)procs_head_free;
     procs_head_free = processes[procs_head_free].next_free;
     sync_release(proc_table_lock);
+
     pid_t pid = processes[idx].next_pid;
+
+    processes[idx].as = NULL;
+    processes[idx].vroot_addr = 0;
+    processes[idx].vroot = 0;
+    processes[idx].croot = NULL;
+    processes[idx].user_ep_cap = 0;
+    processes[idx].tcb_addr = 0;
+    processes[idx].tcb_cap = 0;
+    processes[idx].proc_files = NULL;
+
 
     dprintf(0, "acquiring proc lock\n");
     sync_acquire(processes[idx].proc_lock);
@@ -74,33 +85,52 @@ int proc_create(pid_t parent, char *program_name) {
 
     dprintf(0, "as initing\n");
     /* Initialise address space */
-    as_init(&processes[idx].as);
+    err = as_init(&processes[idx].as);
+    if (err) {
+        goto proc_create_end;
+    }   
 
     dprintf(0, "allocating vroot addr\n");
     /* Create a VSpace */
     processes[idx].vroot_addr = kut_alloc(seL4_PageDirBits);
-    conditional_panic(!processes[idx].vroot_addr, 
-                      "No memory for new Page Directory");
+    if (!processes[idx].vroot_addr) {
+        err = ENOMEM;
+        goto proc_create_end;
+    }
+
     err = cspace_ut_retype_addr(processes[idx].vroot_addr,
                                 seL4_ARM_PageDirectoryObject,
                                 seL4_PageDirBits,
                                 cur_cspace,
                                 &processes[idx].vroot);
+    if (err == seL4_NotEnoughMemory) {
+        err = ENOMEM;
+        goto proc_create_end;
+    }
+    /* panic on any other errors */
     conditional_panic(err, "Failed to allocate page directory cap for client");
 
     dprintf(0, "cspace create\n");
     /* Create a simple 1 level CSpace */
     processes[idx].croot = cspace_create(1);
-    assert(processes[idx].croot != NULL);
+    if (!processes[idx].croot) {
+        err = ENOMEM;
+        goto proc_create_end;
+    }
 
     dprintf(0, "adding IPC region\n");
-    as_add_region(processes[idx].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
+    err = as_add_region(processes[idx].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
+    if (err) {
+        goto proc_create_end;
+    }
     dprintf(0, "Added IPC region\n");
 
     /* Create an IPC buffer */
     seL4_Word ipcbuf_svaddr;
     err = pt_add_page(&processes[idx], PROCESS_IPC_BUFFER, &ipcbuf_svaddr, &processes[idx].ipc_buffer_cap);
-    conditional_panic(err, "Unable to add page table page for ipc buffer\n");
+    if (err) {
+        goto proc_create_end;
+    }
     frame_change_swappable(ipcbuf_svaddr, 0);
 
     dprintf(0, "minting ep\n");
@@ -110,20 +140,26 @@ int proc_create(pid_t parent, char *program_name) {
                                   _sos_ipc_ep_cap,
                                   seL4_AllRights, 
                                   seL4_CapData_Badge_new(pid));
-    /* should be the first slot in the space, hack I know */
-    assert(processes[idx].user_ep_cap == 1);
-    assert(processes[idx].user_ep_cap == USER_EP_CAP);
+    if (processes[idx].user_ep_cap != USER_EP_CAP) {
+        err = ENOMEM;
+        goto proc_create_end;   
+    }
 
     dprintf(0, "tcb stuff\n");
     /* Create a new TCB object */
     processes[idx].tcb_addr = kut_alloc(seL4_TCBBits);
-    conditional_panic(!processes[idx].tcb_addr, "No memory for new TCB");
+    if (!processes[idx].tcb_addr) {
+        err = ENOMEM;
+        goto proc_create_end;
+    }
     err =  cspace_ut_retype_addr(processes[idx].tcb_addr,
                                  seL4_TCBObject,
                                  seL4_TCBBits,
                                  cur_cspace,
                                  &processes[idx].tcb_cap);
-    conditional_panic(err, "Failed to create TCB");
+    if (err) {
+        goto proc_create_end;
+    }
 
     /* Configure the TCB */
     dprintf(0, "more tcb stuff\n");
@@ -131,28 +167,43 @@ int proc_create(pid_t parent, char *program_name) {
                              processes[idx].croot->root_cnode, seL4_NilData,
                              processes[idx].vroot, seL4_NilData, PROCESS_IPC_BUFFER,
                              processes[idx].ipc_buffer_cap);
-    conditional_panic(err, "Unable to configure new TCB");
+    if (err) {
+        goto proc_create_end;
+    }
 
 
     /* parse the cpio image */
     dprintf(1, "\nStarting \"%s\"...\n", program_name);
     elf_base = cpio_get_file(_cpio_archive, program_name, &elf_size);
-    conditional_panic(!elf_base, "Unable to locate cpio header");
+    if (!elf_base) {
+        err = ENOENT;
+        goto proc_create_end;
+    }
 
     /* load the elf image */
     dprintf(0, "elf load\n");
     err = elf_load(&processes[idx], elf_base);
-    conditional_panic(err, "Failed to load elf image");
-
+    if (err) {
+        goto proc_create_end;
+    }
 
     /* Create a stack frame */
-    /* Define stack */
     dprintf(0, "adding heap and stack regions\n");
-    as_add_heap(processes[idx].as);
-    as_add_stack(&processes[idx]);
+    err = as_add_heap(processes[idx].as);
+    if (err) {
+        goto proc_create_end;
+    }
+    err = as_add_stack(&processes[idx]);
+    if (err) {
+        goto proc_create_end;
+    }
 
     /* File descriptor table stuff */
     processes[idx].proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
+    if (!processes[idx].proc_files) {
+        err = ENOMEM;
+        goto proc_create_end;
+    }
     for (int i = 0; i < OPEN_FILE_MAX; ++i) {
         processes[idx].proc_files[i].used = false;
         processes[idx].proc_files[i].offset = 0;
@@ -182,7 +233,6 @@ int proc_create(pid_t parent, char *program_name) {
         processes[idx].proc_files[i].open_file_idx = open_entry;
         processes[idx].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
     }
-    sync_release(processes[idx].proc_lock);
 
     /* Start the new process */
     dprintf(0, "almost done!\n");
@@ -190,6 +240,13 @@ int proc_create(pid_t parent, char *program_name) {
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(processes[idx].tcb_cap, 1, 0, 2, &context);
+proc_create_end:
+    sync_release(processes[idx].proc_lock);
+
+    if (err) {
+        proc_exit(&processes[idx]);
+        return -err;
+    }
 
     return pid;
 }
@@ -207,53 +264,59 @@ void proc_exit(process_t *proc) {
 
     proc->pid = -1;
 
-    /* Close all fd and free related data structures */
-    sync_acquire(open_files_lock);
-    for (int i = 0; i < OPEN_FILE_MAX; ++i) {
-        struct fd_entry *fd_entry = &proc->proc_files[i];
-        if (fd_entry->used) {
-            open_files[fd_entry->open_file_idx].ref_count--;
+    if (proc->proc_files) {
+        /* Close all fd and free related data structures */
+        sync_acquire(open_files_lock);
+        for (int i = 0; i < OPEN_FILE_MAX; ++i) {
+            struct fd_entry *fd_entry = &proc->proc_files[i];
+            if (fd_entry->used) {
+                open_files[fd_entry->open_file_idx].ref_count--;
+            }
         }
+        sync_release(open_files_lock);
+        kfree(proc->proc_files);
     }
-    sync_release(open_files_lock);
-    kfree(proc->proc_files);
 
-    /* Destroy address space */
-    dprintf(0, "as destroying\n");
-    err = as_destroy(proc);
-    dprintf(0, "done\n");
-    conditional_panic(err, "unable to destroy address space");
+    if (proc->as) {
+        /* Destroy address space */
+        dprintf(0, "as destroying\n");
+        err = as_destroy(proc);
+        dprintf(0, "done\n");
+        conditional_panic(err, "unable to destroy address space");
+    }
 
     /* Destroy tcb */
-    //err = cspace_revoke_cap(cur_cspace, proc->tcb_cap);
-    //conditional_panic(err, "unable to revoke tcb cap");
+    if (proc->tcb_cap) {
+        err = cspace_delete_cap(cur_cspace, proc->tcb_cap);
+        conditional_panic(err, "unable to delete tcb cap");
+    }
+    if (proc->tcb_addr) {
+        kut_free(proc->tcb_addr, seL4_TCBBits);
+    }
 
-    err = cspace_delete_cap(cur_cspace, proc->tcb_cap);
-    conditional_panic(err, "unable to delete tcb cap");
+    if (proc->user_ep_cap) {
+        /* Destroy process ipc cap */
+        err = cspace_delete_cap(proc->croot, proc->user_ep_cap);
+        conditional_panic(err, "unable to delete user ep cap");
+    }
 
-    kut_free(proc->tcb_addr, seL4_TCBBits);
-
-    /* Destroy process ipc cap */
-    // err = cspace_revoke_cap(cur_cspace, proc->user_ep_cap);
-    // conditional_panic(err, "unable to revoke user ep cap");
-
-    err = cspace_delete_cap(proc->croot, proc->user_ep_cap);
-    conditional_panic(err, "unable to delete user ep cap");
-
-    /* Destroy process cspace */
-    err = cspace_destroy(proc->croot);
-    conditional_panic(err, "unable to destroy cspace");
+    if (proc->croot) {
+        /* Destroy process cspace */
+        err = cspace_destroy(proc->croot);
+        conditional_panic(err, "unable to destroy cspace");
+    }
 
     /* Destroy page directory */
-    //err = cspace_revoke_cap(cur_cspace, proc->vroot);
-    //conditional_panic(err, "unable to revoke vroot");
-
-    err = cspace_delete_cap(cur_cspace, proc->vroot);
-    conditional_panic(err, "unable to delete vroot");
-
-    kut_free(proc->vroot_addr, seL4_PageDirBits);
+    if (proc->vroot) {
+        err = cspace_delete_cap(cur_cspace, proc->vroot);
+        conditional_panic(err, "unable to delete vroot");
+    }
+    if (proc->vroot_addr) {
+        kut_free(proc->vroot_addr, seL4_PageDirBits);
+    }
 
     dprintf(0, "acquiring proc table lock\n");
+    /* Place pid back into 'free' pids list */
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1 || procs_tail_free == -1) {
         assert(procs_head_free == -1 && procs_tail_free == -1);

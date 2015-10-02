@@ -55,20 +55,13 @@ static int swapout() {
      * Any looped over page is un-referenced, and unmapped
      */
     while (ft[_cur_ft_idx].referenced || !ft[_cur_ft_idx].is_swappable) {
-        // dprintf(0, "considering frame %d referenced %d swappable %d\n", _cur_ft_idx, ft[_cur_ft_idx].referenced, ft[_cur_ft_idx].is_swappable);
         struct ft_entry *fte = &ft[_cur_ft_idx];
 
         if (fte->user_cap && fte->is_swappable) {
             fte->referenced = false;
 
-            //seL4_ARM_Page_Unify_Instruction(fte->user_cap, 0, PAGE_SIZE);
-
             int err = seL4_ARM_Page_Unmap(fte->user_cap);
             conditional_panic(err, "Unable to unmap page (swapout)");
-
-            /* Remove all child capabilities */
-            //err = cspace_revoke_cap(cur_cspace, fte->user_cap);
-            //conditional_panic(err, "unable to revoke cap(swapout)");
 
             /* Remove the capability itself */
             err = cspace_delete_cap(cur_cspace, fte->user_cap);
@@ -93,26 +86,20 @@ static int swapout() {
 
     /* Update swap free list */
     int disk_loc = swap_free_head;
-    //dprintf(0, "disc loc = %d\n", disk_loc);
     swap_free_head = swap_table[swap_free_head].next_free;
 
-    //dprintf(0, "vaddr in out ft idx %x\n", out_fte->vaddr);
     conditional_panic(!out_fte, "Invalid ft_entry (swap)");
     conditional_panic(!out_fte->vaddr_proc, "a ft_entry (swap)");
     conditional_panic(!out_fte->vaddr_proc->as, "b ft_entry (swap)");
     struct pt_entry *out_pte = vaddr_to_pt_entry(out_fte->vaddr_proc->as, out_fte->vaddr);
     conditional_panic(!out_pte, "Swapped out page is not in page table");
-    //dprintf(0, "out_pte->frame %d vaddr %d\n", out_pte->frame, frame_idx_to_svaddr(_cur_ft_idx));
     conditional_panic(out_pte->frame != frame_idx_to_svaddr(_cur_ft_idx), "Page table and frametable are not synced");
 
     out_pte->frame = -disk_loc;
 
     seL4_Word svaddr = frame_idx_to_svaddr(_cur_ft_idx);
-    //dprintf(0, "writing at loc %d\n", disk_loc * PAGE_SIZE);
     int nwritten = nfs_sos_write_sync(swap_fh, disk_loc * PAGE_SIZE, (void*)svaddr, PAGE_SIZE);
-    if (nwritten < 0) {
-        return nwritten;
-    }
+    conditional_panic(nwritten != PAGE_SIZE, "Writing out to swap file failed");
 
     return _cur_ft_idx;
 }
@@ -121,7 +108,6 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
     assert(ret_svaddr != NULL);
     conditional_panic(vaddr % PAGE_SIZE != 0, "vaddr provided to swapin is not page aligned");
     sync_acquire(ft_lock);  
-    //dprintf(0, "swapping in %x\n", vaddr);
 
     int frame_idx = -EFAULT;
     if (*ret_svaddr == 0) {
@@ -129,19 +115,14 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
     } else {
         frame_idx = svaddr_to_frame_idx(*ret_svaddr);
     }
+    conditional_panic(frame_idx == 0, "Invalid frame_idx/ret_svaddr (swapin)");
     if (frame_idx < 0) {
-        dprintf(0, "warning warning swapout frame_idx %d\n", frame_idx);
         sync_release(ft_lock);
         return -frame_idx;
     }
 
     struct pt_entry *in_pte = vaddr_to_pt_entry(proc->as, vaddr);
-    if (in_pte == NULL) {
-        dprintf(0, "warning warning null pt_entry\n");
-        sync_release(ft_lock);
-        return EFAULT;
-    }
-    //dprintf(0, "in_pte->frame = %d\n", in_pte->frame);
+    conditional_panic(!in_pte, "Page entry does not exist (swapin)");
     conditional_panic(in_pte->frame > 0, "Trying to swap in a page which is already swapped in");
 
     *ret_svaddr = frame_idx_to_svaddr(frame_idx);
@@ -150,12 +131,8 @@ int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
         int disk_loc_in = -(in_pte->frame);
         /* Fetch page from disk */   
         int nread = nfs_sos_read_sync(swap_fh, disk_loc_in * PAGE_SIZE, (void*)(*ret_svaddr), PAGE_SIZE);
+        conditional_panic(nread != PAGE_SIZE, "Reading in from swap file failed");
         seL4_ARM_Page_Unify_Instruction(ft[frame_idx].cap, 0, PAGE_SIZE);
-        if (nread < 0) {
-            dprintf(0, "warning warning nfs read sucks %d\n", nread);
-            sync_release(ft_lock);
-            return -nread;
-        }
 
         free_swap_entry(disk_loc_in);
     } else {
@@ -173,31 +150,28 @@ int swapin_sos(seL4_Word *ret_svaddr) {
 
     int frame_idx = swapout();
     if (frame_idx < 0) {
-        dprintf(0, "warning warning swapout_sos frame_idx %d\n", frame_idx);
-        return -frame_idx;
+        sync_release(ft_lock);
+        return ENOMEM;
     }
 
     *ret_svaddr = frame_idx_to_svaddr(frame_idx);
 
     memset((void*)(*ret_svaddr), 0, PAGE_SIZE);
-    //seL4_ARM_Page_Unify_Instruction(ft[frame_idx].cap, 0, PAGE_SIZE);
     frame_change_swappable(*ret_svaddr, false);
 
     sync_release(ft_lock);
     return 0;
-
 }
 
-int free_swap_entry(int entry_idx) {
+void free_swap_entry(int entry_idx) {
     if (swap_free_head == -1 || swap_free_tail == -1) {
         assert(swap_free_tail == -1 && swap_free_head == -1);
         swap_free_head = entry_idx;
         swap_free_tail = entry_idx;
         swap_table[entry_idx].next_free = -1;
-        return 0;
+    } else {
+        swap_table[swap_free_tail].next_free = entry_idx;
+        swap_table[entry_idx].next_free = -1;
+        swap_free_tail = entry_idx;
     }
-    swap_table[swap_free_tail].next_free = entry_idx;
-    swap_table[entry_idx].next_free = -1;
-    swap_free_tail = entry_idx;
-    return 0;
 }
