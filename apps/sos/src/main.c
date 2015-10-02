@@ -472,9 +472,10 @@ void nfs_tick(uint32_t id, void *data) {
     seL4_DebugPutChar('X');
     sync_acquire(nfs_lock);
     seL4_DebugPutChar('Z');
-    //nfs_timeout();
+    nfs_timeout();
     sync_release(nfs_lock);
     //register_timer(NFS_TICK_TIME, nfs_tick, data);
+    printf("registered\n");
 }
 
 //static void test0() {

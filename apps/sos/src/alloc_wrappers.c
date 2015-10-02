@@ -6,11 +6,11 @@
 #include "ut_manager/ut.h"
 #include "alloc_wrappers.h"
 
-#define DEBUG 
+//#define KMALLOC_DEBUG 
 
 sync_mutex_t ut_lock;
 
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
 int count;
 
 struct _entry {
@@ -27,7 +27,7 @@ struct _entry *free_m_head;
 sync_mutex_t malloc_lock;
 
 void alloc_wrappers_init() {
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
     count = 0;
     m_head = NULL;
     free_m_head = &malloc_entries[0];
@@ -59,7 +59,7 @@ void *kmalloc(size_t n) {
         sync_acquire(malloc_lock);
 
         ret = malloc(n);
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
         printf("malloc %p %d\n", ret, ++count);
         struct _entry *new = free_m_head;
         assert(new);
@@ -72,14 +72,14 @@ void *kmalloc(size_t n) {
 #endif
     } else {
         ret = malloc(n);
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
         dprintf(0, "malloc lock null\n");
         printf("lockless malloc %p %d\n", ret, ++count);
 #endif
     }
     
     if (malloc_lock) sync_release(malloc_lock);
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
     else dprintf(0, "2nd malloc lock null\n");
 #endif
 
@@ -97,7 +97,7 @@ void kfree(void *buf) {
      */
     if (malloc_lock) {
         sync_acquire(malloc_lock);
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
         struct _entry *prev = NULL;
         struct _entry *found = NULL;
         for (struct _entry *e = m_head; e != NULL; e = e->next) {
@@ -117,7 +117,7 @@ void kfree(void *buf) {
         }
 #endif
         free(buf);
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
         printf("free %p %d\n", buf, --count);
 
         if (prev) {
@@ -131,7 +131,7 @@ void kfree(void *buf) {
 #endif
     } else {
         free(buf);
-#ifdef DEBUG
+#ifdef KMALLOC_DEBUG
         printf("lockless free %p %d\n", buf, --count);
 #endif
     }

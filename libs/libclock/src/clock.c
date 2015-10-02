@@ -296,7 +296,10 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
 int remove_timer(uint32_t id) {
     sync_acquire(timer_lock);
 
-    if (head == NULL) return 0;
+    if (head == NULL) {
+        sync_release(timer_lock);
+        return 0;
+    }
 
     if (head->id == id) {
     
