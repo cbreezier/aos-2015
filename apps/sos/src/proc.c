@@ -221,8 +221,8 @@ void proc_exit(process_t *proc) {
     conditional_panic(err, "unable to destroy address space");
 
     /* Destroy tcb */
-    err = cspace_revoke_cap(cur_cspace, proc->tcb_cap);
-    conditional_panic(err, "unable to revoke tcb cap");
+    //err = cspace_revoke_cap(cur_cspace, proc->tcb_cap);
+    //conditional_panic(err, "unable to revoke tcb cap");
 
     err = cspace_delete_cap(cur_cspace, proc->tcb_cap);
     conditional_panic(err, "unable to delete tcb cap");
@@ -241,8 +241,8 @@ void proc_exit(process_t *proc) {
     conditional_panic(err, "unable to destroy cspace");
 
     /* Destroy page directory */
-    err = cspace_revoke_cap(cur_cspace, proc->vroot);
-    conditional_panic(err, "unable to revoke vroot");
+    //err = cspace_revoke_cap(cur_cspace, proc->vroot);
+    //conditional_panic(err, "unable to revoke vroot");
 
     err = cspace_delete_cap(cur_cspace, proc->vroot);
     conditional_panic(err, "unable to delete vroot");

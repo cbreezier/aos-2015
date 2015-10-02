@@ -158,8 +158,8 @@ int frame_free(seL4_Word svaddr) {
     conditional_panic(err, "Unable to unmap page(free)");
 
     /* Remove all child capabilities */
-    err = cspace_revoke_cap(cur_cspace, ft[idx].cap);
-    conditional_panic(err, "unable to revoke cap(free)");
+    //err = cspace_revoke_cap(cur_cspace, ft[idx].cap);
+    //conditional_panic(err, "unable to revoke cap(free)");
 
     /* Remove the capability itself */
     err = cspace_delete_cap(cur_cspace, ft[idx].cap);

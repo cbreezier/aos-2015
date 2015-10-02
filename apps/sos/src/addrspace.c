@@ -100,8 +100,8 @@ int as_destroy(process_t *proc) {
     /* Free the kernel PageTable where relevant */
     for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
         if (as->pt_caps[l1]) {
-            err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
-            conditional_panic(err, "Unable to revoke cap(as_destroy)");
+            //err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
+            //conditional_panic(err, "Unable to revoke cap(as_destroy)");
 
             err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
             conditional_panic(err, "Unable to delete cap(as_destroy)");

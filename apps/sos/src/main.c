@@ -89,6 +89,7 @@ extern fhandle_t mnt_point;
 
 struct mutex_ep {
     seL4_CPtr unminted;
+    seL4_CPtr minted;
     uint32_t ep_addr;
 };
 
@@ -112,6 +113,7 @@ void* sync_new_ep(seL4_CPtr* ep, int badge) {
     }
 
     *ep = cspace_mint_cap(cur_cspace, cur_cspace, ret->unminted, seL4_AllRights, seL4_CapData_Badge_new(badge));
+    ret->minted = *ep;
 
     return (void*)ret;
 }
@@ -119,13 +121,14 @@ void* sync_new_ep(seL4_CPtr* ep, int badge) {
 void sync_free_ep(void *ep) {
     struct mutex_ep *to_free = (struct mutex_ep*)ep;
 
-    int err = cspace_revoke_cap(cur_cspace, to_free->unminted);
-    conditional_panic(err, "Unable to revoke cap(sync_free_eP)");
+    int err = cspace_delete_cap(cur_cspace, to_free->minted);
+    conditional_panic(err, "Unable to delete cap(sync_free_ep minted)");
 
     err = cspace_delete_cap(cur_cspace, to_free->unminted);
-    conditional_panic(err, "Unable to delete cap(sync_free_eP)");
+    conditional_panic(err, "Unable to delete cap(sync_free_ep unminted)");
 
     kut_free(to_free->ep_addr, seL4_EndpointBits);
+    kfree(to_free);
 }
 
 seL4_MessageInfo_t unknown_syscall(process_t *proc, int num_args) {

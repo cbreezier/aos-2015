@@ -146,8 +146,8 @@ void pt_remove_page(process_t *proc, struct pt_entry *pe) {
 
         int err;
         /* Remove all child capabilities */
-        err = cspace_revoke_cap(cur_cspace, user_cap);
-        conditional_panic(err, "unable to revoke cap(free)");
+        //err = cspace_revoke_cap(cur_cspace, user_cap);
+        //conditional_panic(err, "unable to revoke cap(free)");
 
         /* Remove the capability itself */
         err = cspace_delete_cap(cur_cspace, user_cap);
