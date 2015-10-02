@@ -68,8 +68,6 @@ const seL4_BootInfo* _boot_info;
 
 process_t tty_test_process;
 
-sync_mutex_t network_irq_lock;
-
 
 /*
  * A dummy starting syscall
@@ -217,9 +215,9 @@ void syscall_loop(seL4_CPtr ep) {
             //dprintf(0, "badge %d\n", badge);
 
             if (badge & IRQ_BADGE_NETWORK) {
-                sync_acquire(network_irq_lock);
+                sync_acquire(network_lock);
                 network_irq();
-                sync_release(network_irq_lock);
+                sync_release(network_lock);
             }
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
@@ -470,10 +468,10 @@ void setup_tick_timer(uint32_t id, void *data) {
 
 void nfs_tick(uint32_t id, void *data) {
     seL4_DebugPutChar('X');
-    sync_acquire(nfs_lock);
+    sync_acquire(network_lock);
     seL4_DebugPutChar('Z');
     nfs_timeout();
-    sync_release(nfs_lock);
+    sync_release(network_lock);
     //register_timer(NFS_TICK_TIME, nfs_tick, data);
     printf("registered\n");
 }
@@ -563,19 +561,11 @@ int main(void) {
     cur_cspace->lock = sync_create_mutex();
     conditional_panic(!cur_cspace->lock, "Cannot create cur_cspace lock");
 
-    /* Initialise network irq lock */
-    network_irq_lock = sync_create_mutex();
-    conditional_panic(!network_irq_lock, "Cannot create network irq lock");
-
     /* Initialise alloc wrappers */
     alloc_wrappers_init();
 
     printf("frametable\n");
     frametable_init();
-
-    /* Allocate all SOS threads */
-    printf("thread init\n");
-    threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
 
     /* Initialise the network hardware */
     printf("network init\n");
@@ -589,6 +579,10 @@ int main(void) {
 
     /* Initialise nfs sync */
     nfs_sync_init();
+
+    /* Allocate all SOS threads */
+    printf("thread init\n");
+    threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));

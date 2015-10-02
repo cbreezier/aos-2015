@@ -32,8 +32,8 @@ struct token {
 
 
 void nfs_sync_init() {
-    nfs_lock = sync_create_mutex();
-    conditional_panic(!nfs_lock, "Cannot initialise nfs sync lock"); 
+    network_lock = sync_create_mutex();
+    conditional_panic(!network_lock, "Cannot initialise nfs sync lock"); 
 }
 
 static int rpc_stat_to_err(enum rpc_stat stat) {
@@ -109,9 +109,9 @@ int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
 
-    sync_acquire(nfs_lock);
+    sync_acquire(network_lock);
     enum rpc_stat res = nfs_lookup(&mnt_point, name, nfs_lookup_cb, (uintptr_t)(&t));
-    sync_release(nfs_lock);
+    sync_release(network_lock);
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;
@@ -164,9 +164,9 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
         int before_count = t.count;
         size_t to_read = nbytes - t.count < PAGE_SIZE ? nbytes - t.count : PAGE_SIZE;
 
-        sync_acquire(nfs_lock);
+        sync_acquire(network_lock);
         enum rpc_stat res = nfs_read(&file->fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
-        sync_release(nfs_lock);
+        sync_release(network_lock);
         if (t.err) {
             kfree(sos_buf);
             return -t.err;
@@ -215,9 +215,9 @@ int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyte
     t.err = 0;
     
     while (!t.finished && t.count < nbytes) {
-        sync_acquire(nfs_lock);
+        sync_acquire(network_lock);
         enum rpc_stat res = nfs_read(&fh, offset + t.count, nbytes - t.count, nfs_sos_read_cb, (uintptr_t)(&t));
-        sync_release(nfs_lock);
+        sync_release(network_lock);
         if (t.err) {
             return -t.err;
         }
@@ -273,9 +273,9 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
         }
         int count_before = t.count;
 
-        sync_acquire(nfs_lock);
+        sync_acquire(network_lock);
         enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
-        sync_release(nfs_lock);
+        sync_release(network_lock);
         err = rpc_stat_to_err(res);
         if (err) {
             frame_change_swappable(svaddr, true);
@@ -306,9 +306,9 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  
     while (!t.finished && nbytes > 0) {
         int count_before = t.count;
-        sync_acquire(nfs_lock);
+        sync_acquire(network_lock);
         enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
-        sync_release(nfs_lock);
+        sync_release(network_lock);
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
@@ -354,9 +354,9 @@ int nfs_readdir_sync(void *sos_buf, int *ret_num_files) {
     t.cookie = 0;
 
     do {
-        sync_acquire(nfs_lock);
+        sync_acquire(network_lock);
         enum rpc_stat res = nfs_readdir(&mnt_point, t.cookie, nfs_readdir_cb, (uintptr_t)(&t));
-        sync_release(nfs_lock);
+        sync_release(network_lock);
         int err = rpc_stat_to_err(res);
         if (res) {
             return err;
@@ -395,9 +395,9 @@ int nfs_create_sync(const char *name, uint32_t mode, size_t sz, fhandle_t *ret_f
     sattr.mtime.tv_sec = -1;
     sattr.atime.tv_usec = -1;
 
-    sync_acquire(nfs_lock);
+    sync_acquire(network_lock);
     enum rpc_stat res = nfs_create(&mnt_point, name, &sattr, nfs_create_cb, (uintptr_t)(&t));
-    sync_release(nfs_lock);
+    sync_release(network_lock);
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;

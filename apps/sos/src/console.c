@@ -4,6 +4,7 @@
 #include "copy.h"
 #include "thread.h"
 #include "frametable.h"
+#include "nfs_sync.h"
 
 #define MAX_BUFF_SIZE PAGE_SIZE
 
@@ -22,6 +23,7 @@ seL4_CPtr notify_async_ep;
 size_t num_newlines;
 
 void serial_callback_handler(struct serial *serial, char c) {
+    sync_release(network_lock);
     sync_acquire(read_serial_lock);
 
     if (buf_size < MAX_BUFF_SIZE) {
@@ -45,6 +47,7 @@ void serial_callback_handler(struct serial *serial, char c) {
         seL4_Notify(notify_async_ep, 0);
     }
     sync_release(read_serial_lock);
+    sync_acquire(network_lock);
 }
 
 void console_init() {
@@ -186,7 +189,9 @@ int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *s
             sync_release(write_serial_lock);
             return -err;
         }
+        sync_acquire(network_lock);
         int written = serial_send(serial, (char *)svaddr, (int) to_write);
+        sync_release(network_lock);
         frame_change_swappable(svaddr, true);
 
         bytes_left -= written;

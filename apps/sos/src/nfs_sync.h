@@ -5,7 +5,7 @@
 #include "file.h"
 #include "proc.h"
 
-sync_mutex_t nfs_lock;
+sync_mutex_t network_lock;
 
 void nfs_sync_init();
 
