@@ -543,7 +543,6 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
 
     void *usr_buf= (void*)seL4_GetMR(1);
 
-    dprintf(0, "allocing path\n");
     /* Do copyin to get path */
     char *path = kmalloc(N_NAME * sizeof(char));
     if (path == NULL) {
@@ -551,26 +550,21 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
         goto sos_execve_end;
     }
 
-    dprintf(0, "copying in string\n");
     err = copyinstring(proc, path, usr_buf, NAME_MAX);
     if (err) {
         goto sos_execve_end;
     }
     path[N_NAME-1] = 0;
 
-    dprintf(0, "proc creating\n");
     pid = proc_create(proc->pid, path);
     if (pid < 0) {
         err = -pid;
         goto sos_execve_end;
     }
-    dprintf(0, "all done\n");
     
 sos_execve_end:
     if (path) {
-        dprintf(0, "kfreeing\n");
         kfree(path);   
-        dprintf(0, "done kfreeing\n");
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
@@ -607,10 +601,11 @@ seL4_MessageInfo_t sos_ustat(process_t *proc, int num_args) {
     }
 
     for (int i = 0; i < MAX_PROCESSES && num_procs < max_procs; ++i) {
-        if (processes[i].pid != -1) {
+        pid_t pid = processes[i].pid;
+        if (pid != -1) {
             sync_acquire(processes[i].proc_lock);
             sos_process_t sos_proc;
-            sos_proc.pid = i;
+            sos_proc.pid = pid;
             sos_proc.size = processes[i].size;
             sos_proc.stime = processes[i].stime;
             strcpy(sos_proc.command, processes[i].command);
@@ -641,39 +636,35 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
 
     int err = 0;
     int pid = (int)seL4_GetMR(1);
-
-    dprintf(0, "wait piding\n");
-    if (pid < -1 || pid >= MAX_PROCESSES) {
+    int pid_idx = pid & PROCESSES_MASK;
+    if (pid < -1) {
         err = EINVAL;
         goto sos_waitid_end;
     }
+    assert(pid <= PID_MAX);
 
     if (pid != -1) {
-        dprintf(0, "acquiring proc lock\n");
-        sync_acquire(processes[pid].proc_lock);
+        sync_acquire(processes[pid_idx].proc_lock);
         /* Process we want to wait on does not exist */
-        if (processes[pid].pid == -1) {
+        if (processes[pid_idx].pid == -1) {
             err = ECHILD;
-            sync_release(processes[pid].proc_lock);
+            sync_release(processes[pid_idx].proc_lock);
             goto sos_waitid_end;
         }
 
         /* Process we want to wait on is not our child */
-        if (processes[pid].parent_proc != proc->pid) {
+        if (processes[pid_idx].parent_proc != proc->pid) {
             err = ECHILD;
-            sync_release(processes[pid].proc_lock);
+            sync_release(processes[pid_idx].proc_lock);
             goto sos_waitid_end;
         }
-        dprintf(0, "releasing proc lock\n");
-        sync_release(processes[pid].proc_lock);
+        sync_release(processes[pid_idx].proc_lock);
     }
 
-    dprintf(0, "doing ??\n");
     seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
     proc->wait_ep = async_ep;
     proc->wait_pid = pid;
 
-    dprintf(0, "waiting\n");
     seL4_Wait(async_ep, NULL);
     /* 
      * At this point, our wait_pid is the child that exited (set by
@@ -682,7 +673,6 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
 
 sos_waitid_end:
     asm("nop");
-    dprintf(0, "at the end\n");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
     seL4_SetMR(0, err);
@@ -696,8 +686,9 @@ seL4_MessageInfo_t sos_kill(process_t *proc, int num_args) {
     int err = 0;
 
     pid_t pid = seL4_GetMR(1);
+    uint32_t pid_idx = pid & PROCESSES_MASK;
 
-    process_t *to_kill = &processes[pid];
+    process_t *to_kill = &processes[pid_idx];
 
     sync_acquire(to_kill->proc_lock);
     if (to_kill->pid == -1 || to_kill->zombie) {

@@ -160,7 +160,8 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Wor
             unknown_syscall(NULL, 0);   
         } else {
 
-            process_t *proc = &processes[badge];
+            uint32_t proc_idx = badge & PROCESSES_MASK;
+            process_t *proc = &processes[proc_idx];
 
             sync_acquire(proc->proc_lock);
             if (proc->pid == -1) {
@@ -224,7 +225,6 @@ void syscall_loop(seL4_CPtr ep) {
             }
             /* Interrupt */
             if (badge & IRQ_BADGE_TIMER) {
-                //seL4_DebugPutChar('W');
                 timer_interrupt();
             }
 
@@ -234,14 +234,14 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_Word pc = seL4_GetMR(0);
             seL4_Word vaddr = seL4_GetMR(1);
             seL4_Word instruction_fault = seL4_GetMR(2);
-
+            uint32_t proc_idx = badge & PROCESSES_MASK;
 
             /* Page fault */
             dprintf(-1, "vm fault at 0x%08x, pc = 0x%08x, pid = %d, %s\n", vaddr,
                     pc, badge,
                     instruction_fault ? "Instruction Fault" : "Data fault");
 
-            process_t *proc = &processes[badge];
+            process_t *proc = &processes[proc_idx];
             sync_acquire(proc->proc_lock);
             proc->sos_thread_handling = true;
             sync_release(proc->proc_lock);
@@ -250,7 +250,7 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
             assert(reply_cap != CSPACE_NULL);
             seL4_CPtr sos_cap;
-            int err = pt_add_page(&processes[badge], vaddr, NULL, &sos_cap);
+            int err = pt_add_page(&processes[proc_idx], vaddr, NULL, &sos_cap);
 
             switch(err) {
                 case ENOMEM:
@@ -614,7 +614,7 @@ int main(void) {
 
     printf("cur cpsace levels = %u\n", cur_cspace->levels);
     //syscall_loop(_sos_interrupt_ep_cap);
-    syscall_loop(_sos_ipc_ep_cap);
+    syscall_loop(_sos_interrupt_ep_cap);
 
     /* Not reached */
     return 0;

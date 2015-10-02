@@ -53,7 +53,6 @@ while running:
 
                 numCommands = random.randint(1, 5)
                 numCommands = 0
-                #numCommands = 0
 
                 for i in range(numCommands):
                     command = commands[random.randint(0, len(commands)-1)]

@@ -8,9 +8,12 @@
 
 #define N_NAME 32
 #define MAX_PROCESSES 32
+#define PROCESSES_MASK (MAX_PROCESSES - 1)
 
 #define USER_EP_CAP          (1)
 #define USER_PRIORITY (0)
+
+#define PID_MAX ((int)((1u << (seL4_BadgeBits-1)) - 1))
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -69,6 +72,8 @@ typedef struct {
 
     bool zombie;
     bool sos_thread_handling;
+
+    pid_t next_pid;
 } process_t;
 
 int procs_head_free, procs_tail_free;

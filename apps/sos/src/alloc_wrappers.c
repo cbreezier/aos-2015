@@ -10,7 +10,6 @@
 
 sync_mutex_t ut_lock;
 
-int count;
 #ifdef KMALLOC_DEBUG
 int count;
 
@@ -60,7 +59,6 @@ void *kmalloc(size_t n) {
         sync_acquire(malloc_lock);
 
         ret = malloc(n);
-        printf("malloc %p %d\n", ret, ++count);
 #ifdef KMALLOC_DEBUG
         printf("malloc %p %d\n", ret, ++count);
         struct _entry *new = free_m_head;
@@ -119,7 +117,6 @@ void kfree(void *buf) {
         }
 #endif
         free(buf);
-        printf("free %p %d\n", buf, --count);
 #ifdef KMALLOC_DEBUG
         printf("free %p %d\n", buf, --count);
 

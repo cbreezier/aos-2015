@@ -29,6 +29,7 @@ void proc_init() {
         processes[i].next_free = (i == MAX_PROCESSES - 1) ? -1 : i+1;
         processes[i].pid = -1;
         processes[i].proc_lock = sync_create_mutex();
+        processes[i].next_pid = i;
     }
     procs_head_free = 0;
     procs_tail_free = MAX_PROCESSES - 1;
@@ -47,20 +48,22 @@ int proc_create(pid_t parent, char *program_name) {
         return ENOMEM;
     }
 
-    uint32_t pid = (uint32_t)procs_head_free;
+    uint32_t idx = (uint32_t)procs_head_free;
     procs_head_free = processes[procs_head_free].next_free;
     sync_release(proc_table_lock);
+    pid_t pid = processes[idx].next_pid;
 
     dprintf(0, "acquiring proc lock\n");
-    sync_acquire(processes[pid].proc_lock);
-    processes[pid].parent_proc = parent;
-    processes[pid].pid = pid;
-    processes[pid].size = 0;
-    processes[pid].stime = (unsigned)(time_stamp() / 1000);
-    strcpy(processes[pid].command, program_name);
-    processes[pid].wait_ep = 0;
-    processes[pid].zombie = false;
-    processes[pid].sos_thread_handling = false;
+    sync_acquire(processes[idx].proc_lock);
+    processes[idx].parent_proc = parent;
+    processes[idx].pid = pid;
+    processes[idx].next_pid = (pid + MAX_PROCESSES) & PID_MAX;
+    processes[idx].size = 0;
+    processes[idx].stime = (unsigned)(time_stamp() / 1000);
+    strcpy(processes[idx].command, program_name);
+    processes[idx].wait_ep = 0;
+    processes[idx].zombie = false;
+    processes[idx].sos_thread_handling = false;
 
     /* These required for setting up the TCB */
     seL4_UserContext context;
@@ -71,63 +74,63 @@ int proc_create(pid_t parent, char *program_name) {
 
     dprintf(0, "as initing\n");
     /* Initialise address space */
-    as_init(&processes[pid].as);
+    as_init(&processes[idx].as);
 
     dprintf(0, "allocating vroot addr\n");
     /* Create a VSpace */
-    processes[pid].vroot_addr = kut_alloc(seL4_PageDirBits);
-    conditional_panic(!processes[pid].vroot_addr, 
+    processes[idx].vroot_addr = kut_alloc(seL4_PageDirBits);
+    conditional_panic(!processes[idx].vroot_addr, 
                       "No memory for new Page Directory");
-    err = cspace_ut_retype_addr(processes[pid].vroot_addr,
+    err = cspace_ut_retype_addr(processes[idx].vroot_addr,
                                 seL4_ARM_PageDirectoryObject,
                                 seL4_PageDirBits,
                                 cur_cspace,
-                                &processes[pid].vroot);
+                                &processes[idx].vroot);
     conditional_panic(err, "Failed to allocate page directory cap for client");
 
     dprintf(0, "cspace create\n");
     /* Create a simple 1 level CSpace */
-    processes[pid].croot = cspace_create(1);
-    assert(processes[pid].croot != NULL);
+    processes[idx].croot = cspace_create(1);
+    assert(processes[idx].croot != NULL);
 
     dprintf(0, "adding IPC region\n");
-    as_add_region(processes[pid].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
+    as_add_region(processes[idx].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
     dprintf(0, "Added IPC region\n");
 
     /* Create an IPC buffer */
     seL4_Word ipcbuf_svaddr;
-    err = pt_add_page(&processes[pid], PROCESS_IPC_BUFFER, &ipcbuf_svaddr, &processes[pid].ipc_buffer_cap);
+    err = pt_add_page(&processes[idx], PROCESS_IPC_BUFFER, &ipcbuf_svaddr, &processes[idx].ipc_buffer_cap);
     conditional_panic(err, "Unable to add page table page for ipc buffer\n");
     frame_change_swappable(ipcbuf_svaddr, 0);
 
     dprintf(0, "minting ep\n");
     /* Copy the fault endpoint to the user app to enable IPC */
-    processes[pid].user_ep_cap = cspace_mint_cap(processes[pid].croot,
+    processes[idx].user_ep_cap = cspace_mint_cap(processes[idx].croot,
                                   cur_cspace,
                                   _sos_ipc_ep_cap,
                                   seL4_AllRights, 
                                   seL4_CapData_Badge_new(pid));
     /* should be the first slot in the space, hack I know */
-    assert(processes[pid].user_ep_cap == 1);
-    assert(processes[pid].user_ep_cap == USER_EP_CAP);
+    assert(processes[idx].user_ep_cap == 1);
+    assert(processes[idx].user_ep_cap == USER_EP_CAP);
 
     dprintf(0, "tcb stuff\n");
     /* Create a new TCB object */
-    processes[pid].tcb_addr = kut_alloc(seL4_TCBBits);
-    conditional_panic(!processes[pid].tcb_addr, "No memory for new TCB");
-    err =  cspace_ut_retype_addr(processes[pid].tcb_addr,
+    processes[idx].tcb_addr = kut_alloc(seL4_TCBBits);
+    conditional_panic(!processes[idx].tcb_addr, "No memory for new TCB");
+    err =  cspace_ut_retype_addr(processes[idx].tcb_addr,
                                  seL4_TCBObject,
                                  seL4_TCBBits,
                                  cur_cspace,
-                                 &processes[pid].tcb_cap);
+                                 &processes[idx].tcb_cap);
     conditional_panic(err, "Failed to create TCB");
 
     /* Configure the TCB */
     dprintf(0, "more tcb stuff\n");
-    err = seL4_TCB_Configure(processes[pid].tcb_cap, processes[pid].user_ep_cap, USER_PRIORITY,
-                             processes[pid].croot->root_cnode, seL4_NilData,
-                             processes[pid].vroot, seL4_NilData, PROCESS_IPC_BUFFER,
-                             processes[pid].ipc_buffer_cap);
+    err = seL4_TCB_Configure(processes[idx].tcb_cap, processes[idx].user_ep_cap, USER_PRIORITY,
+                             processes[idx].croot->root_cnode, seL4_NilData,
+                             processes[idx].vroot, seL4_NilData, PROCESS_IPC_BUFFER,
+                             processes[idx].ipc_buffer_cap);
     conditional_panic(err, "Unable to configure new TCB");
 
 
@@ -138,26 +141,26 @@ int proc_create(pid_t parent, char *program_name) {
 
     /* load the elf image */
     dprintf(0, "elf load\n");
-    err = elf_load(&processes[pid], elf_base);
+    err = elf_load(&processes[idx], elf_base);
     conditional_panic(err, "Failed to load elf image");
 
 
     /* Create a stack frame */
     /* Define stack */
     dprintf(0, "adding heap and stack regions\n");
-    as_add_heap(processes[pid].as);
-    as_add_stack(&processes[pid]);
+    as_add_heap(processes[idx].as);
+    as_add_stack(&processes[idx]);
 
     /* File descriptor table stuff */
-    processes[pid].proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
+    processes[idx].proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
     for (int i = 0; i < OPEN_FILE_MAX; ++i) {
-        processes[pid].proc_files[i].used = false;
-        processes[pid].proc_files[i].offset = 0;
-        processes[pid].proc_files[i].open_file_idx = 0;
-        processes[pid].proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? -1 : i + 1;
+        processes[idx].proc_files[i].used = false;
+        processes[idx].proc_files[i].offset = 0;
+        processes[idx].proc_files[i].open_file_idx = 0;
+        processes[idx].proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? -1 : i + 1;
     }
-    processes[pid].files_head_free = 3;
-    processes[pid].files_tail_free = OPEN_FILE_MAX - 1;
+    processes[idx].files_head_free = 3;
+    processes[idx].files_tail_free = OPEN_FILE_MAX - 1;
 
     sync_acquire(open_files_lock);
 
@@ -175,18 +178,18 @@ int proc_create(pid_t parent, char *program_name) {
     sync_release(open_files_lock);
 
     for (int i = 0; i < 3; ++i) {
-        processes[pid].proc_files[i].used = true;
-        processes[pid].proc_files[i].open_file_idx = open_entry;
-        processes[pid].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
+        processes[idx].proc_files[i].used = true;
+        processes[idx].proc_files[i].open_file_idx = open_entry;
+        processes[idx].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
     }
-    sync_release(processes[pid].proc_lock);
+    sync_release(processes[idx].proc_lock);
 
     /* Start the new process */
     dprintf(0, "almost done!\n");
     memset(&context, 0, sizeof(context));
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
-    seL4_TCB_WriteRegisters(processes[pid].tcb_cap, 1, 0, 2, &context);
+    seL4_TCB_WriteRegisters(processes[idx].tcb_cap, 1, 0, 2, &context);
 
     return pid;
 }
@@ -200,6 +203,7 @@ void proc_exit(process_t *proc) {
 
     pid_t pid_parent = proc->parent_proc;
     pid_t pid_proc = proc->pid;
+    uint32_t pid_idx = pid_proc & PROCESSES_MASK;
 
     proc->pid = -1;
 
@@ -253,13 +257,13 @@ void proc_exit(process_t *proc) {
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1 || procs_tail_free == -1) {
         assert(procs_head_free == -1 && procs_tail_free == -1);
-        procs_head_free = pid_proc;
-        procs_tail_free = pid_proc;
-        processes[pid_proc].next_free = -1;
+        procs_head_free = pid_idx;
+        procs_tail_free = pid_idx;
+        processes[pid_idx].next_free = -1;
     } else {
-        processes[procs_tail_free].next_free = pid_proc;
-        processes[pid_proc].next_free = -1;
-        procs_tail_free = pid_proc;
+        processes[procs_tail_free].next_free = pid_idx;
+        processes[pid_idx].next_free = -1;
+        procs_tail_free = pid_idx;
     }
     sync_release(proc_table_lock);
 
@@ -271,18 +275,18 @@ void proc_exit(process_t *proc) {
 
     /* Signal possibly waiting parent */
     if (pid_parent != -1) {
+        uint32_t parent_idx = pid_parent & PROCESSES_MASK;
         dprintf(0, "acquiring parent proc lock\n");
-        sync_acquire(processes[pid_parent].proc_lock);
-
-        if (processes[pid_parent].wait_ep) {
-            if (processes[pid_parent].wait_pid == -1 || processes[pid_parent].wait_pid == pid_proc) {
-                processes[pid_parent].wait_pid = pid_proc;
-                seL4_Notify(processes[pid_parent].wait_ep, 0);
-                processes[pid_parent].wait_ep = 0;
+        sync_acquire(processes[parent_idx].proc_lock);
+        if (processes[parent_idx].pid == pid_parent && processes[parent_idx].wait_ep) {
+            if (processes[parent_idx].wait_pid == -1 || processes[parent_idx].wait_pid == pid_proc) {
+                processes[parent_idx].wait_pid = pid_proc;
+                seL4_Notify(processes[parent_idx].wait_ep, 0);
+                processes[parent_idx].wait_ep = 0;
             }
         }
 
-        sync_release(processes[pid_parent].proc_lock);
+        sync_release(processes[parent_idx].proc_lock);
     }
     dprintf(0, "all done\n");
 }
