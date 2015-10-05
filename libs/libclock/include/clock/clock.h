@@ -24,6 +24,24 @@
 typedef uint64_t timestamp_t;
 typedef void (*timer_callback_t)(uint32_t id, void *data);
 
+/* 
+ * List of timers, sorted by their order of activation.
+ * Delay is relative to the previous timer in the list, such
+ * rescheduling a timer can be done in constant time
+ */
+struct timer_list_node {
+    uint64_t delay;
+
+    uint32_t id;
+
+    timer_callback_t callback;
+    void *data;
+
+    bool is_user_provided;
+
+    struct timer_list_node *next;
+};
+
 
 /*
  * Initialise driver. Performs implicit stop_timer() if already initialised.
@@ -42,7 +60,7 @@ int start_timer(seL4_CPtr interrupt_ep);
  *
  * Returns 0 on failure, otherwise an unique ID for this timeout
  */
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data);
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, struct timer_list_node *given_node);
 
 /*
  * Remove a previously registered callback by its ID

@@ -85,6 +85,9 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
  * NFS mount point
  */
 #define NFS_TICK_TIME 100000ull
+
+struct timer_list_node nfs_timer_node;
+
 extern fhandle_t mnt_point;
 
 struct mutex_ep {
@@ -160,7 +163,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Wor
     syscall_number = saved_mr[0];
 
     /* Process system call */
-    dprintf(-1, "got syscall number %u\n", syscall_number);
+    dprintf(-1, "got syscall number %u from pid %u\n", syscall_number, badge);
 
     seL4_MessageInfo_t reply;
     switch (syscall_number) {
@@ -173,7 +176,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Wor
             process_t *proc = &processes[proc_idx];
 
             sync_acquire(proc->proc_lock);
-            if (proc->pid == -1) {
+            if (proc->pid != badge) {
                 sync_release(proc->proc_lock);
                 goto handle_syscall_end;
             }
@@ -185,19 +188,15 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Wor
             reply = syscall_jt[syscall_number](proc, num_args);
 
             if (syscall_number != SYS_exit) {
-                copyMR(saved_mr, true, seL4_MessageInfo_get_length(reply));
-
-                sync_acquire(proc->proc_lock);
-                proc->sos_thread_handling = false;
-                sync_release(proc->proc_lock);
-
-                copyMR(saved_mr, false, seL4_MessageInfo_get_length(reply));
-
                 /* Check if zombie - if so kill the thread */
                 if (proc->zombie || is_fatal_error(saved_mr[0])) {
                     proc_exit(proc);    
                 } else {
                     seL4_Send(reply_cap, reply);
+
+                    sync_acquire(proc->proc_lock);
+                    proc->sos_thread_handling = false;
+                    sync_release(proc->proc_lock);
                 }
             }
 
@@ -468,23 +467,20 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-timestamp_t last_time = 0;
-void setup_tick_timer(uint32_t id, void *data) {
-    timestamp_t t = time_stamp();
-    timestamp_t diff = t - last_time;
-    last_time = t;
-    dprintf(0, "Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
-    register_timer(*((uint64_t*) data), setup_tick_timer, data);
-}
+//timestamp_t last_time = 0;
+//void setup_tick_timer(uint32_t id, void *data) {
+//    timestamp_t t = time_stamp();
+//    timestamp_t diff = t - last_time;
+//    last_time = t;
+//    dprintf(0, "Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
+//    register_timer(*((uint64_t*) data), setup_tick_timer, data);
+//}
 
 void nfs_tick(uint32_t id, void *data) {
-    //seL4_DebugPutChar('X');
     sync_acquire(network_lock);
-    //seL4_DebugPutChar('Z');
     nfs_timeout();
     sync_release(network_lock);
-    //register_timer(NFS_TICK_TIME, nfs_tick, data);
-    //printf("registered\n");
+    register_timer(NFS_TICK_TIME, nfs_tick, data, &nfs_timer_node);
 }
 
 //static void test0() {
@@ -598,7 +594,7 @@ int main(void) {
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     //nfs_tick(0, NULL);
-    register_timer(NFS_TICK_TIME, nfs_tick, NULL);
+    register_timer(NFS_TICK_TIME, nfs_tick, NULL, &nfs_timer_node);
 
     /* Initialise swap table */
     size_t ft_lo_idx, ft_hi_idx;

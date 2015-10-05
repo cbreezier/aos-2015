@@ -63,7 +63,6 @@ static struct allocation *remove_num(struct allocation *node, uint32_t num) {
             kfree(node);
             return NULL;
         }
-        assert(!"Should never remove_num up to here");
         if (node->left != NULL && node->right != NULL) {
             uint32_t smallest = tree_min(node->right);
             if (smallest == -1) return node;
@@ -138,7 +137,9 @@ uint32_t allocator_get_num(struct number_allocator *na) {
     bool success = false;
     sync_acquire(allocator_lock);
     do {
-        num = gen_random(na);
+        do {
+            num = gen_random(na);
+        } while (num == 0);
         na->root = insert_num(na->root, num, &success);
     } while (!success);
     sync_release(allocator_lock);

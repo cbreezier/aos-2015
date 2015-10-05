@@ -30,21 +30,7 @@ enum {
     CLKSRC = 24
 };
 
-/* 
- * List of timers, sorted by their order of activation.
- * Delay is relative to the previous timer in the list, such
- * rescheduling a timer can be done in constant time
- */
-struct list_node {
-    uint64_t delay;
-
-    uint32_t id;
-
-    timer_callback_t callback;
-    void *data;
-
-    struct list_node *next;
-} *head;
+struct timer_list_node *head;
 
 sync_mutex_t timer_lock;
 
@@ -152,12 +138,12 @@ int start_timer(seL4_CPtr interrupt_ep) {
 
     timer_lock = sync_create_mutex();
     if (timer_lock == NULL) {
-        return EFAULT;
+        return ENOMEM;
     }
 
     allocator = init_allocator(time_stamp());
     if (allocator == NULL) {
-        return EFAULT;
+        return ENOMEM;
     }
 
     // printf("Finished initialising timer\n");
@@ -192,15 +178,24 @@ static void reschedule(uint64_t delay) {
     epit_clocks[0]->cr |= BIT(EN);
 }
 
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, struct timer_list_node *given_node) {
     bool rescheduling = false;
 
-    struct list_node *node = kmalloc(sizeof(struct list_node));
+    if (given_node == NULL) {
+        given_node = kmalloc(sizeof(struct timer_list_node));
+        if (given_node == NULL) {
+            return 0;
+        }
+        given_node->is_user_provided = false;
+    } else {
+        given_node->is_user_provided = true;
+    }
+    struct timer_list_node *node = given_node;
     assert(node != NULL);
 
     node->callback = callback;
     node->data = data;
-    node->id = 1;//allocator_get_num(allocator);
+    node->id = allocator_get_num(allocator);
     node->delay = delay;
 
     sync_acquire(timer_lock);
@@ -219,7 +214,6 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
 
     epit_clocks[0]->cr |= BIT(EN);
 
-    assert(head == NULL);
     if (head == NULL) {
         node->next = NULL;
         head = node; 
@@ -238,8 +232,8 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
             overcompensation = head->delay - current_us;
         }
         uint64_t running_delay = 0;
-        struct list_node *prev = NULL;
-        struct list_node *cur = head;
+        struct timer_list_node *prev = NULL;
+        struct timer_list_node *cur = head;
         /* 
          * Find the position at which to insert the new timer.
          * "cur" will contain the element following the position
@@ -319,7 +313,9 @@ int remove_timer(uint32_t id) {
 
         if (head->next == NULL) {
             allocator_release_num(allocator, head->id); 
-            kfree(head);
+            if (!head->is_user_provided) {
+                kfree(head);
+            }
             sync_release(timer_lock);
             return 0;
         }
@@ -330,17 +326,19 @@ int remove_timer(uint32_t id) {
         }
 
         /* Remove the timer and free its memory */
-        struct list_node *to_free = head;
+        struct timer_list_node *to_free = head;
         head = head->next;
         allocator_release_num(allocator, to_free->id);
-        kfree(to_free);
+        if (!to_free->is_user_provided) {
+            kfree(to_free);
+        }
 
         /* Must reschedule timer since we modified the head */
         reschedule(head->delay);
     } else {
         /* List traversal to find the timer and remove it */
-        struct list_node *prev = NULL;
-        struct list_node *cur = head;
+        struct timer_list_node *prev = NULL;
+        struct timer_list_node *cur = head;
         while (cur != NULL && cur->id != id) {
             prev = cur;
             cur = cur->next;
@@ -387,9 +385,9 @@ int timer_interrupt(void) {
                 reschedule(head->delay);
             }
         } else {
-            struct list_node *to_free = head;
-            //head = head->next;
-            //to_free->next = NULL;
+            struct timer_list_node *to_free = head;
+            head = head->next;
+            to_free->next = NULL;
             /* 
              * Rescheduling must be done prior to callback, for
              * efficiency, and to handle the possibility that
@@ -400,11 +398,11 @@ int timer_interrupt(void) {
             } else {
                 epit_clocks[0]->cr &= ~(BIT(EN));
             }
-            //allocator_release_num(allocator, to_free->id);
+            allocator_release_num(allocator, to_free->id);
             to_free->callback(to_free->id, to_free->data);
-            //seL4_DebugPutChar('P');
-            //kfree(to_free);
-            //seL4_DebugPutChar('H');
+            if (!to_free->is_user_provided) {
+                kfree(to_free);
+            }
         }
     }
     if (epit_clocks[1]->sr) {
@@ -445,8 +443,8 @@ int stop_timer(void) {
 
     sync_destroy_mutex(timer_lock);
 
-    struct list_node *prev;
-    struct list_node *cur = head;
+    struct timer_list_node *prev;
+    struct timer_list_node *cur = head;
     while (cur != NULL) {
         prev = cur;
         cur = cur->next;

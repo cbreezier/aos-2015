@@ -52,7 +52,6 @@ while running:
                 s.sendto('exec sosh &\n', sabreAddr)
 
                 numCommands = random.randint(1, 5)
-                numCommands = 0
 
                 for i in range(numCommands):
                     command = commands[random.randint(0, len(commands)-1)]

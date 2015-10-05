@@ -210,7 +210,8 @@ int proc_create(pid_t parent, char *program_name) {
         processes[idx].proc_files[i].open_file_idx = 0;
         processes[idx].proc_files[i].next_free = i == OPEN_FILE_MAX - 1 ? -1 : i + 1;
     }
-    processes[idx].files_head_free = 3;
+    processes[idx].proc_files[0].next_free = 3;
+    processes[idx].files_head_free = 0;
     processes[idx].files_tail_free = OPEN_FILE_MAX - 1;
 
     sync_acquire(open_files_lock);
@@ -219,19 +220,20 @@ int proc_create(pid_t parent, char *program_name) {
     bool exists = (strcmp(open_files[open_entry].file_obj.name, "console") == 0);
 
     if (exists) {
-        open_files[open_entry].ref_count += 3;
+        open_files[open_entry].ref_count += 2;
     } else {
-        open_files[open_entry].ref_count = 3;
+        open_files[open_entry].ref_count = 2;
         open_files[open_entry].file_obj.read = console_read;
         open_files[open_entry].file_obj.write = console_write;
         strcpy(open_files[open_entry].file_obj.name, "console");
     }
     sync_release(open_files_lock);
 
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 1; i < 3; ++i) {
         processes[idx].proc_files[i].used = true;
         processes[idx].proc_files[i].open_file_idx = open_entry;
-        processes[idx].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
+        //processes[idx].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
+        processes[idx].proc_files[i].mode = FM_WRITE;
     }
 
     /* Start the new process */

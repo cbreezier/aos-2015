@@ -578,7 +578,7 @@ int main(void) {
 //
 //    return 0;
     in = open("console", O_RDONLY);
-    printf("in = %d\n", in);
+//    printf("in = %d\n", in);
 //    pt_test();
 //    printf("IT WORKED\n");
 
@@ -591,7 +591,7 @@ int main(void) {
 
 
     //in = 0;
-    assert(in >= 0);
+    //assert(in >= 0);
 
     bp = buf;
     done = 0;

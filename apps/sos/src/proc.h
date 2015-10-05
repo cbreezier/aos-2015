@@ -5,6 +5,7 @@
 #include <cspace/cspace.h>
 #include <limits.h>
 #include <sync/mutex.h>
+#include <clock/clock.h>
 
 #define N_NAME 32
 #define MAX_PROCESSES 32
@@ -73,6 +74,8 @@ typedef struct {
     bool sos_thread_handling;
 
     pid_t next_pid;
+
+    struct timer_list_node timer_sleep_node;
 } process_t;
 
 int procs_head_free, procs_tail_free;

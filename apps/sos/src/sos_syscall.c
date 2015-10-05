@@ -78,7 +78,7 @@ seL4_MessageInfo_t sos_nanosleep(process_t *proc, int num_args) {
     if (data != NULL) {
         seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
         *data = async_ep;
-        err = register_timer(delay, sos_nanosleep_notify, (void*)data);
+        err = register_timer(delay, sos_nanosleep_notify, (void*)data, &proc->timer_sleep_node);
         seL4_Wait(async_ep, NULL);
     } else {
         err = ENOMEM;
@@ -647,7 +647,7 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
     if (pid != -1) {
         sync_acquire(processes[pid_idx].proc_lock);
         /* Process we want to wait on does not exist */
-        if (processes[pid_idx].pid == -1) {
+        if (processes[pid_idx].pid != pid) {
             err = ECHILD;
             sync_release(processes[pid_idx].proc_lock);
             goto sos_waitid_end;
@@ -692,7 +692,7 @@ seL4_MessageInfo_t sos_kill(process_t *proc, int num_args) {
     process_t *to_kill = &processes[pid_idx];
 
     sync_acquire(to_kill->proc_lock);
-    if (to_kill->pid == -1 || to_kill->zombie) {
+    if (to_kill->pid != pid_idx || to_kill->zombie) {
         err = ESRCH;
         sync_release(to_kill->proc_lock);
         goto sos_kill_end;
