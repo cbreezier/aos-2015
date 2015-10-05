@@ -145,6 +145,15 @@ void copyMR(seL4_Word *buf, bool in, size_t num_args) {
     }
 }
 
+static bool is_fatal_error(int err) {
+    switch (err) {
+        case EACCES:
+            return true;
+        default:
+            return false;
+    }
+}
+
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Word *saved_mr) {
     seL4_Word syscall_number;
 
@@ -185,7 +194,7 @@ void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Wor
                 copyMR(saved_mr, false, seL4_MessageInfo_get_length(reply));
 
                 /* Check if zombie - if so kill the thread */
-                if (proc->zombie) {
+                if (proc->zombie || is_fatal_error(saved_mr[0])) {
                     proc_exit(proc);    
                 } else {
                     seL4_Send(reply_cap, reply);
@@ -252,18 +261,9 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_CPtr sos_cap;
             int err = pt_add_page(&processes[proc_idx], vaddr, NULL, &sos_cap);
 
-            bool has_killed_proc = false;
-            switch(err) {
-                case ENOMEM:
-                case EACCES:
-                    proc_exit(proc);
-                    cspace_free_slot(cur_cspace, reply_cap);
-                    has_killed_proc = true;
-                    break;
-                default:
-                    break;
-            }
-            if (has_killed_proc) {
+            if (err) {
+                proc_exit(proc);
+                cspace_free_slot(cur_cspace, reply_cap);
                 continue;
             }
 

@@ -220,7 +220,7 @@ pid_t sos_my_id(void) {
     seL4_SetMR(0, SYS_getpid);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
 
-    return seL4_GetMR(0);
+    return seL4_GetMR(1);
 }
 /* Returns ID of caller's process. */
 

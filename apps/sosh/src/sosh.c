@@ -117,7 +117,7 @@ static int sosh_read(int argc, char **argv) {
         return 1;
     }
 
-    char buf[(int)1e7];
+    char buf[(int)1e6];
     buf[0] = '\0';
 
     int nread = read(atoi(argv[1]), buf + atoi(argv[2]), atoi(argv[3]));

@@ -59,7 +59,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
     bool region_r, region_w;
     /* Check that the entire user buffer lies within a valid region */
     if (!usr_buf_in_region(proc, usr, nbytes, &region_r, &region_w)) {
-        return EFAULT;
+        return EACCES;
     }
     if ((!region_r && !copyout) || (!region_w && copyout)) {
         return EACCES;

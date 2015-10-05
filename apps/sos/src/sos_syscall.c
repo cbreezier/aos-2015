@@ -118,17 +118,17 @@ seL4_MessageInfo_t sos_brk(process_t *proc, int num_args) {
 
     struct region_entry *heap = proc->as->heap_region;
 
-    int error = ENOMEM;
+    int err = ENOMEM;
 
     if ((heap->next == NULL || new_top_align <= heap->next->start) && new_top_align > heap->start) {
         size_t new_size = new_top_align - heap->start;
         heap->size = new_size;
-        error = 0;
+        err = 0;
     }
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
-    seL4_SetMR(0, error);
+    seL4_SetMR(0, err);
     seL4_SetMR(1, new_top_align);
 
     return reply;
@@ -579,9 +579,10 @@ seL4_MessageInfo_t sos_getpid(process_t *proc, int num_args) {
 
     pid_t pid = proc->pid;
 
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 
-    seL4_SetMR(0, pid);
+    seL4_SetMR(0, 0);
+    seL4_SetMR(1, pid);
 
     return reply;
 }
