@@ -125,7 +125,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
     return num_read;
 }
 
-int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *dest, size_t nbytes) {
+int console_read(process_t *proc, fhandle_t *fh, uint32_t offset, void *dest, size_t nbytes) {
     if (!usr_buf_in_region(proc, dest, nbytes, NULL, NULL)) {
         return -EFAULT;
     }
@@ -168,7 +168,7 @@ int console_read(process_t *proc, struct file_t *file, uint32_t offset, void *de
 }
 
 /* src is a user address */
-int console_write(process_t *proc, struct file_t *file, uint32_t offset, void *src, size_t nbytes) {
+int console_write(process_t *proc, fhandle_t *fh, uint32_t offset, void *src, size_t nbytes) {
     bool region_r;
     if (!usr_buf_in_region(proc, src, nbytes, &region_r, NULL)) {
         return -EFAULT;

@@ -11,12 +11,12 @@ void nfs_sync_init();
 
 int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr);
 
-int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes);
+int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf, size_t nbytes);
 
 /* Pls only give me at most PAGE_SIZE bytes */
 int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes);
 
-int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *sos_buf, size_t nbytes);
+int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf, size_t nbytes);
 
 /* Pls only give me at most PAGE_SIZE bytes */
 int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes);

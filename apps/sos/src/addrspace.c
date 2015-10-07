@@ -318,3 +318,24 @@ struct region_entry *as_get_region(struct addrspace *as, void *vaddr) {
     }
     return NULL;
 }
+
+void as_unify_cache(struct addrspace *as) {
+    if (as == NULL) return;
+
+    if (as->page_directory != NULL) {
+        for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
+            if (as->page_directory[l1] == NULL) {
+                continue;
+            }
+            for (size_t l2 = 0; l2 < (1 << SECOND_LEVEL_SIZE); ++l2) {
+                seL4_Word frame = as->page_directory[l1][l2].frame;
+                if (frame <= 0) {
+                    continue;
+                }
+                uint32_t idx = svaddr_to_frame_idx(frame);
+                seL4_ARM_Page_Unify_Instruction(ft[idx].cap, 0, PAGE_SIZE);
+            }
+        }
+    }
+
+}

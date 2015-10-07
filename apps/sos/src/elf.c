@@ -13,6 +13,7 @@
 #include <string.h>
 #include <assert.h>
 #include <cspace/cspace.h>
+#include <elf/elf32.h>
 
 #include "elf.h"
 #include "pagetable.h"
@@ -20,6 +21,8 @@
 #include "vmem_layout.h"
 #include "ut_manager/ut.h"
 #include "alloc_wrappers.h"
+#include "file.h"
+#include "nfs_sync.h"
 
 #include <utils/mapping.h>
 
@@ -58,9 +61,9 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
  * TODO: Don't keep these pages mapped in
  */
 static int load_segment_into_vspace(process_t *proc,
-                                    char *src, unsigned long segment_size,
+                                    unsigned long offset, unsigned long segment_size,
                                     unsigned long file_size, unsigned long dst,
-                                    unsigned long permissions) {
+                                    unsigned long permissions, fhandle_t *fhandle) {
 
     /* Overview of ELF segment loading
 
@@ -90,9 +93,7 @@ static int load_segment_into_vspace(process_t *proc,
 
     assert(file_size <= segment_size);
 
-    unsigned long pos;
 
-    //printf("adding region\n");
     int err = as_add_region(proc->as, dst, segment_size,
         permissions & seL4_CanRead,
         permissions & seL4_CanWrite,
@@ -101,73 +102,102 @@ static int load_segment_into_vspace(process_t *proc,
     if (err) {
         return err;
     }
+
+    err = nfs_read_sync(proc, fhandle, offset, (void*)dst, file_size);
+    if (err) {
+        return err;
+    }
+
+    return 0;
     //dprintf(0, "region added\n");
 
     /* We work a page at a time in the destination vspace. */
-    pos = 0;
-    while(pos < segment_size) {
-        int nbytes;
-        seL4_Word vaddr = PAGE_ALIGN(dst);
-
-        /* Now copy our data into the destination vspace. */
-        seL4_Word svaddr;
-        seL4_CPtr sos_cap;
-        err = pt_add_page(proc, vaddr, &svaddr, &sos_cap);
-        if (err) {
-            //dprintf(0, "error is %u\n", err);
-            return err;
-        }
-        nbytes = PAGESIZE - (dst & PAGEMASK);
-        if (pos < file_size){
-            memcpy((void*)svaddr + (PAGE_SIZE - nbytes), (void*)src, MIN(nbytes, file_size - pos));
-        }
-        frame_change_swappable(svaddr, 1);
-
-        /* Not observable to I-cache yet so flush the frame */
-        seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-
-        pos += nbytes;
-        dst += nbytes;
-        src += nbytes;
-    }
-    return 0;
+//    unsigned long pos = 0;
+//    while(pos < segment_size) {
+//        int nbytes;
+//        seL4_Word vaddr = PAGE_ALIGN(dst);
+//
+//        /* Now copy our data into the destination vspace. */
+//        seL4_Word svaddr;
+//        seL4_CPtr sos_cap;
+//        err = pt_add_page(proc, vaddr, &svaddr, &sos_cap);
+//        if (err) {
+//            //dprintf(0, "error is %u\n", err);
+//            return err;
+//        }
+//        nbytes = PAGESIZE - (dst & PAGEMASK);
+//        if (pos < file_size){
+//            memcpy((void*)svaddr + (PAGE_SIZE - nbytes), (void*)src, MIN(nbytes, file_size - pos));
+//        }
+//        frame_change_swappable(svaddr, 1);
+//
+//        /* Not observable to I-cache yet so flush the frame */
+//        seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+//
+//        pos += nbytes;
+//        dst += nbytes;
+//        src += nbytes;
+//    }
+//    return 0;
 }
 
-int elf_load(process_t *proc, char *elf_file) {
+int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
 
     int num_headers;
     int err;
     int i;
 
+    fhandle_t fhandle;
+    err = nfs_lookup_sync(file_name, &fhandle, NULL);
+    if (err) {
+        return err;
+    }
+
+    struct Elf32_Header header;
+
+    err = nfs_sos_read_sync(fhandle, 0, (void*)(&header), sizeof(header));
+    if (err) {
+        return err;
+    }
+
+    void *elf_header = (void *)&header;
+
     /* Ensure that the ELF file looks sane. */
-    if (elf_checkFile(elf_file)){
+    if (elf_checkFile(elf_header)) {
         return seL4_InvalidArgument;
     }
 
-    num_headers = elf_getNumProgramHeaders(elf_file);
+    num_headers = elf_getNumProgramHeaders(elf_header);
     for (i = 0; i < num_headers; i++) {
-        char *source_addr;
-        unsigned long flags, file_size, segment_size, vaddr;
+        //char *source_addr, ;
+        unsigned long flags, file_size, segment_size, vaddr, source_offset;
 
         /* Skip non-loadable segments (such as debugging data). */
-        if (elf_getProgramHeaderType(elf_file, i) != PT_LOAD)
+        if (elf_getProgramHeaderType(elf_header, i) != PT_LOAD)
             continue;
 
         /* Fetch information about this segment. */
-        source_addr = elf_file + elf_getProgramHeaderOffset(elf_file, i);
-        file_size = elf_getProgramHeaderFileSize(elf_file, i);
-        segment_size = elf_getProgramHeaderMemorySize(elf_file, i);
-        vaddr = elf_getProgramHeaderVaddr(elf_file, i);
-        flags = elf_getProgramHeaderFlags(elf_file, i);
+        source_offset = elf_getProgramHeaderOffset(elf_header, i);
+        //source_addr = elf_header + source_offset;
+        file_size = elf_getProgramHeaderFileSize(elf_header, i);
+        segment_size = elf_getProgramHeaderMemorySize(elf_header, i);
+        vaddr = elf_getProgramHeaderVaddr(elf_header, i);
+        flags = elf_getProgramHeaderFlags(elf_header, i);
 
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
-        err = load_segment_into_vspace(proc, source_addr, segment_size, file_size, vaddr,
-                                       get_sel4_rights_from_elf(flags) & seL4_AllRights);
+        err = load_segment_into_vspace(proc, source_offset, segment_size, file_size, vaddr,
+                                       get_sel4_rights_from_elf(flags) & seL4_AllRights, &fhandle);
         if (err) {
             return err;
         }
     }
+
+    if (ret_entrypoint) {
+        *ret_entrypoint = elf_getEntryPoint(elf_header);
+    }
+
+    as_unify_cache(proc->as);
 
     return 0;
 }

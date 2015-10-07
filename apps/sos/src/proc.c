@@ -80,8 +80,9 @@ int proc_create(pid_t parent, char *program_name) {
     seL4_UserContext context;
 
     /* These required for loading program sections */
-    char* elf_base;
-    unsigned long elf_size;
+    //char* elf_base;
+    //unsigned long elf_size;
+    seL4_Word program_entrypoint = 0;
 
     dprintf(0, "as initing\n");
     /* Initialise address space */
@@ -172,17 +173,17 @@ int proc_create(pid_t parent, char *program_name) {
     }
 
 
-    /* parse the cpio image */
-    dprintf(1, "\nStarting \"%s\"...\n", program_name);
-    elf_base = cpio_get_file(_cpio_archive, program_name, &elf_size);
-    if (!elf_base) {
-        err = ENOENT;
-        goto proc_create_end;
-    }
+    ///* parse the cpio image */
+    //dprintf(1, "\nStarting \"%s\"...\n", program_name);
+    //elf_base = cpio_get_file(_cpio_archive, program_name, &elf_size);
+    //if (!elf_base) {
+    //    err = ENOENT;
+    //    goto proc_create_end;
+    //}
 
     /* load the elf image */
     dprintf(0, "elf load\n");
-    err = elf_load(&processes[idx], elf_base);
+    err = elf_load(&processes[idx], program_name, &program_entrypoint);
     if (err) {
         goto proc_create_end;
     }
@@ -239,7 +240,7 @@ int proc_create(pid_t parent, char *program_name) {
     /* Start the new process */
     dprintf(0, "almost done!\n");
     memset(&context, 0, sizeof(context));
-    context.pc = elf_getEntryPoint(elf_base);
+    context.pc = program_entrypoint;
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(processes[idx].tcb_cap, 1, 0, 2, &context);
 proc_create_end:

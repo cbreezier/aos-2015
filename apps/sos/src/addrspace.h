@@ -56,4 +56,6 @@ int as_remove_region(process_t *proc, seL4_Word addr);
  */
 struct region_entry *as_get_region(struct addrspace *as, void *vaddr);
 
+void as_unify_cache(struct addrspace *as);
+
 #endif /* _ADDRSPACE_H_ */

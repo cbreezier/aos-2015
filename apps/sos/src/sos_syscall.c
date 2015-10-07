@@ -347,7 +347,7 @@ seL4_MessageInfo_t sos_read(process_t *proc, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    nread = file->read(proc, file, fd_entry->offset, buf, nbytes);
+    nread = file->read(proc, &file->fh, fd_entry->offset, buf, nbytes);
     if (nread < 0) {
         err = -nread;
         goto sos_read_end;
@@ -396,7 +396,7 @@ seL4_MessageInfo_t sos_write(process_t *proc, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    nwrite = file->write(proc, file, fd_entry->offset, buf, nbytes);
+    nwrite = file->write(proc, &file->fh, fd_entry->offset, buf, nbytes);
     if (nwrite < 0) {
         err = -nwrite;
         goto sos_write_end;

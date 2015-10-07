@@ -146,7 +146,7 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
 }
 
 /* Returns number of bytes read. Returns -error upon error */
-int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
+int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.usr_buf = usr_buf;
@@ -166,7 +166,7 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
         size_t to_read = nbytes - t.count < PAGE_SIZE ? nbytes - t.count : PAGE_SIZE;
 
         sync_acquire(network_lock);
-        enum rpc_stat res = nfs_read(&file->fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
+        enum rpc_stat res = nfs_read(fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
         sync_release(network_lock);
         if (t.err) {
             kfree(sos_buf);
@@ -185,7 +185,7 @@ int nfs_read_sync(process_t *proc, struct file_t *file, uint32_t offset, void *u
             return -err;
         }
         
-        dprintf(0, "copying to %x\n", usr_buf + before_count);
+        //dprintf(0, "copying to %x\n", usr_buf + before_count);
         err = copyout(proc, usr_buf + before_count, sos_buf, t.count - before_count);
         if (err) {
             return -err;
@@ -254,7 +254,7 @@ static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, 
 }
 
 /* Returns number of bytes written. Returns -error upon error */
-int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *usr_buf, size_t nbytes) {
+int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.count = 0;
@@ -279,7 +279,7 @@ int nfs_write_sync(process_t *proc, struct file_t *file, uint32_t offset, void *
         int count_before = t.count;
 
         sync_acquire(network_lock);
-        enum rpc_stat res = nfs_write(&file->fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
+        enum rpc_stat res = nfs_write(fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
         sync_release(network_lock);
         err = rpc_stat_to_err(res);
         if (err) {
