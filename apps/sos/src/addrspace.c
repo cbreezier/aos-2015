@@ -350,11 +350,15 @@ void as_unify_cache(struct addrspace *as) {
                 continue;
             }
             for (size_t l2 = 0; l2 < (1 << SECOND_LEVEL_SIZE); ++l2) {
-                seL4_Word frame = as->page_directory[l1][l2].frame;
+                int frame = as->page_directory[l1][l2].frame;
                 if (frame <= 0) {
                     continue;
                 }
                 uint32_t idx = svaddr_to_frame_idx(frame);
+                if (ft[idx].user_cap == 0) {
+                    // Page is currently unmapped, unable to (and no need to) unify
+                    continue;
+                }
                 seL4_ARM_Page_Unify_Instruction(ft[idx].cap, 0, PAGE_SIZE);
             }
         }

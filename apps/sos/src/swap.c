@@ -101,7 +101,11 @@ static int swapout() {
     int nwritten = nfs_sos_write_sync(swap_fh, disk_loc * PAGE_SIZE, (void*)svaddr, PAGE_SIZE);
     conditional_panic(nwritten != PAGE_SIZE, "Writing out to swap file failed");
 
-    return _cur_ft_idx++;
+    int ret = _cur_ft_idx++;
+    if (_cur_ft_idx >= _hi_ft_idx) {
+        _cur_ft_idx = _lo_ft_idx;
+    }
+    return ret;
 }
 
 int swapin(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr) {
