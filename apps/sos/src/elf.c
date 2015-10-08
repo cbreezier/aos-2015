@@ -97,17 +97,19 @@ static int load_segment_into_vspace(process_t *proc,
     dprintf(0, "dst = %lu, segment_size = %lu, file_size = %lu\n", dst, segment_size, file_size);
     /* Temporarily set all permissions to the region, such that we can load it */
     int err = as_add_region(proc->as, dst, segment_size, 1, 1, 1);
-
     if (err) {
         dprintf(0, "as add region failed %d\n", err);
         return err;
     }
+    dprintf(0, "as_add_region done (elf load)\n");
 
+    dprintf(0, "nfs_read_sync (elf load)\n");
     err = nfs_read_sync(proc, fhandle, offset, (void*)dst, file_size);
     if (err < 0) {
         dprintf(0, "nfs_read_sync failed - reading segment %d\n", -err);
         return -err;
     }
+    dprintf(0, "nfs_read_sync done (elf load)\n");
 
     as_change_region_perms(proc->as, (void*)dst,
         permissions & seL4_CanRead,

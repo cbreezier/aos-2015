@@ -7,6 +7,8 @@
 
 sync_mutex_t printf_lock;
 
+sync_mutex_t malloc_lock;
+
 void alloc_wrappers_init();
 
 void *kmalloc(size_t n);

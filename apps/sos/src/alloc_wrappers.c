@@ -6,7 +6,7 @@
 #include "ut_manager/ut.h"
 #include "alloc_wrappers.h"
 
-//#define KMALLOC_DEBUG 
+#define KMALLOC_DEBUG 
 
 sync_mutex_t ut_lock;
 
@@ -23,8 +23,6 @@ struct _entry *m_head;
 
 struct _entry *free_m_head;
 #endif
-
-sync_mutex_t malloc_lock;
 
 void alloc_wrappers_init() {
 #ifdef KMALLOC_DEBUG
@@ -56,11 +54,17 @@ void *kmalloc(size_t n) {
      */
     void *ret = NULL;
     if (malloc_lock) {
+        seL4_DebugPutChar('1');
+        seL4_DebugPutChar('\n');
         sync_acquire(malloc_lock);
+        seL4_DebugPutChar('2');
+        seL4_DebugPutChar('\n');
 
         ret = malloc(n);
+        seL4_DebugPutChar('3');
+        seL4_DebugPutChar('\n');
 #ifdef KMALLOC_DEBUG
-        printf("malloc %p %d\n", ret, ++count);
+        //printf("malloc %p %d\n", ret, ++count);
         struct _entry *new = free_m_head;
         assert(new);
         free_m_head = free_m_head->next;
@@ -73,12 +77,17 @@ void *kmalloc(size_t n) {
     } else {
         ret = malloc(n);
 #ifdef KMALLOC_DEBUG
-        dprintf(0, "malloc lock null\n");
-        printf("lockless malloc %p %d\n", ret, ++count);
+        //printf("lockless malloc %p %d\n", ret, ++count);
 #endif
     }
     
-    if (malloc_lock) sync_release(malloc_lock);
+    if (malloc_lock) {
+        seL4_DebugPutChar('4');
+        seL4_DebugPutChar('\n');
+        sync_release(malloc_lock);
+        seL4_DebugPutChar('5');
+        seL4_DebugPutChar('\n');
+    }
 #ifdef KMALLOC_DEBUG
     else dprintf(0, "2nd malloc lock null\n");
 #endif
@@ -96,7 +105,13 @@ void kfree(void *buf) {
      * in order to also use kfree when sos is initing.
      */
     if (malloc_lock) {
+        seL4_DebugPutChar('A');
+        seL4_DebugPutChar('\n');
         sync_acquire(malloc_lock);
+        seL4_DebugPutChar('B');
+        seL4_DebugPutChar('\n');
+
+
 #ifdef KMALLOC_DEBUG
         struct _entry *prev = NULL;
         struct _entry *found = NULL;
@@ -116,9 +131,13 @@ void kfree(void *buf) {
             while (true);
         }
 #endif
+        seL4_DebugPutChar('C');
+        seL4_DebugPutChar('\n');
         free(buf);
+        seL4_DebugPutChar('D');
+        seL4_DebugPutChar('\n');
 #ifdef KMALLOC_DEBUG
-        printf("free %p %d\n", buf, --count);
+        //printf("free %p %d\n", buf, --count);
 
         if (prev) {
             prev->next = found->next;
@@ -132,11 +151,17 @@ void kfree(void *buf) {
     } else {
         free(buf);
 #ifdef KMALLOC_DEBUG
-        printf("lockless free %p %d\n", buf, --count);
+        //printf("lockless free %p %d\n", buf, --count);
 #endif
     }
 
-    if (malloc_lock) sync_release(malloc_lock);
+    if (malloc_lock) {
+        seL4_DebugPutChar('E');
+        seL4_DebugPutChar('\n');
+        sync_release(malloc_lock);
+        seL4_DebugPutChar('F');
+        seL4_DebugPutChar('\n');
+    }
 
     // // Print all mallocs so far
     // for (struct _entry *e = m_head; e != NULL; e = e->next) {

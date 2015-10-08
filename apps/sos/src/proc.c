@@ -44,6 +44,7 @@ int proc_create(pid_t parent, char *program_name) {
     dprintf(0, "acquiring proc table lock\n");
     sync_acquire(proc_table_lock);
     if (procs_head_free == -1) {
+        dprintf(0, "FAIL A");
         sync_release(proc_table_lock);
         return ENOMEM;
     }
@@ -88,6 +89,7 @@ int proc_create(pid_t parent, char *program_name) {
     /* Initialise address space */
     err = as_init(&processes[idx].as);
     if (err) {
+        dprintf(0, "FAIL B");
         goto proc_create_end;
     }   
 
@@ -95,6 +97,7 @@ int proc_create(pid_t parent, char *program_name) {
     /* Create a VSpace */
     processes[idx].vroot_addr = kut_alloc(seL4_PageDirBits);
     if (!processes[idx].vroot_addr) {
+        dprintf(0, "FAIL C");
         err = ENOMEM;
         goto proc_create_end;
     }
@@ -105,6 +108,7 @@ int proc_create(pid_t parent, char *program_name) {
                                 cur_cspace,
                                 &processes[idx].vroot);
     if (err == seL4_NotEnoughMemory) {
+        dprintf(0, "FAIL D");
         err = ENOMEM;
         goto proc_create_end;
     }
@@ -115,6 +119,7 @@ int proc_create(pid_t parent, char *program_name) {
     /* Create a simple 1 level CSpace */
     processes[idx].croot = cspace_create(1);
     if (!processes[idx].croot) {
+        dprintf(0, "FAIL E");
         err = ENOMEM;
         goto proc_create_end;
     }
@@ -122,6 +127,7 @@ int proc_create(pid_t parent, char *program_name) {
     dprintf(0, "adding IPC region\n");
     err = as_add_region(processes[idx].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
     if (err) {
+        dprintf(0, "FAIL F");
         goto proc_create_end;
     }
     dprintf(0, "Added IPC region\n");
@@ -130,6 +136,7 @@ int proc_create(pid_t parent, char *program_name) {
     seL4_Word ipcbuf_svaddr;
     err = pt_add_page(&processes[idx], PROCESS_IPC_BUFFER, &ipcbuf_svaddr, &processes[idx].ipc_buffer_cap);
     if (err) {
+        dprintf(0, "FAIL G");
         goto proc_create_end;
     }
     frame_change_swappable(ipcbuf_svaddr, 0);
@@ -142,6 +149,7 @@ int proc_create(pid_t parent, char *program_name) {
                                   seL4_AllRights, 
                                   seL4_CapData_Badge_new(pid));
     if (processes[idx].user_ep_cap != USER_EP_CAP) {
+        dprintf(0, "FAIL H");
         err = ENOMEM;
         goto proc_create_end;   
     }
@@ -150,6 +158,7 @@ int proc_create(pid_t parent, char *program_name) {
     /* Create a new TCB object */
     processes[idx].tcb_addr = kut_alloc(seL4_TCBBits);
     if (!processes[idx].tcb_addr) {
+        dprintf(0, "FAIL I");
         err = ENOMEM;
         goto proc_create_end;
     }
@@ -159,6 +168,7 @@ int proc_create(pid_t parent, char *program_name) {
                                  cur_cspace,
                                  &processes[idx].tcb_cap);
     if (err) {
+        dprintf(0, "FAIL J");
         goto proc_create_end;
     }
 
@@ -169,6 +179,7 @@ int proc_create(pid_t parent, char *program_name) {
                              processes[idx].vroot, seL4_NilData, PROCESS_IPC_BUFFER,
                              processes[idx].ipc_buffer_cap);
     if (err) {
+        dprintf(0, "FAIL K");
         goto proc_create_end;
     }
 
@@ -186,6 +197,7 @@ int proc_create(pid_t parent, char *program_name) {
     err = elf_load(&processes[idx], program_name, &program_entrypoint);
     if (err) {
         dprintf(0, "error is %d\n", err);
+        dprintf(0, "FAIL M");
         goto proc_create_end;
     }
 
@@ -193,16 +205,19 @@ int proc_create(pid_t parent, char *program_name) {
     dprintf(0, "adding heap and stack regions\n");
     err = as_add_heap(processes[idx].as);
     if (err) {
+        dprintf(0, "FAIL N");
         goto proc_create_end;
     }
     err = as_add_stack(&processes[idx]);
     if (err) {
+        dprintf(0, "FAIL O");
         goto proc_create_end;
     }
 
     /* File descriptor table stuff */
     processes[idx].proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
     if (!processes[idx].proc_files) {
+        dprintf(0, "FAIL P");
         err = ENOMEM;
         goto proc_create_end;
     }
@@ -290,20 +305,24 @@ void proc_exit(process_t *proc) {
     }
 
     /* Destroy tcb */
+    dprintf(0, "before tcb cap\n");
     if (proc->tcb_cap) {
         err = cspace_delete_cap(cur_cspace, proc->tcb_cap);
         conditional_panic(err, "unable to delete tcb cap");
     }
+    dprintf(0, "before tcb addr\n");
     if (proc->tcb_addr) {
         kut_free(proc->tcb_addr, seL4_TCBBits);
     }
 
+    dprintf(0, "before ep cap\n");
     if (proc->user_ep_cap) {
         /* Destroy process ipc cap */
         err = cspace_delete_cap(proc->croot, proc->user_ep_cap);
         conditional_panic(err, "unable to delete user ep cap");
     }
 
+    dprintf(0, "before croot\n");
     if (proc->croot) {
         /* Destroy process cspace */
         err = cspace_destroy(proc->croot);
@@ -311,10 +330,12 @@ void proc_exit(process_t *proc) {
     }
 
     /* Destroy page directory */
+    dprintf(0, "before vroot\n");
     if (proc->vroot) {
         err = cspace_delete_cap(cur_cspace, proc->vroot);
         conditional_panic(err, "unable to delete vroot");
     }
+    dprintf(0, "before vroot addr\n");
     if (proc->vroot_addr) {
         kut_free(proc->vroot_addr, seL4_PageDirBits);
     }
@@ -334,9 +355,9 @@ void proc_exit(process_t *proc) {
     }
     sync_release(proc_table_lock);
 
-    char outbuf[100];
-    sprintf(outbuf, "Not all proc memory freed %d\n", proc->size);
-    conditional_panic(proc->size != 0, outbuf);
+    //char outbuf[100];
+    //sprintf(outbuf, "Not all proc memory freed %d\n", proc->size);
+    conditional_panic(proc->size != 0, "Not all memory freed");
 
     sync_release(proc->proc_lock);
 

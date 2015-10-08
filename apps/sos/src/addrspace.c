@@ -70,6 +70,8 @@ int as_destroy(process_t *proc) {
         kfree(prev);
     }
 
+    dprintf(0, "region list freed\n");
+
     int err = 0;
     /*
      * Free all the frames allocated in the page table
@@ -94,6 +96,8 @@ int as_destroy(process_t *proc) {
         conditional_panic(err, "Unable to delete page directory");
     }
 
+    dprintf(0, "page directory deallocated\n");
+
     if (as->pt_caps) {
         /* Free the kernel PageTable where relevant */
         for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
@@ -109,6 +113,8 @@ int as_destroy(process_t *proc) {
         }
     }
 
+    dprintf(0, "pt caps freed\n");
+
     if (as->pt_caps) {
         err = frame_free((seL4_Word)as->pt_caps);
         conditional_panic(err, "Cannot free pt_caps frame");
@@ -118,8 +124,11 @@ int as_destroy(process_t *proc) {
         err = frame_free((seL4_Word)as->pt_addrs);
         conditional_panic(err, "Cannot free pt_addrs frame");
     }
-    
+
+    dprintf(0, "kfreeing as\n");
     kfree(as);
+    dprintf(0, "PROC DESTROY ALL DONE\n");
+
     return 0;
 }
 

@@ -2,6 +2,7 @@
 
 #define _GNU_SOURCE
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <limits.h>
 #include <stdint.h>
@@ -10,7 +11,8 @@
 #include "libc.h"
 #include "atomic.h"
 #include "pthread_impl.h"
-#include <stdio.h>
+
+#include "../../../../libs/libsel4/include/sel4/sel4.h"
 
 uintptr_t __brk(uintptr_t);
 void *__mmap(void *, size_t, int, int, int, off_t);
@@ -512,6 +514,10 @@ void free(void *p)
 				reclaim = 1;
 			next = NEXT_CHUNK(next);
 		}
+        seL4_DebugPutChar('x');
+        seL4_DebugPutChar('\n');
+        seL4_DebugPutChar('y');
+        seL4_DebugPutChar('\n');
 	}
 
 	self->csize = final_size;

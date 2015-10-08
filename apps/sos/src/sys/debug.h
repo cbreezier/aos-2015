@@ -33,7 +33,9 @@ void plogf(const char *msg, ...);
 #define dprintf(v, ...) \
     if ((v) < verbose) { \
         if (printf_lock) sync_acquire(printf_lock); \
+        if (malloc_lock) sync_acquire(malloc_lock); \
         printf(__VA_ARGS__); \
+        if (malloc_lock) sync_release(malloc_lock); \
         if (printf_lock) sync_release(printf_lock); \
     }
 
