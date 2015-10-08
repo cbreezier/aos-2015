@@ -7,7 +7,6 @@
 #include <sync/mutex.h>
 #include <clock/clock.h>
 
-#define N_NAME 32
 #define MAX_PROCESSES 32
 #define PROCESSES_MASK (MAX_PROCESSES - 1)
 
@@ -29,7 +28,7 @@ typedef struct {
     pid_t     pid;
     unsigned  size;       /* in pages */
     unsigned  stime;      /* start time in msec since booting */
-    char      command[N_NAME];    /* Name of exectuable */
+    char      command[NAME_MAX];    /* Name of exectuable */
 } sos_process_t;
 
 

@@ -49,7 +49,7 @@ while running:
                     continue
 
                 s.sendto('exec sosh &\n', sabreAddr)
-                s.sendto('exec sosh &\n', sabreAddr)
+                s.sendto('sosh\n', sabreAddr)
 
                 numCommands = random.randint(1, 2)
 

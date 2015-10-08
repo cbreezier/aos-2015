@@ -544,7 +544,7 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
     void *usr_buf= (void*)seL4_GetMR(1);
 
     /* Do copyin to get path */
-    char *path = kmalloc(N_NAME * sizeof(char));
+    char *path = kmalloc(NAME_MAX * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
         goto sos_execve_end;
@@ -554,7 +554,7 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
     if (err) {
         goto sos_execve_end;
     }
-    path[N_NAME-1] = 0;
+    path[NAME_MAX-1] = 0;
 
     printf("sos_execve %s\n", path);
 

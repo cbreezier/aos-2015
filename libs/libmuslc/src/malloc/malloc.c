@@ -376,6 +376,10 @@ void *malloc(size_t n)
 			break;
 		}
 		unlock_bin(j);
+//        seL4_DebugPutChar('o');
+//        seL4_DebugPutChar('\n');
+//        seL4_DebugPutChar('p');
+//        seL4_DebugPutChar('\n');
 	}
 
 	/* Now patch up in case we over-allocated */
@@ -514,10 +518,10 @@ void free(void *p)
 				reclaim = 1;
 			next = NEXT_CHUNK(next);
 		}
-        seL4_DebugPutChar('x');
-        seL4_DebugPutChar('\n');
-        seL4_DebugPutChar('y');
-        seL4_DebugPutChar('\n');
+//        seL4_DebugPutChar('x');
+//        seL4_DebugPutChar('\n');
+//        seL4_DebugPutChar('y');
+//        seL4_DebugPutChar('\n');
 	}
 
 	self->csize = final_size;

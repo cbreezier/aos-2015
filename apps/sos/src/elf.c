@@ -116,6 +116,8 @@ static int load_segment_into_vspace(process_t *proc,
         permissions & seL4_CanWrite,
         permissions & seL4_CanRead);
 
+    dprintf(0, "nfs load segment all done\n");
+
     return 0;
     //dprintf(0, "region added\n");
 
@@ -221,11 +223,15 @@ int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
         }
     }
 
+    dprintf(0, "Getting entrypoint\n");
     if (ret_entrypoint) {
         *ret_entrypoint = elf_getEntryPoint(elf_header);
     }
 
+    dprintf(0, "unifying cache\n");
     as_unify_cache(proc->as);
+
+    printf("ELF LOAD ALL DONE BITCHES\n");
 
     return 0;
 }

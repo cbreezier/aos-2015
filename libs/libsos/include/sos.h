@@ -29,7 +29,7 @@
 /* Limits */
 #define PROCESS_MAX_FILES 16
 #define MAX_IO_BUF 0x1000
-#define N_NAME 32
+#define NAME_MAX 255
 
 /* file modes */
 #define FM_EXEC  1
@@ -57,7 +57,7 @@ typedef struct {
     pid_t     pid;
     unsigned  size;       /* in pages */
     unsigned  stime;      /* start time in msec since booting */
-    char      command[N_NAME];    /* Name of exectuable */
+    char      command[NAME_MAX];    /* Name of exectuable */
 } sos_process_t;
 
 /* NULL syscall */

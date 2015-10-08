@@ -56,6 +56,7 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
     return 0;
 }
 
+int cntr = 0;
 static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
     bool region_r, region_w;
     /* Check that the entire user buffer lies within a valid region */
@@ -83,6 +84,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
         }
         if (is_string) {
             strncpy(*dst, *src, to_copy);
+
             /* Check for end of string char */
             if (*((char*)(*dst + to_copy - 1)) == 0) {
                 sync_release(ft_lock);
@@ -98,6 +100,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
         usr += to_copy;
         sos += to_copy;
     }
+
     return 0;
 }
 

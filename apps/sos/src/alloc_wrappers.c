@@ -54,15 +54,15 @@ void *kmalloc(size_t n) {
      */
     void *ret = NULL;
     if (malloc_lock) {
-        seL4_DebugPutChar('1');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('1');
+        //seL4_DebugPutChar('\n');
         sync_acquire(malloc_lock);
-        seL4_DebugPutChar('2');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('2');
+        //seL4_DebugPutChar('\n');
 
         ret = malloc(n);
-        seL4_DebugPutChar('3');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('3');
+        //seL4_DebugPutChar('\n');
 #ifdef KMALLOC_DEBUG
         //printf("malloc %p %d\n", ret, ++count);
         struct _entry *new = free_m_head;
@@ -82,11 +82,11 @@ void *kmalloc(size_t n) {
     }
     
     if (malloc_lock) {
-        seL4_DebugPutChar('4');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('4');
+        //seL4_DebugPutChar('\n');
         sync_release(malloc_lock);
-        seL4_DebugPutChar('5');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('5');
+        //seL4_DebugPutChar('\n');
     }
 #ifdef KMALLOC_DEBUG
     else dprintf(0, "2nd malloc lock null\n");
@@ -105,11 +105,11 @@ void kfree(void *buf) {
      * in order to also use kfree when sos is initing.
      */
     if (malloc_lock) {
-        seL4_DebugPutChar('A');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('A');
+        //seL4_DebugPutChar('\n');
         sync_acquire(malloc_lock);
-        seL4_DebugPutChar('B');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('B');
+        //seL4_DebugPutChar('\n');
 
 
 #ifdef KMALLOC_DEBUG
@@ -131,11 +131,11 @@ void kfree(void *buf) {
             while (true);
         }
 #endif
-        seL4_DebugPutChar('C');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('C');
+        //seL4_DebugPutChar('\n');
         free(buf);
-        seL4_DebugPutChar('D');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('D');
+        //seL4_DebugPutChar('\n');
 #ifdef KMALLOC_DEBUG
         //printf("free %p %d\n", buf, --count);
 
@@ -156,11 +156,11 @@ void kfree(void *buf) {
     }
 
     if (malloc_lock) {
-        seL4_DebugPutChar('E');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('E');
+        //seL4_DebugPutChar('\n');
         sync_release(malloc_lock);
-        seL4_DebugPutChar('F');
-        seL4_DebugPutChar('\n');
+        //seL4_DebugPutChar('F');
+        //seL4_DebugPutChar('\n');
     }
 
     // // Print all mallocs so far
