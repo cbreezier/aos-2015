@@ -195,7 +195,7 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, s
 
     node->callback = callback;
     node->data = data;
-    node->id = allocator_get_num(allocator);
+    node->id = 0;//allocator_get_num(allocator);
     node->delay = delay;
 
     sync_acquire(timer_lock);
@@ -398,7 +398,7 @@ int timer_interrupt(void) {
             } else {
                 epit_clocks[0]->cr &= ~(BIT(EN));
             }
-            allocator_release_num(allocator, to_free->id);
+            //allocator_release_num(allocator, to_free->id);
             to_free->callback(to_free->id, to_free->data);
             if (!to_free->is_user_provided) {
                 kfree(to_free);

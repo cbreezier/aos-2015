@@ -1,0 +1,2 @@
+apps-$(CONFIG_APP_TESTAPP) += test
+test: $(libc) libsel4 libsos
