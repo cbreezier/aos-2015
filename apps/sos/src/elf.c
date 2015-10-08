@@ -94,19 +94,25 @@ static int load_segment_into_vspace(process_t *proc,
     assert(file_size <= segment_size);
 
 
-    int err = as_add_region(proc->as, dst, segment_size,
-        permissions & seL4_CanRead,
-        permissions & seL4_CanWrite,
-        permissions & seL4_CanRead);
+    dprintf(0, "dst = %lu, segment_size = %lu, file_size = %lu\n", dst, segment_size, file_size);
+    /* Temporarily set all permissions to the region, such that we can load it */
+    int err = as_add_region(proc->as, dst, segment_size, 1, 1, 1);
 
     if (err) {
+        dprintf(0, "as add region failed %d\n", err);
         return err;
     }
 
     err = nfs_read_sync(proc, fhandle, offset, (void*)dst, file_size);
-    if (err) {
-        return err;
+    if (err < 0) {
+        dprintf(0, "nfs_read_sync failed - reading segment %d\n", -err);
+        return -err;
     }
+
+    as_change_region_perms(proc->as, (void*)dst,
+        permissions & seL4_CanRead,
+        permissions & seL4_CanWrite,
+        permissions & seL4_CanRead);
 
     return 0;
     //dprintf(0, "region added\n");
@@ -150,39 +156,59 @@ int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
     fhandle_t fhandle;
     err = nfs_lookup_sync(file_name, &fhandle, NULL);
     if (err) {
+        dprintf(0, "nfs lookup failed\n");
         return err;
     }
 
     struct Elf32_Header header;
 
     err = nfs_sos_read_sync(fhandle, 0, (void*)(&header), sizeof(header));
-    if (err) {
-        return err;
+    if (err < 0) {
+        dprintf(0, "sos read sync failed\n");
+        return -err;
     }
 
     void *elf_header = (void *)&header;
 
     /* Ensure that the ELF file looks sane. */
     if (elf_checkFile(elf_header)) {
+        dprintf(0, "elf file not sane\n");
         return seL4_InvalidArgument;
     }
 
     num_headers = elf_getNumProgramHeaders(elf_header);
     for (i = 0; i < num_headers; i++) {
+        struct Elf32_Phdr program_header;
+
+        err = nfs_sos_read_sync(fhandle, sizeof(header) + i*sizeof(program_header), (void*)(&program_header), sizeof(program_header));
+        if (err < 0) {
+            dprintf(0, "sos read sync failed - program header\n");
+            return -err;
+        }
+
         //char *source_addr, ;
         unsigned long flags, file_size, segment_size, vaddr, source_offset;
 
         /* Skip non-loadable segments (such as debugging data). */
-        if (elf_getProgramHeaderType(elf_header, i) != PT_LOAD)
+//        if (elf_getProgramHeaderType(elf_header, i) != PT_LOAD)
+//            continue;
+        if (program_header.p_type != PT_LOAD)
             continue;
 
         /* Fetch information about this segment. */
-        source_offset = elf_getProgramHeaderOffset(elf_header, i);
-        //source_addr = elf_header + source_offset;
-        file_size = elf_getProgramHeaderFileSize(elf_header, i);
-        segment_size = elf_getProgramHeaderMemorySize(elf_header, i);
-        vaddr = elf_getProgramHeaderVaddr(elf_header, i);
-        flags = elf_getProgramHeaderFlags(elf_header, i);
+//        source_offset = elf_getProgramHeaderOffset(elf_header, i);
+//        //source_addr = elf_header + source_offset;
+//        file_size = elf_getProgramHeaderFileSize(elf_header, i);
+//        segment_size = elf_getProgramHeaderMemorySize(elf_header, i);
+//        vaddr = elf_getProgramHeaderVaddr(elf_header, i);
+//        flags = elf_getProgramHeaderFlags(elf_header, i);
+        source_offset = program_header.p_offset;
+        file_size = program_header.p_filesz;
+        segment_size = program_header.p_memsz;
+        vaddr = program_header.p_vaddr;
+        flags = program_header.p_flags;
+
+        dprintf(0, "%lu %lu %lu %lu %lu\n", source_offset, file_size, segment_size, vaddr, flags);
 
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));

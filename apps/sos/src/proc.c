@@ -185,6 +185,7 @@ int proc_create(pid_t parent, char *program_name) {
     dprintf(0, "elf load\n");
     err = elf_load(&processes[idx], program_name, &program_entrypoint);
     if (err) {
+        dprintf(0, "error is %d\n", err);
         goto proc_create_end;
     }
 

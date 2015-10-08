@@ -319,6 +319,19 @@ struct region_entry *as_get_region(struct addrspace *as, void *vaddr) {
     return NULL;
 }
 
+int as_change_region_perms(struct addrspace *as, void *vaddr, bool r, bool w, bool x) {
+    struct region_entry *region = as_get_region(as, vaddr);
+    if (region == NULL) {
+        return EFAULT;
+    }
+
+    region->r = r;
+    region->w = w;
+    region->x = x;
+    
+    return 0;
+}
+
 void as_unify_cache(struct addrspace *as) {
     if (as == NULL) return;
 

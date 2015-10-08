@@ -188,6 +188,7 @@ int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf
         //dprintf(0, "copying to %x\n", usr_buf + before_count);
         err = copyout(proc, usr_buf + before_count, sos_buf, t.count - before_count);
         if (err) {
+            dprintf(0, "Error copying out to %u\n", usr_buf + before_count);
             return -err;
         }
     }

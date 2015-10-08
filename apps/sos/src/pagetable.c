@@ -42,7 +42,8 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
         assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
         proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc_sos(true);
         if (proc->as->page_directory[tl_idx] == NULL) {
-            
+            dprintf(0, "warning warning can't allocate page table\n");
+            return ENOMEM;
         }
         memset(proc->as->page_directory[tl_idx], 0, PAGE_SIZE);
     }

@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <sys/debug.h>
 #include "copy.h"
 #include "pagetable.h"
 #include "frametable.h"
@@ -59,9 +60,11 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
     bool region_r, region_w;
     /* Check that the entire user buffer lies within a valid region */
     if (!usr_buf_in_region(proc, usr, nbytes, &region_r, &region_w)) {
+        dprintf(0, "No region - copyout\n");
         return EACCES;
     }
     if ((!region_r && !copyout) || (!region_w && copyout)) {
+        dprintf(0, "No perms - copyout\n");
         return EACCES;
     }
 

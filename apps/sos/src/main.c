@@ -590,6 +590,7 @@ int main(void) {
     /* Allocate all SOS threads */
     printf("thread init\n");
     threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
+    printf("thread init finished\n");
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
