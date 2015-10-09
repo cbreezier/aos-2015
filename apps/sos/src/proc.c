@@ -38,7 +38,7 @@ void proc_init() {
     conditional_panic(!proc_table_lock, "Can't create proc table lock");
 }
 
-int proc_create(pid_t parent, char *program_name) {
+int proc_create(pid_t parent, char *program_name, seL4_CPtr sos_ep_cap) {
     int err = 0;
 
     dprintf(0, "acquiring proc table lock\n");

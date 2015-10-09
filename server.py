@@ -25,7 +25,7 @@ print 'Attempting %d runs' % (NUM_RUNS)
 
 #commands = ['ps', 'ls', 'cat a.cpp', 'time']
 #commands = ['ps', 'time']
-commands = ['ps']
+commands = ['cat a.cpp']
 
 numCommands = 1
 
@@ -53,15 +53,17 @@ while running:
                 s.sendto('sosh\n', sabreAddr)
 
                 #numCommands = random.randint(1, 2)
-                numCommands = 1
+#                numCommands = 1
+#
+#                for i in range(numCommands):
+#                    command = commands[0]
+#                    #command = commands[random.randint(0, len(commands)-1)]
+#                    command += '\n'
+#                    s.sendto(command, sabreAddr)
+                s.sendto("cat a.cpp\n", sabreAddr)
+                s.sendto("ps\n", sabreAddr) 
 
-                for i in range(numCommands):
-                    command = commands[0]
-                    #command = commands[random.randint(0, len(commands)-1)]
-                    command += '\n'
-                    s.sendto(command, sabreAddr)
-
-                numCommands += 4
+                numCommands = 6
 
                 s.sendto('exit\n', sabreAddr)
                 s.sendto('exit\n', sabreAddr)

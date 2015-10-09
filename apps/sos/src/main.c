@@ -64,6 +64,8 @@
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
+#define TIMER_APP timer
+
 const seL4_BootInfo* _boot_info;
 
 process_t tty_test_process;
@@ -238,8 +240,17 @@ void syscall_loop(seL4_CPtr ep) {
                 sync_release(network_lock);
             }
             /* Interrupt */
+            //if (badge & IRQ_BADGE_TIMER) {
+            //    timer_interrupt();
+            //}
+
+            /* TODO: FIX */
             if (badge & IRQ_BADGE_TIMER) {
-                timer_interrupt();
+                uint32_t id = seL4_GetMR(0);
+                void *data = seL4_GetMR(1);
+                timer_callback_t callback = seL4_GetMR(2);
+
+                (*callback)(id, data);
             }
 
 
@@ -483,19 +494,14 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 //}
 
 static void bereaving_parents_tick(uint32_t id, void *data) {
-    dprintf(0, "starting parent notification scheme\n");
     for (int i = 0; i < MAX_PROCESSES; ++i) {
-        dprintf(0, "about to acquire proc lock i = %d\n", i);
         sync_acquire(processes[i].proc_lock);
-        dprintf(0, "acquired proc lock i = %d\n", i);
         if (processes[i].wait_ep) {
             if (processes[i].wait_pid == -1) {
                 continue;
             }
             int child_pid_idx = processes[i].wait_pid & PROCESSES_MASK;
-            dprintf(0, "about to acquire child lock %d\n", child_pid_idx);
             sync_acquire(processes[child_pid_idx].proc_lock);
-            dprintf(0, "acquired child lock %d\n", child_pid_idx);
             if (processes[child_pid_idx].pid != processes[i].wait_pid) {
                 seL4_Notify(processes[i].wait_ep, 0);
                 processes[i].wait_ep = 0;
@@ -504,7 +510,7 @@ static void bereaving_parents_tick(uint32_t id, void *data) {
         }    
         sync_release(processes[i].proc_lock);
     }
-    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
+    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, 
 }
 
 void nfs_tick(uint32_t id, void *data) {
@@ -586,6 +592,19 @@ void sos_async_thread_entrypoint() {
     assert(!"SOS thread has exited");
 }
 
+static void setup_timer_app() {
+    /* Start the timer app */
+    int pid = proc_create(-1, TIMER_APP);
+    conditional_panic(pid < 0, "Cannot start timer process");
+
+    seL4_CPtr timer_listening_cap = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
+
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 1, 0);
+    seL4_SetTag(tag);
+    seL4_SetCap(0, badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    seL4_Send(processes[pid].user_ep_cap, tag);
+}
+
 
 
 /*
@@ -636,6 +655,8 @@ int main(void) {
     /* Initialise pcbs and bookkeeping table */
     proc_init();
 
+    setup_timer_app(); 
+
     /* Register 100ms nfs tick timer */
     register_timer(NFS_TICK_TIME, nfs_tick, NULL, &nfs_timer_node);
 
@@ -643,7 +664,7 @@ int main(void) {
     register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
 
     /* Start the user application */
-    int pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
+    pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
     conditional_panic(pid < 0, "Cannot start first process");
 
     dprintf(0, "initial pid = %d\n", pid);

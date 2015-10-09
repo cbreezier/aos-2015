@@ -40,6 +40,7 @@ menu "seL4 Applications"
     source "apps/sosh/Kconfig"
     source "apps/tty_test/Kconfig"
     source "apps/test/Kconfig"
+    source "apps/timer/Kconfig"
 endmenu
 
 menu "Tools"
