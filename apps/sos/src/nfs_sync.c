@@ -163,7 +163,7 @@ int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf
     
     while (!t.finished && t.count < nbytes) {
         int before_count = t.count;
-        size_t to_read = nbytes - t.count < PAGE_SIZE ? nbytes - t.count : PAGE_SIZE;
+        size_t to_read = (nbytes - t.count < PAGE_SIZE) ? (nbytes - t.count) : PAGE_SIZE;
 
         sync_acquire(network_lock);
         enum rpc_stat res = nfs_read(fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));

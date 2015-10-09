@@ -399,7 +399,9 @@ int timer_interrupt(void) {
                 epit_clocks[0]->cr &= ~(BIT(EN));
             }
             //allocator_release_num(allocator, to_free->id);
+            sync_release(timer_lock);
             to_free->callback(to_free->id, to_free->data);
+            sync_acquire(timer_lock);
             if (!to_free->is_user_provided) {
                 kfree(to_free);
             }

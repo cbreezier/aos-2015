@@ -86,7 +86,13 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
  */
 #define NFS_TICK_TIME 100000ull
 
+/*
+ * Notifying bereaving parents
+ */
+#define BEREAVING_PARENTS_TICK_TIME 500000ull
+
 struct timer_list_node nfs_timer_node;
+struct timer_list_node bereaving_parents_timer_node;
 
 extern fhandle_t mnt_point;
 
@@ -476,10 +482,36 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 //    register_timer(*((uint64_t*) data), setup_tick_timer, data);
 //}
 
+static void bereaving_parents_tick(uint32_t id, void *data) {
+    dprintf(0, "starting parent notification scheme\n");
+    for (int i = 0; i < MAX_PROCESSES; ++i) {
+        dprintf(0, "about to acquire proc lock i = %d\n", i);
+        sync_acquire(processes[i].proc_lock);
+        dprintf(0, "acquired proc lock i = %d\n", i);
+        if (processes[i].wait_ep) {
+            if (processes[i].wait_pid == -1) {
+                continue;
+            }
+            int child_pid_idx = processes[i].wait_pid & PROCESSES_MASK;
+            dprintf(0, "about to acquire child lock %d\n", child_pid_idx);
+            sync_acquire(processes[child_pid_idx].proc_lock);
+            dprintf(0, "acquired child lock %d\n", child_pid_idx);
+            if (processes[child_pid_idx].pid != processes[i].wait_pid) {
+                seL4_Notify(processes[i].wait_ep, 0);
+                processes[i].wait_ep = 0;
+            }
+            sync_release(processes[child_pid_idx].proc_lock);
+        }    
+        sync_release(processes[i].proc_lock);
+    }
+    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
+}
+
 void nfs_tick(uint32_t id, void *data) {
     sync_acquire(network_lock);
     nfs_timeout();
     sync_release(network_lock);
+
     register_timer(NFS_TICK_TIME, nfs_tick, data, &nfs_timer_node);
 }
 
@@ -595,14 +627,20 @@ int main(void) {
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     //nfs_tick(0, NULL);
-    register_timer(NFS_TICK_TIME, nfs_tick, NULL, &nfs_timer_node);
 
     /* Initialise swap table */
     size_t ft_lo_idx, ft_hi_idx;
     get_ft_limits(&ft_lo_idx, &ft_hi_idx);
     swap_init(ft_lo_idx, ft_hi_idx);
 
+    /* Initialise pcbs and bookkeeping table */
     proc_init();
+
+    /* Register 100ms nfs tick timer */
+    register_timer(NFS_TICK_TIME, nfs_tick, NULL, &nfs_timer_node);
+
+    /* Register 500ms bereaving parents tick timer */
+    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
 
     /* Start the user application */
     int pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);

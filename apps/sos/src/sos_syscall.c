@@ -665,8 +665,11 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
     }
 
     seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
+
+    sync_acquire(proc->proc_lock);
     proc->wait_ep = async_ep;
     proc->wait_pid = pid;
+    sync_release(proc->proc_lock);
 
     seL4_Wait(async_ep, NULL);
     /* 

@@ -72,7 +72,8 @@ int proc_create(pid_t parent, char *program_name) {
     processes[idx].next_pid = (pid + MAX_PROCESSES) & PID_MAX;
     processes[idx].size = 0;
     processes[idx].stime = (unsigned)(time_stamp() / 1000);
-    strcpy(processes[idx].command, program_name);
+    strncpy(processes[idx].command, program_name, NAME_MAX);
+    processes[idx].command[NAME_MAX - 1] = '\0';
     processes[idx].wait_ep = 0;
     processes[idx].zombie = false;
     processes[idx].sos_thread_handling = false;
@@ -85,7 +86,7 @@ int proc_create(pid_t parent, char *program_name) {
     //unsigned long elf_size;
     seL4_Word program_entrypoint = 0;
 
-    dprintf(0, "as initing\n");
+     dprintf(0, "as initing\n");
     /* Initialise address space */
     err = as_init(&processes[idx].as);
     if (err) {
