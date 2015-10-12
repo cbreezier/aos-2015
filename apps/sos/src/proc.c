@@ -341,21 +341,6 @@ void proc_exit(process_t *proc) {
         kut_free(proc->vroot_addr, seL4_PageDirBits);
     }
 
-    dprintf(0, "acquiring proc table lock\n");
-    /* Place pid back into 'free' pids list */
-    sync_acquire(proc_table_lock);
-    if (procs_head_free == -1 || procs_tail_free == -1) {
-        assert(procs_head_free == -1 && procs_tail_free == -1);
-        procs_head_free = pid_idx;
-        procs_tail_free = pid_idx;
-        processes[pid_idx].next_free = -1;
-    } else {
-        processes[procs_tail_free].next_free = pid_idx;
-        processes[pid_idx].next_free = -1;
-        procs_tail_free = pid_idx;
-    }
-    sync_release(proc_table_lock);
-
     //char outbuf[100];
     //sprintf(outbuf, "Not all proc memory freed %d\n", proc->size);
     conditional_panic(proc->size != 0, "Not all memory freed");
@@ -377,5 +362,21 @@ void proc_exit(process_t *proc) {
 
         sync_release(processes[parent_idx].proc_lock);
     }
+
+    dprintf(0, "acquiring proc table lock\n");
+    /* Place pid back into 'free' pids list */
+    sync_acquire(proc_table_lock);
+    if (procs_head_free == -1 || procs_tail_free == -1) {
+        assert(procs_head_free == -1 && procs_tail_free == -1);
+        procs_head_free = pid_idx;
+        procs_tail_free = pid_idx;
+        processes[pid_idx].next_free = -1;
+    } else {
+        processes[procs_tail_free].next_free = pid_idx;
+        processes[pid_idx].next_free = -1;
+        procs_tail_free = pid_idx;
+    }
+    sync_release(proc_table_lock);
+
     dprintf(0, "all done\n");
 }

@@ -435,7 +435,8 @@ cspace_t *cspace_create(int levels) /* either 1 or 2 level */
                                     seL4_AllRights,
                                     c->guard);
     assert(c->root_cnode != CSPACE_NULL);
-    cspace_delete_cap(cur_cspace,slot); /* delete the old 'short' cap to the cnode */ 
+    int delete_err = cspace_delete_cap(cur_cspace,slot); /* delete the old 'short' cap to the cnode */ 
+    sel4_error(delete_err, "Cannot delete old short cap");
 
     c->lock = sync_create_mutex();
     sel4_error(!c->lock, "Cannot initialise cspace lock");
@@ -481,7 +482,8 @@ cspace_err_t cspace_destroy(cspace_t *c)
         }
     }
     
-    cspace_delete_cap(cur_cspace, c->root_cnode); /* expectation is that this is last cap to cnode */
+    int delete_err = cspace_delete_cap(cur_cspace, c->root_cnode); /* expectation is that this is last cap to cnode */
+    sel4_error(delete_err, "Could not delete last cap to cnode");
     cspace_ut_free(c->addr,CSPACE_NODE_SIZE_IN_MEM_BITS); 
     
     if (c->lock) sync_destroy_mutex(c->lock);
@@ -688,7 +690,7 @@ cspace_err_t cspace_delete_cap(cspace_t *c, seL4_CPtr cap)
     err = seL4_CNode_Delete(c->root_cnode,
                             cap,
                             CSPACE_DEPTH);
-    sel4_error(err, "Copying cap");
+    sel4_error(err, "Deleting cap");
     
     if (c->lock) sync_release(c->lock);
     return cspace_free_slot(c,cap);

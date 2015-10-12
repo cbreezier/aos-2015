@@ -505,7 +505,7 @@ static void bereaving_parents_tick(uint32_t id, void *data) {
     }
     register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
 
-    dprintf(0, "Num user processed: %d\n", count);
+    dprintf(0, "Num user processes: %d\n", count);
 }
 
 void nfs_tick(uint32_t id, void *data) {
