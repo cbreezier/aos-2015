@@ -592,40 +592,13 @@ void sos_async_thread_entrypoint() {
     assert(!"SOS thread has exited");
 }
 
-/* Taken from network.c */
-static seL4_CPtr
-enable_irq(int irq, seL4_CPtr aep, int *err) {
-    seL4_CPtr cap;
-    /* Create an IRQ handler */
-    cap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, irq);
-    if (!cap) {
-        *err = 1;
-        return cap;
-    }
-    /* Assign to an end point */
-    *err = seL4_IRQHandler_SetEndpoint(cap, aep);
-    if (*err) {
-        return cap;
-    }
-    /* Ack the handler before continuing */
-    *err = seL4_IRQHandler_Ack(cap);
-    return cap;
-}
-
 #define EPIT1_IRQ 88
 #define EPIT2_IRQ 89
 #define EPIT1_BASE_ADDRESS (void*) 0x20D0000
 #define EPIT2_BASE_ADDRESS (void*) 0x20D4000
 
-static void setup_timer_app() {
-    /* Start the timer app */
-    int pid = proc_create(-1, TIMER_APP);
-    conditional_panic(pid < 0, "Cannot start timer process");
-
-    // Assuming pid has not looped around yet
-    process_t *proc = &processes[pid];
-
-    // Sync endpoint
+static void setup_timer_app(process_t *proc) {
+    // Sync endpoint slot 2
     seL4_Word timer_ep_cap_addr = kut_alloc(seL4_EndpointBits);
     conditional_panic(!timer_ep_cap_addr, "Cannot ut_alloc space for timer cap");
     seL4_CPtr timer_ep_cap;
@@ -636,40 +609,33 @@ static void setup_timer_app() {
     // Copy
     seL4_CPtr copied_timer_ep_cap = cspace_copy_cap(proc->croot, cur_cspace, timer_ep_cap, seL4_AllRights);
     conditional_panic(!copied_timer_ep_cap, "Cannot copy timer cap");
+    conditional_panic(copied_timer_ep_cap != 2, "Timer sync ep slot not 2");
 
-    // Async endpoint
+    // Async endpoint slot 3
     seL4_Word timer_irq_addr = kut_alloc(seL4_EndpointBits);
     conditional_panic(!timer_irq_addr, "Cannot ut_alloc space for async timer cap");
     seL4_CPtr timer_irq_cap;
     // Retype
-    err = cspace_ut_retype_addr(timer_irq_addr, seL4_EndpointObject, seL4_EndpointBits, cur_cspace, &timer_irq_cap);
+    err = cspace_ut_retype_addr(timer_irq_addr, seL4_AsyncEndpointObject, seL4_EndpointBits, cur_cspace, &timer_irq_cap);
     conditional_panic(err, "Cannot retype async timer cap");
     // Mint
     seL4_CPtr copied_timer_irq_cap = cspace_mint_cap(proc->croot, cur_cspace, timer_irq_cap, seL4_AllRights, seL4_CapData_Badge_new(IRQ_BADGE_TIMER));
     conditional_panic(!copied_timer_irq_cap, "Cannot mint async timer cap");
+    conditional_panic(copied_timer_irq_cap != 3, "Timer async ep slot not 3");
     // Bind sync and async
-    err = seL4_TCB_BindAEP(proc->tcb_cap, copied_timer_irq_cap);
+    err = seL4_TCB_BindAEP(proc->tcb_cap, timer_irq_cap);
     conditional_panic(err, "Cannot bind sync and async");
 
-    // EPIT1
-    seL4_CPtr epit1_cap = enable_irq(EPIT1_IRQ, copied_timer_irq_cap, &err);
-    conditional_panic(err, "Cannot get epit1 cap");
-    seL4_CPtr copied_epit1_cap = cspace_copy_cap(proc->croot, cur_cspace, epit1_cap, seL4_AllRights);
-    conditional_panic(!copied_epit1_cap, "Cannot copy timer cap");
-    // EPIT2
-    seL4_CPtr epit2_cap = enable_irq(EPIT2_IRQ, copied_timer_irq_cap, &err);
-    conditional_panic(err, "Cannot get epit2 cap");
-    seL4_CPtr copied_epit2_cap = cspace_copy_cap(proc->croot, cur_cspace, epit2_cap, seL4_AllRights);
-    conditional_panic(!copied_epit2_cap, "Cannot copy timer cap");
+    // Cnode root cspace slot 4
+    seL4_CPtr copied_croot = cspace_copy_cap(proc->croot, cur_cspace, proc->croot->root_cnode, seL4_AllRights);
+    conditional_panic(!copied_croot, "Cannot copy croot");
+    conditional_panic(copied_croot != 4, "Timer croot slot not 4");
 
     // Map devices
     do_map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE, proc->vroot);
     do_map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE, proc->vroot);
 
-    // seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 1, 0);
-    // seL4_SetTag(tag);
-    // seL4_SetCap(0, badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    // seL4_Send(processes[pid].user_ep_cap, tag);
+    dprintf(0, "Timer setup all done!\n");
 }
 
 /*
@@ -720,7 +686,10 @@ int main(void) {
     /* Initialise pcbs and bookkeeping table */
     proc_init();
 
-    setup_timer_app(); 
+    /* Start the timer app */
+    pid_t timer_pid = proc_create(-1, TIMER_APP);
+    conditional_panic(timer_pid < 0, "Cannot start timer process");
+    setup_timer_app(&processes[timer_pid]); 
 
     /* Register 100ms nfs tick timer */
     register_timer(NFS_TICK_TIME, nfs_tick, NULL, timer_ep);

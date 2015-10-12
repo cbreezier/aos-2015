@@ -16,13 +16,16 @@
 #define EPIT1_IRQ 88
 #define EPIT2_IRQ 89
 
-// Caps
+// Caps copied in
 #define SYSCALL_ENDPOINT_SLOT 1
 #define TIMER_EP_CAP 2
-#define EPIT1_CAP 3
-#define EPIT2_CAP 4
-#define CNODE_CAP 5
-#define REPLY_CAP 6
+#define TIMER_IRQ_CAP 3
+#define CNODE_CAP 4
+
+// Created here
+#define EPIT1_CAP 5
+#define EPIT2_CAP 6
+#define REPLY_CAP 7
 
 #define CSPACE_DEPTH 32
 
@@ -71,12 +74,46 @@ static volatile struct epit_clocks {
     unsigned int cnr;  /* Counter */
 } *epit_clocks[2];
 
+// Fixed assert
+static void fassert(bool condition, char *err_msg) {
+    if (condition) {
+        printf("Assertion failed: %s\n", err_msg);
+    }
+
+    // Segfault and die
+    *NULL;
+}
+
+/* Taken from network.c */
+static seL4_CPtr
+enable_irq(int irq, int slot) {
+    /* Create an IRQ handler */
+    int err = seL4_IRQControl_Get(seL4_CapIRQControl,
+                               irq,
+                               CNODE_CAP, 
+                               slot, 
+                               CSPACE_DEPTH);
+    fassert(err, "Getting an IRQ control cap");
+
+    /* Assign to an end point */
+    err = seL4_IRQHandler_SetEndpoint(slot, TIMER_IRQ_CAP);
+    fassert(err, "Assign irq to endpoint failed");
+
+    /* Ack the handler before continuing */
+    err = seL4_IRQHandler_Ack(slot);
+    fassert(err, "Ack irq failed");
+
+    return slot;
+}
+
 static int start_timer() {
+    seL4_DebugPutChar('X');
+    seL4_DebugPutChar('\n');
     clock_irqs[0].irq = EPIT1_IRQ;
-    clock_irqs[0].cap = EPIT1_CAP;//enable_irq(EPIT1_IRQ, interrupt_ep, &err);
+    clock_irqs[0].cap = enable_irq(EPIT1_IRQ, EPIT1_CAP);
     
     clock_irqs[1].irq = EPIT2_IRQ;
-    clock_irqs[1].cap = EPIT2_CAP;//enable_irq(EPIT2_IRQ, interrupt_ep, &err);
+    clock_irqs[1].cap = enable_irq(EPIT2_IRQ, EPIT2_CAP);
 
     /* Head of the list of registered timers */
     head = NULL;
