@@ -258,6 +258,11 @@ void syscall_loop(seL4_CPtr ep) {
             process_t *proc = &processes[proc_idx];
             sync_acquire(proc->proc_lock);
             proc->sos_thread_handling = true;
+
+            if (proc->pid != badge) {
+                sync_release(proc->proc_lock);    
+                continue;
+            }
             sync_release(proc->proc_lock);
 
 

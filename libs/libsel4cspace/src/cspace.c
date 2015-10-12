@@ -576,17 +576,22 @@ cspace_err_t cspace_free_slot(cspace_t *c, seL4_CPtr slot)
      */
         
     switch(c->levels) {
-    case 1:
-        c->num_free_slots++;
-        if (c->lock) sync_release(c->lock);
-        return cspace_free_level1_index(c,slot); /* index same as CPtr for single level */
-        break;
-    case 2:
-        if (c->lock) sync_release(c->lock);
-        return cspace_free_level2_slot(c,slot);
-        break;
-    default:
-        assert(0); /* should never get here */
+        case 1: {
+            c->num_free_slots++;
+            /* index same as CPtr for single level */
+            cspace_err_t err = cspace_free_level1_index(c,slot);
+            if (c->lock) sync_release(c->lock);
+            return err;
+            break;
+        }
+        case 2: {
+            cspace_err_t err = cspace_free_level2_slot(c,slot);
+            if (c->lock) sync_release(c->lock);
+            return err;
+            break;
+        }
+        default:
+            assert(0); /* should never get here */
     }
     if (c->lock) sync_release(c->lock);
     return CSPACE_NOERROR;
@@ -692,8 +697,9 @@ cspace_err_t cspace_delete_cap(cspace_t *c, seL4_CPtr cap)
                             CSPACE_DEPTH);
     sel4_error(err, "Deleting cap");
     
+    cspace_err_t free_err = cspace_free_slot(c,cap);
     if (c->lock) sync_release(c->lock);
-    return cspace_free_slot(c,cap);
+    return free_err;
 }
 
 seL4_CPtr cspace_mint_cap(cspace_t *dest, 
