@@ -74,7 +74,9 @@ void vfs_cache_init() {
         cache[i].nbytes = 0;
         cache[i].file_obj_next = NULL;
         cache[i].offset = 0;
-        dir_cache[i].path[0] = 0;
+    }
+    for (int i = 0; i < NUM_CACHE_DIR_ENTRIES; ++i) {
+        dir_cache[i].path[0] = '\0';
     }
     cache_lock = sync_create_mutex();
     conditional_panic(!cache_lock, "Cannot create cache lock");
