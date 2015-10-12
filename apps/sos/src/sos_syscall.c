@@ -14,6 +14,7 @@
 #include "nfs_sync.h"
 #include "copy.h"
 #include "alloc_wrappers.h"
+#include "file_caching.h"
 
 seL4_MessageInfo_t sos_null(process_t *proc, int num_args) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -243,8 +244,8 @@ seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
 
             open_files[open_entry].file_obj.fh = fh;
 
-            open_files[open_entry].file_obj.read = nfs_read_sync;
-            open_files[open_entry].file_obj.write = nfs_write_sync;
+            open_files[open_entry].file_obj.read = vfs_cache_read;
+            open_files[open_entry].file_obj.write = vfs_cache_write;
         }
 
         strcpy(open_files[open_entry].file_obj.name, path);
@@ -294,7 +295,11 @@ seL4_MessageInfo_t sos_close(process_t *proc, int num_args) {
     fd_entry->used = false;
 
     sync_acquire(open_files_lock);
+
     open_files[fd_entry->open_file_idx].ref_count--;
+    if (open_files[fd_entry->open_file_idx].ref_count == 0) {
+        vfs_cache_clear_file(&open_files[fd_entry->open_file_idx].file_obj);
+    }
     sync_release(open_files_lock);
 
     /* Add fd back to available fds */
@@ -347,7 +352,7 @@ seL4_MessageInfo_t sos_read(process_t *proc, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    nread = file->read(proc, &file->fh, fd_entry->offset, buf, nbytes);
+    nread = file->read(proc, file, fd_entry->offset, buf, nbytes);
     if (nread < 0) {
         err = -nread;
         goto sos_read_end;
@@ -396,7 +401,7 @@ seL4_MessageInfo_t sos_write(process_t *proc, int num_args) {
     }
 
     struct file_t *file = &fe->file_obj;
-    nwrite = file->write(proc, &file->fh, fd_entry->offset, buf, nbytes);
+    nwrite = file->write(proc, file, fd_entry->offset, buf, nbytes);
     if (nwrite < 0) {
         err = -nwrite;
         goto sos_write_end;

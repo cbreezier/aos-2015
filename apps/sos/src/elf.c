@@ -231,7 +231,5 @@ int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
     dprintf(0, "unifying cache\n");
     as_unify_cache(proc->as);
 
-    printf("ELF LOAD ALL DONE BITCHES\n");
-
     return 0;
 }

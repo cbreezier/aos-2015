@@ -13,8 +13,8 @@ struct serial *serial;
 
 void console_init();
 
-int console_read(process_t *proc, fhandle_t *fh, uint32_t offset, void *dest, size_t nbytes);
+int console_read(process_t *proc, struct file_t *fe, uint32_t offset, void *dest, size_t nbytes);
 
-int console_write(process_t *proc, fhandle_t *fh, uint32_t offset, void *src, size_t nbytes);
+int console_write(process_t *proc, struct file_t *fe, uint32_t offset, void *src, size_t nbytes);
 
 #endif /* _CONSOLE_H_ */

@@ -176,8 +176,9 @@ static int cat(int argc, char **argv) {
 
     assert(fd >= 0);
 
-    while ((num_read = read(fd, buf, BUF_SIZ)) > 0)
+    while ((num_read = read(fd, buf, BUF_SIZ)) > 0) {
         num_written = write(stdout_fd, buf, num_read);
+    }
 
     close(stdout_fd);
 
@@ -551,6 +552,34 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         {"time", second_time}, {"mtime", micro_time}, {"open", sosh_open}, {"read", sosh_read}, {"write", sosh_write} , {"kill", kill}, {"pt_test", pt_test}, {"wait", wait}, {"mem", mem} };
 
 int main(void) {
+    char bufff[500000];
+    int fd = open("abc.xyz", 2);
+    uint64_t before = mtime();
+    read(fd, bufff, 500000);
+    uint64_t after = mtime();
+    printf("first time %llu\n", after - before);
+
+    int fd2 = open("abc.xyz", 2);
+    before = mtime();
+    int blabla = 0;
+    while (blabla < 500000) {
+        int to_read = rand() % 5000;
+        read(fd2, bufff+blabla, to_read);
+        blabla += to_read;
+    }
+    for (blabla = 0; blabla < 400000; blabla++) {
+        assert(bufff[blabla] == 'A' + (blabla / 4096) % 26);
+//        for (int ax = 0; ax < 4096; ax++) {
+//            assert(bufff[blabla] == 'A' + (blabla % 26));
+//        }
+//        blabla += 4096;
+    }
+    //read(fd2, bufff, 500000);
+    after = mtime();
+    printf("second time %llu\n", after - before);
+
+    close(fd);
+    close(fd2);
     /* Testing mapped pages */
 
 //    read_res_fd = open("readres", O_RDWR);

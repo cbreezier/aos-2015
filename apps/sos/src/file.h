@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "proc.h"
+#include "file_caching.h"
 
 #define FILES_PER_DIR 32
 
@@ -34,14 +35,18 @@ struct file_t;
 
 typedef unsigned int size_t;
 
-typedef int (*read_type)(process_t *proc, fhandle_t *fh, uint32_t offset, void *dest, size_t nbytes);
-typedef int (*write_type)(process_t *proc, fhandle_t *fh, uint32_t offset, void *src, size_t nbytes);
+typedef int (*read_type)(process_t *proc, struct file_t *fe, uint32_t offset, void *dest, size_t nbytes);
+typedef int (*write_type)(process_t *proc, struct file_t *fe, uint32_t offset, void *src, size_t nbytes);
 
 struct file_t {
     read_type read;
     write_type write;
 
+    struct vfs_cache_entry *cache_entry_head; 
+
     fhandle_t fh;
+
+    sync_mutex_t file_lock;
 
     char name[NAME_MAX];
 };

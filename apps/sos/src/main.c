@@ -35,6 +35,7 @@
 #include "console.h"
 #include "swap.h"
 #include "nfs_sync.h"
+#include "file_caching.h"
 #include "alloc_wrappers.h"
 
 #include "ut_manager/ut.h"
@@ -510,7 +511,7 @@ static void bereaving_parents_tick(uint32_t id, void *data) {
     }
     register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
 
-    dprintf(0, "Num user processes: %d\n", count);
+    //dprintf(0, "Num user processes: %d\n", count);
 }
 
 void nfs_tick(uint32_t id, void *data) {
@@ -641,6 +642,9 @@ int main(void) {
 
     /* Initialise pcbs and bookkeeping table */
     proc_init();
+
+    /* Initialise vfs caching */
+    vfs_cache_init();
 
     /* Register 100ms nfs tick timer */
     register_timer(NFS_TICK_TIME, nfs_tick, NULL, &nfs_timer_node);
