@@ -53,5 +53,7 @@ int usr_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr
  */
 void* map_device(void* paddr, int size);
 
+void* do_map_device(void* paddr, int size, seL4_CPtr page_directory);
+
 
 #endif /* _MAPPING_H_ */

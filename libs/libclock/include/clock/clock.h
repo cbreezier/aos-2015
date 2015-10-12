@@ -21,8 +21,15 @@
 #define CLOCK_R_CNCL (-2)       /* operation cancelled (driver stopped) */
 #define CLOCK_R_FAIL (-3)       /* operation failed for other reason */
 
+#define REGISTER_TIMER_CALL 0
+#define REMOVE_TIMER_CALL 1
+#define TIMESTAMP_CALL 2
+#define STOP_TIMER_CALL 3
+
 typedef uint64_t timestamp_t;
 typedef void (*timer_callback_t)(uint32_t id, void *data);
+
+seL4_CPtr timer_ep;
 
 /*
  * Register a callback to be called after a given delay
@@ -32,14 +39,14 @@ typedef void (*timer_callback_t)(uint32_t id, void *data);
  *
  * Returns 0 on failure, otherwise an unique ID for this timeout
  */
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, struct timer_list_node *given_node, seL4_CPtr timer_ep);
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, seL4_CPtr timer_ep);
 
 /*
  * Remove a previously registered callback by its ID
  *  id: Unique ID returned by register_time
  * Returns CLOCK_R_OK iff successful. 
  */
-int remove_timer(uint32_t id);
+int remove_timer(uint32_t id, seL4_CPtr timer_ep);
 
 /*
  * Returns present time in microseconds since booting.

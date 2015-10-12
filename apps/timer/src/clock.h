@@ -21,6 +21,11 @@
 #define CLOCK_R_CNCL (-2)       /* operation cancelled (driver stopped) */
 #define CLOCK_R_FAIL (-3)       /* operation failed for other reason */
 
+#define REGISTER_TIMER_CALL 0
+#define REMOVE_TIMER_CALL 1
+#define TIMESTAMP_CALL 2
+#define STOP_TIMER_CALL 3
+
 typedef uint64_t timestamp_t;
 
 /* 

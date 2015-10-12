@@ -100,9 +100,13 @@ usr_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
     return err;
 }
 
+void*
+map_device(void* paddr, int size){
+    return do_map_device(paddr, size, seL4_CapInitThreadPD);
+}
 
 void* 
-map_device(void* paddr, int size){
+do_map_device(void* paddr, int size, seL4_CPtr page_directory){
     static seL4_Word virt = DEVICE_START;
     seL4_Word phys = (seL4_Word)paddr;
     seL4_Word vstart = virt;
@@ -121,7 +125,7 @@ map_device(void* paddr, int size){
         conditional_panic(err, "Unable to retype device memory");
         /* Map in the page */
         err = map_page(frame_cap, 
-                       seL4_CapInitThreadPD, 
+                       page_directory, 
                        virt, 
                        seL4_AllRights,
                        0);

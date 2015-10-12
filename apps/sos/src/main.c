@@ -64,7 +64,7 @@
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
-#define TIMER_APP timer
+#define TIMER_APP "timer"
 
 const seL4_BootInfo* _boot_info;
 
@@ -93,8 +93,8 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
  */
 #define BEREAVING_PARENTS_TICK_TIME 500000ull
 
-struct timer_list_node nfs_timer_node;
-struct timer_list_node bereaving_parents_timer_node;
+// struct timer_list_node nfs_timer_node;
+// struct timer_list_node bereaving_parents_timer_node;
 
 extern fhandle_t mnt_point;
 
@@ -245,13 +245,13 @@ void syscall_loop(seL4_CPtr ep) {
             //}
 
             /* TODO: FIX */
-            if (badge & IRQ_BADGE_TIMER) {
-                uint32_t id = seL4_GetMR(0);
-                void *data = seL4_GetMR(1);
-                timer_callback_t callback = seL4_GetMR(2);
+            // if (badge & IRQ_BADGE_TIMER) {
+            //     uint32_t id = seL4_GetMR(0);
+            //     void *data = seL4_GetMR(1);
+            //     timer_callback_t callback = seL4_GetMR(2);
 
-                (*callback)(id, data);
-            }
+            //     (*callback)(id, data);
+            // }
 
 
         }else if(label == seL4_VMFault){
@@ -510,7 +510,7 @@ static void bereaving_parents_tick(uint32_t id, void *data) {
         }    
         sync_release(processes[i].proc_lock);
     }
-    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, 
+    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, timer_ep);
 }
 
 void nfs_tick(uint32_t id, void *data) {
@@ -518,7 +518,7 @@ void nfs_tick(uint32_t id, void *data) {
     nfs_timeout();
     sync_release(network_lock);
 
-    register_timer(NFS_TICK_TIME, nfs_tick, data, &nfs_timer_node);
+    register_timer(NFS_TICK_TIME, nfs_tick, data, timer_ep);
 }
 
 //static void test0() {
@@ -592,20 +592,85 @@ void sos_async_thread_entrypoint() {
     assert(!"SOS thread has exited");
 }
 
+/* Taken from network.c */
+static seL4_CPtr
+enable_irq(int irq, seL4_CPtr aep, int *err) {
+    seL4_CPtr cap;
+    /* Create an IRQ handler */
+    cap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, irq);
+    if (!cap) {
+        *err = 1;
+        return cap;
+    }
+    /* Assign to an end point */
+    *err = seL4_IRQHandler_SetEndpoint(cap, aep);
+    if (*err) {
+        return cap;
+    }
+    /* Ack the handler before continuing */
+    *err = seL4_IRQHandler_Ack(cap);
+    return cap;
+}
+
+#define EPIT1_IRQ 88
+#define EPIT2_IRQ 89
+#define EPIT1_BASE_ADDRESS (void*) 0x20D0000
+#define EPIT2_BASE_ADDRESS (void*) 0x20D4000
+
 static void setup_timer_app() {
     /* Start the timer app */
     int pid = proc_create(-1, TIMER_APP);
     conditional_panic(pid < 0, "Cannot start timer process");
 
-    seL4_CPtr timer_listening_cap = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
+    // Assuming pid has not looped around yet
+    process_t *proc = &processes[pid];
 
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 1, 0);
-    seL4_SetTag(tag);
-    seL4_SetCap(0, badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    seL4_Send(processes[pid].user_ep_cap, tag);
+    // Sync endpoint
+    seL4_Word timer_ep_cap_addr = kut_alloc(seL4_EndpointBits);
+    conditional_panic(!timer_ep_cap_addr, "Cannot ut_alloc space for timer cap");
+    seL4_CPtr timer_ep_cap;
+    // Retype
+    int err = cspace_ut_retype_addr(timer_ep_cap_addr, seL4_EndpointObject, seL4_EndpointBits, cur_cspace, &timer_ep_cap);
+    conditional_panic(err, "Cannot retype timer cap");
+    timer_ep = timer_ep_cap;
+    // Copy
+    seL4_CPtr copied_timer_ep_cap = cspace_copy_cap(proc->croot, cur_cspace, timer_ep_cap, seL4_AllRights);
+    conditional_panic(!copied_timer_ep_cap, "Cannot copy timer cap");
+
+    // Async endpoint
+    seL4_Word timer_irq_addr = kut_alloc(seL4_EndpointBits);
+    conditional_panic(!timer_irq_addr, "Cannot ut_alloc space for async timer cap");
+    seL4_CPtr timer_irq_cap;
+    // Retype
+    err = cspace_ut_retype_addr(timer_irq_addr, seL4_EndpointObject, seL4_EndpointBits, cur_cspace, &timer_irq_cap);
+    conditional_panic(err, "Cannot retype async timer cap");
+    // Mint
+    seL4_CPtr copied_timer_irq_cap = cspace_mint_cap(proc->croot, cur_cspace, timer_irq_cap, seL4_AllRights, seL4_CapData_Badge_new(IRQ_BADGE_TIMER));
+    conditional_panic(!copied_timer_irq_cap, "Cannot mint async timer cap");
+    // Bind sync and async
+    err = seL4_TCB_BindAEP(proc->tcb_cap, copied_timer_irq_cap);
+    conditional_panic(err, "Cannot bind sync and async");
+
+    // EPIT1
+    seL4_CPtr epit1_cap = enable_irq(EPIT1_IRQ, copied_timer_irq_cap, &err);
+    conditional_panic(err, "Cannot get epit1 cap");
+    seL4_CPtr copied_epit1_cap = cspace_copy_cap(proc->croot, cur_cspace, epit1_cap, seL4_AllRights);
+    conditional_panic(!copied_epit1_cap, "Cannot copy timer cap");
+    // EPIT2
+    seL4_CPtr epit2_cap = enable_irq(EPIT2_IRQ, copied_timer_irq_cap, &err);
+    conditional_panic(err, "Cannot get epit2 cap");
+    seL4_CPtr copied_epit2_cap = cspace_copy_cap(proc->croot, cur_cspace, epit2_cap, seL4_AllRights);
+    conditional_panic(!copied_epit2_cap, "Cannot copy timer cap");
+
+    // Map devices
+    do_map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE, proc->vroot);
+    do_map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE, proc->vroot);
+
+    // seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 1, 0);
+    // seL4_SetTag(tag);
+    // seL4_SetCap(0, badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    // seL4_Send(processes[pid].user_ep_cap, tag);
 }
-
-
 
 /*
  * Main entry point - called by crt.
@@ -644,7 +709,7 @@ int main(void) {
     printf("thread init finished\n");
 
     /* Start the timer hardware */
-    start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    //start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     //nfs_tick(0, NULL);
 
     /* Initialise swap table */
@@ -658,13 +723,13 @@ int main(void) {
     setup_timer_app(); 
 
     /* Register 100ms nfs tick timer */
-    register_timer(NFS_TICK_TIME, nfs_tick, NULL, &nfs_timer_node);
+    register_timer(NFS_TICK_TIME, nfs_tick, NULL, timer_ep);
 
     /* Register 500ms bereaving parents tick timer */
-    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
+    register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, timer_ep);
 
     /* Start the user application */
-    pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
+    pid_t pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
     conditional_panic(pid < 0, "Cannot start first process");
 
     dprintf(0, "initial pid = %d\n", pid);

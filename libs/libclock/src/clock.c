@@ -26,21 +26,28 @@ int remove_timer(uint32_t id, seL4_CPtr timer_ep) {
     seL4_SetTag(tag);
     seL4_SetMR(0, REMOVE_TIMER_CALL);
     seL4_SetMR(1, (seL4_Word)id);
-    seL4_Send(timer_ep, tag);
+    seL4_Call(timer_ep, tag);
+
+    return seL4_GetMR(0);
 }
 
 timestamp_t time_stamp(seL4_CPtr timer_ep) {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1);
     seL4_SetTag(tag);
     seL4_SetMR(0, TIMESTAMP_CALL);
-    seL4_Send(timer_ep, tag);
+    seL4_Call(timer_ep, tag);
+
+    timestamp_t time = seL4_GetMR(1);
+    time <<= 32;
+    time |= seL4_GetMR(0);
+    return time;
 }
 
 int stop_timer(seL4_CPtr timer_ep) {
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 1);
     seL4_SetTag(tag);
     seL4_SetMR(0, STOP_TIMER_CALL);
-    seL4_Send(timer_ep, tag);
-}
+    seL4_Call(timer_ep, tag);
 
-#endif /* _CLOCK_H_ */
+    return seL4_GetMR(0);
+}
