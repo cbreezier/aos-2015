@@ -519,6 +519,14 @@ static void timer_loop(seL4_CPtr ep) {
 }
 
 int main() {
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 0);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    seL4_CPtr timer_ep_cap = seL4_GetCap(0);
+    seL4_CPtr timer_irq_cap = seL4_GetCap(1);
+    seL4_CPtr cnode_cap  = seL4_GetCap(2);
+    printf("%u %u %u\n", timer_ep_cap, timer_irq_cap, cnode_cap);
+
     start_timer();
 
     timer_loop(TIMER_EP_CAP);
