@@ -368,6 +368,16 @@ void vfs_cache_clear_file(struct file_t *fe) {
 
     struct vfs_cache_entry *next_entry = NULL;
     for (struct vfs_cache_entry *cur = fe->cache_entry_head; cur != NULL; ) {
+        if (cur->dirty) {
+            cur->pinned = true;
+
+            sync_release(cache_lock);
+            nfs_sos_write_sync(fe->fh, cur->offset, cur->data, cur->nbytes);
+            sync_acquire(cache_lock);
+
+            cur->dirty = false;
+            cur->pinned = false;
+        }
         cur->referenced = false;
         cur->file_obj = NULL;
         next_entry = cur->file_obj_next;

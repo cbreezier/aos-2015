@@ -291,6 +291,9 @@ void proc_exit(process_t *proc) {
             struct fd_entry *fd_entry = &proc->proc_files[i];
             if (fd_entry->used) {
                 open_files[fd_entry->open_file_idx].ref_count--;
+                if (open_files[fd_entry->open_file_idx].ref_count == 0) {
+                    vfs_cache_clear_file(&open_files[fd_entry->open_file_idx].file_obj);
+                }
             }
         }
         sync_release(open_files_lock);
