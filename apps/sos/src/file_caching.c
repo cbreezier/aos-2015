@@ -27,6 +27,8 @@ struct vfs_cache_dir_entry {
     char path[NAME_MAX];
 } dir_cache[NUM_CACHE_DIR_ENTRIES];
 
+sync_mutex_t dir_cache_lock;
+
 static void write_tick(uint32_t id, void *data) {
     sync_acquire(cache_lock);
     /* Do flushing of pages stuff */
@@ -76,6 +78,9 @@ void vfs_cache_init() {
     }
     cache_lock = sync_create_mutex();
     conditional_panic(!cache_lock, "Cannot create cache lock");
+
+    dir_cache_lock = sync_create_mutex();
+    conditional_panic(!dir_cache_lock, "Cannot create dir cache lock");
 
     register_timer(WRITE_TICK_TIME, write_tick, NULL, &write_tick_node);
 }
@@ -264,7 +269,27 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
     return nread;
 }
 
+/*
+ * djb2 by Dan Bernstein
+ * http://www.cse.yorku.ca/~oz/hash.html
+ */
+static int hash_string(char *path) {
+    unsigned long hash = 5381;
+
+    for (int c = (*path++); c != 0; c = (*path++)) {
+        hash = ((hash << 5) + hash) + c;   
+    }
+
+    return hash % NUM_CACHE_DIR_ENTRIES;
+}
+
 int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *usr_buf, size_t nbytes) {
+    // Invalidate dir_cache since we are modifying this file
+    sync_acquire(dir_cache_lock);
+    int hash = hash_string(fe->name);
+    dir_cache[hash].path[0] = '\0';
+    sync_release(dir_cache_lock);
+
     int nwritten = 0;
 
     sync_acquire(fe->file_lock);
@@ -357,31 +382,22 @@ void vfs_cache_clear_file(struct file_t *fe) {
     sync_release(fe->file_lock);
 }
 
-/*
- * djb2 by Dan Bernstein
- * http://www.cse.yorku.ca/~oz/hash.html
- */
-static int hash_string(char *path) {
-    unsigned long hash = 5381;
-
-    for (int c = (*path++); c != 0; c = (*path++)) {
-        hash = ((hash << 5) + hash) + c;   
-    }
-
-    return hash % NUM_CACHE_DIR_ENTRIES;
-}
-
 int vfs_cache_lookup(char *path, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     int hash = hash_string(path);
+
+    sync_acquire(dir_cache_lock);
     if (strcmp(dir_cache[hash].path, path) != 0) {
-        strcpy(dir_cache[hash].path, path);
         int err = nfs_lookup_sync(path, &dir_cache[hash].fh, &dir_cache[hash].fattr);
         if (err) {
             return err;
         }
+        strncpy(dir_cache[hash].path, path, NAME_MAX);
+        dir_cache[hash].path[NAME_MAX - 1] = '\0';
     }
 
     if (ret_fh != NULL) *ret_fh = dir_cache[hash].fh;
     if (ret_fattr != NULL) *ret_fattr = dir_cache[hash].fattr;
+    sync_release(dir_cache_lock);
+
     return 0;
 }
