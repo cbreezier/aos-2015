@@ -483,19 +483,18 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 //}
 
 static void bereaving_parents_tick(uint32_t id, void *data) {
-    dprintf(0, "starting parent notification scheme\n");
+    int count = 0;
     for (int i = 0; i < MAX_PROCESSES; ++i) {
-        dprintf(0, "about to acquire proc lock i = %d\n", i);
         sync_acquire(processes[i].proc_lock);
-        dprintf(0, "acquired proc lock i = %d\n", i);
+        if (processes[i].pid != -1) {
+            ++count;
+        }
         if (processes[i].wait_ep) {
             if (processes[i].wait_pid == -1) {
                 continue;
             }
             int child_pid_idx = processes[i].wait_pid & PROCESSES_MASK;
-            dprintf(0, "about to acquire child lock %d\n", child_pid_idx);
             sync_acquire(processes[child_pid_idx].proc_lock);
-            dprintf(0, "acquired child lock %d\n", child_pid_idx);
             if (processes[child_pid_idx].pid != processes[i].wait_pid) {
                 seL4_Notify(processes[i].wait_ep, 0);
                 processes[i].wait_ep = 0;
@@ -505,6 +504,8 @@ static void bereaving_parents_tick(uint32_t id, void *data) {
         sync_release(processes[i].proc_lock);
     }
     register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
+
+    dprintf(0, "Num user processed: %d\n", count);
 }
 
 void nfs_tick(uint32_t id, void *data) {

@@ -127,7 +127,7 @@ int as_destroy(process_t *proc) {
 
     dprintf(0, "kfreeing as\n");
     kfree(as);
-    dprintf(0, "PROC DESTROY ALL DONE\n");
+    dprintf(0, "AS DESTROY ALL DONE\n");
 
     return 0;
 }
