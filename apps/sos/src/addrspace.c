@@ -24,7 +24,10 @@ int as_init(struct addrspace **ret_as) {
         return ENOMEM;
     }
 
+    /* Region list lazily allocated */
     new->region_head = NULL;
+
+    /* Top level of the two level page table allocated, lower levels lazily allocated */
     assert(PAGE_SIZE == sizeof(struct pt_entry*)*(1 << TOP_LEVEL_SIZE));
     new->page_directory = (struct pt_entry**)frame_alloc_sos(true);
     if (new->page_directory == NULL) {
@@ -102,9 +105,6 @@ int as_destroy(process_t *proc) {
         /* Free the kernel PageTable where relevant */
         for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
             if (as->pt_caps[l1]) {
-                //err = cspace_revoke_cap(cur_cspace, as->pt_caps[l1]);
-                //conditional_panic(err, "Unable to revoke cap(as_destroy)");
-
                 err = cspace_delete_cap(cur_cspace, as->pt_caps[l1]);
                 conditional_panic(err, "Unable to delete cap(as_destroy)");
 
@@ -115,6 +115,7 @@ int as_destroy(process_t *proc) {
 
     dprintf(0, "pt caps freed\n");
 
+    /* Free memory allocated to store caps */
     if (as->pt_caps) {
         err = frame_free((seL4_Word)as->pt_caps);
         conditional_panic(err, "Cannot free pt_caps frame");
@@ -132,11 +133,17 @@ int as_destroy(process_t *proc) {
     return 0;
 }
 
+/*
+ * Helper function for as_add_region which accepts an extra optional "ret" variable
+ * If not NULL, ret will contain the added region.
+ *
+ * Returns 0 on success and an error code otherwise.
+ */
 static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x, struct region_entry **ret) {
 
-    // Round down starting vaddr
+    /* Round down starting vaddr */
     start = (start / PAGE_SIZE) * PAGE_SIZE;
-    // Round up size
+    /* Round up size */
     size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
 
     bool invalid_location = (size == 0 || size == MEMORY_TOP || start < 0 || start > MEMORY_TOP - size - 1);
@@ -147,6 +154,7 @@ static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, 
     struct region_entry *prev = NULL;
     struct region_entry *cur = as->region_head;
 
+    /* Find where to insert region to maintain sorted order */
     for (; cur != NULL; cur = cur->next) {
         if (start >= cur->start && start < cur->start + cur->size) {
             return EINVAL;
@@ -161,7 +169,7 @@ static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, 
         prev = cur;
     }
 
-    // Found where to insert region to maintain sorted order
+    /* Now that we have found the location we can malloc memory */
     struct region_entry *new_region = kmalloc(sizeof(struct region_entry));
     if (new_region == NULL) {
         return ENOMEM;
@@ -173,20 +181,22 @@ static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, 
     new_region->x = x;
     new_region->next = cur;
 
+    /* Add new region to the region list */
     if (prev == NULL) {
         as->region_head = new_region;
     } else {
         prev->next = new_region;
     }
 
-    *ret = new_region;
+    if (ret != NULL) {
+        *ret = new_region;
+    }
 
     return 0;
 }
 
 int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x) {
-    struct region_entry *unused;
-    return as_do_add_region(as, start, size, r, w, x, &unused);
+    return as_do_add_region(as, start, size, r, w, x, NULL);
 }
 
 int as_add_stack(process_t *proc) {
@@ -194,6 +204,8 @@ int as_add_stack(process_t *proc) {
     if (err) {
         return err;
     }
+
+    /* Map in the first page at the top of the stack */
     err = pt_add_page(proc, PROCESS_STACK_TOP - STACK_SIZE, NULL, NULL);
     return err;
 }
@@ -206,9 +218,9 @@ int as_add_heap(struct addrspace *as) {
 int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *ret_insert_location) {
     assert(ret_insert_location != NULL);
 
-    // Round down starting vaddr
+    /* Round down starting vaddr */
     min = (min / PAGE_SIZE) * PAGE_SIZE;
-    // Round up size
+    /* Round up size */
     size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
 
     bool invalid_location = (size == 0 || size == MEMORY_TOP || min <= 0 || min > MEMORY_TOP - size - 1);
@@ -240,7 +252,7 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
         }
     }
 
-    // Found where to insert region to maintain sorted order
+    /* Found where to insert region to maintain sorted order */
     struct region_entry *new_region = kmalloc(sizeof(struct region_entry));
     if (new_region == NULL) {
         return ENOMEM;
@@ -344,6 +356,7 @@ int as_change_region_perms(struct addrspace *as, void *vaddr, bool r, bool w, bo
 void as_unify_cache(struct addrspace *as) {
     if (as == NULL) return;
 
+    /* For every page in the page directory */
     if (as->page_directory != NULL) {
         for (size_t l1 = 0; l1 < (1 << TOP_LEVEL_SIZE); ++l1) {
             if (as->page_directory[l1] == NULL) {
@@ -356,7 +369,7 @@ void as_unify_cache(struct addrspace *as) {
                 }
                 uint32_t idx = svaddr_to_frame_idx(frame);
                 if (ft[idx].user_cap == 0) {
-                    // Page is currently unmapped, unable to (and no need to) unify
+                    /* Page is currently unmapped, unable to (and no need to) unify */
                     continue;
                 }
                 seL4_ARM_Page_Unify_Instruction(ft[idx].cap, 0, PAGE_SIZE);

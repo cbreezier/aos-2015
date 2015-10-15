@@ -11,11 +11,12 @@ static inline int min(int a, int b) {
 }
 
 bool usr_buf_in_region(process_t *proc, void *usr_buf, size_t buf_size, bool *ret_region_r, bool *ret_region_w) {
-    /* Check that the entire usr buffer lies within a valid region */
+    /* Find region containing starting address usr_buf */
     struct region_entry *path_region = as_get_region(proc->as, usr_buf);
     if (path_region == NULL) {
         return false;
     }
+    /* Check that the entire usr buffer lies within the region */
     seL4_Word region_end = path_region->start + path_region->size;
     if (sizeof(seL4_Word)*(region_end - (seL4_Word)usr_buf) < buf_size) {
         return false;
@@ -29,15 +30,18 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
     assert(ret_svaddr != NULL);
 
     sync_acquire(ft_lock);
+    /* Find relevant page table entry */
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
     seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
     if (pte == NULL || pte->frame <= 0) {
+        /* Mapping not valid, use pt_add_page to handle everything */
         int err = pt_add_page(proc, (seL4_Word)usr_buf, ret_svaddr, NULL);
         if (err) {
             sync_release(ft_lock);
             return err;
         }
     } else {
+        /* Page exists, pin it */
         *ret_svaddr = (seL4_Word)pte->frame;
         frame_change_swappable(*ret_svaddr, 0);
     }
@@ -56,7 +60,12 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
     return 0;
 }
 
-int cntr = 0;
+/*
+ * Does the heavy lifting of copyin/out
+ * 
+ * copyout should be true for copyout, false for copyin
+ * is_string should be true to stop at terminating nulls
+ */
 static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_string, bool copyout) {
     bool region_r, region_w;
     /* Check that the entire user buffer lies within a valid region */
@@ -70,6 +79,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
     }
 
     void *svaddr;
+    /* Convert sos and usr addresses into dest and src based on copyout */
     void **dst = copyout ? &svaddr : &sos;
     void **src = copyout ? &sos : &svaddr;
 
@@ -93,6 +103,7 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
         } else {
             memcpy(*dst, *src, to_copy);
         }
+        /* Unpin page when done */
         frame_change_swappable((seL4_Word)svaddr, true);
         sync_release(ft_lock);
 

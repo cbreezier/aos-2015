@@ -11,6 +11,12 @@
 sync_mutex_t ut_lock;
 
 #ifdef KMALLOC_DEBUG
+/*
+ * For debugging double frees and unfreed memory.
+ * Counts the number of mallocs - number of frees
+ * and also keeps track of each address malloced to compare
+ * to a corresponding free.
+ */
 int count;
 
 struct _entry {
@@ -54,15 +60,9 @@ void *kmalloc(size_t n) {
      */
     void *ret = NULL;
     if (malloc_lock) {
-        //seL4_DebugPutChar('1');
-        //seL4_DebugPutChar('\n');
         sync_acquire(malloc_lock);
-        //seL4_DebugPutChar('2');
-        //seL4_DebugPutChar('\n');
 
         ret = malloc(n);
-        //seL4_DebugPutChar('3');
-        //seL4_DebugPutChar('\n');
 #ifdef KMALLOC_DEBUG
         //printf("malloc %p %d\n", ret, ++count);
         struct _entry *new = free_m_head;
@@ -82,11 +82,7 @@ void *kmalloc(size_t n) {
     }
     
     if (malloc_lock) {
-        //seL4_DebugPutChar('4');
-        //seL4_DebugPutChar('\n');
         sync_release(malloc_lock);
-        //seL4_DebugPutChar('5');
-        //seL4_DebugPutChar('\n');
     }
 #ifdef KMALLOC_DEBUG
     else dprintf(0, "2nd malloc lock null\n");
@@ -105,12 +101,7 @@ void kfree(void *buf) {
      * in order to also use kfree when sos is initing.
      */
     if (malloc_lock) {
-        //seL4_DebugPutChar('A');
-        //seL4_DebugPutChar('\n');
         sync_acquire(malloc_lock);
-        //seL4_DebugPutChar('B');
-        //seL4_DebugPutChar('\n');
-
 
 #ifdef KMALLOC_DEBUG
         struct _entry *prev = NULL;
@@ -124,18 +115,11 @@ void kfree(void *buf) {
         }
         if (!found) {
             printf("WARNING WARNING double free at %p\n", buf);
-//            for (int i = 0; i < 32; i++) {
-//                printf("a + %d is %p, value %x\n", i, (&a) + i, *((&a) + i));
-//            }
             assert(false);
             while (true);
         }
 #endif
-        //seL4_DebugPutChar('C');
-        //seL4_DebugPutChar('\n');
         free(buf);
-        //seL4_DebugPutChar('D');
-        //seL4_DebugPutChar('\n');
 #ifdef KMALLOC_DEBUG
         //printf("free %p %d\n", buf, --count);
 
@@ -156,11 +140,7 @@ void kfree(void *buf) {
     }
 
     if (malloc_lock) {
-        //seL4_DebugPutChar('E');
-        //seL4_DebugPutChar('\n');
         sync_release(malloc_lock);
-        //seL4_DebugPutChar('F');
-        //seL4_DebugPutChar('\n');
     }
 
     // // Print all mallocs so far
@@ -182,14 +162,3 @@ void kut_free(seL4_Word addr, int sizebits) {
     ut_free(addr, sizebits);
     if (ut_lock) sync_release(ut_lock);
 }
-
-//int kprintf(int verbosity, ...) {
-//    int ret;
-//    va_list ap;
-//    va_start(ap, verbosity);
-//    if (printf_lock) sync_acquire(printf_lock);    
-//    ret = dprintf(verbosity, ap);
-//    va_end(ap);
-//    if (printf_lock) sync_release(printf_lock);    
-//    return ret;
-//}

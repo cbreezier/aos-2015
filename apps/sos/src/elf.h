@@ -14,6 +14,12 @@
 #include <sel4/sel4.h>
 #include <addrspace.h>
 
+/*
+ * Loads elf file via nfs given a file name
+ * ret_entrypoint will contain the entrypoint of the loaded program
+ *
+ * Returns 0 on success and error code otherwise
+ */
 int elf_load(process_t *proc, char* file_name, seL4_Word *ret_entrypoint);
 
 #endif /* _LIBOS_ELF_H_ */
