@@ -318,6 +318,13 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_UserException) {
             dprintf(0, "User exception, pid = %d\n", badge); 
+        } else if (label == TIMER_CALLBACK_LABEL) {
+            uint32_t id = (uint32_t) seL4_GetMR(0);
+            void *data = (void *) seL4_GetMR(1);
+            timer_callback_t callback = (timer_callback_t) seL4_GetMR(2);
+            dprintf(0, "timer callback %p %u %p\n", callback, id, data);
+
+            callback(id, data);
         } else{
             dprintf(0, "Rootserver got an unknown message %d, pid = %d\n", label, badge);
         }
@@ -597,6 +604,22 @@ void sos_async_thread_entrypoint() {
 #define EPIT1_BASE_ADDRESS (void*) 0x20D0000
 #define EPIT2_BASE_ADDRESS (void*) 0x20D4000
 
+static seL4_CPtr
+enable_irq(int irq, seL4_CPtr aep) {
+    seL4_CPtr cap;
+    int err;
+    /* Create an IRQ handler */
+    cap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, irq);
+    conditional_panic(!cap, "Failed to acquire and IRQ control cap");
+    /* Assign to an end point */
+    err = seL4_IRQHandler_SetEndpoint(cap, aep);
+    conditional_panic(err, "Failed to set interrupt endpoint");
+    /* Ack the handler before continuing */
+    err = seL4_IRQHandler_Ack(cap);
+    conditional_panic(err, "Failure to acknowledge pending interrupts");
+    return cap;
+}
+
 static void setup_timer_app(process_t *proc) {
     // Sync endpoint slot 2
     seL4_Word timer_ep_cap_addr = kut_alloc(seL4_EndpointBits);
@@ -619,9 +642,11 @@ static void setup_timer_app(process_t *proc) {
     err = cspace_ut_retype_addr(timer_irq_addr, seL4_AsyncEndpointObject, seL4_EndpointBits, cur_cspace, &timer_irq_cap);
     conditional_panic(err, "Cannot retype async timer cap");
     // Mint
-    seL4_CPtr copied_timer_irq_cap = cspace_mint_cap(proc->croot, cur_cspace, timer_irq_cap, seL4_AllRights, seL4_CapData_Badge_new(IRQ_BADGE_TIMER));
-    conditional_panic(!copied_timer_irq_cap, "Cannot mint async timer cap");
-    conditional_panic(copied_timer_irq_cap != 3, "Timer async ep slot not 3");
+    seL4_CPtr minted_timer_irq_cap = cspace_mint_cap(cur_cspace, cur_cspace, timer_irq_cap, seL4_AllRights, seL4_CapData_Badge_new(IRQ_BADGE_TIMER));
+    conditional_panic(!minted_timer_irq_cap, "Cannot mint async timer cap");
+    // Copy to user slot 3
+    seL4_CPtr user_timer_irq_cap = cspace_copy_cap(proc->croot, cur_cspace, minted_timer_irq_cap, seL4_AllRights);
+    conditional_panic(user_timer_irq_cap != 3, "Timer async ep slot not 3");
     // Bind sync and async
     err = seL4_TCB_BindAEP(proc->tcb_cap, timer_irq_cap);
     conditional_panic(err, "Cannot bind sync and async");
@@ -631,9 +656,20 @@ static void setup_timer_app(process_t *proc) {
     conditional_panic(!copied_croot, "Cannot copy croot");
     conditional_panic(copied_croot != 4, "Timer croot slot not 4");
 
+    // EPIT1 slot 5
+    seL4_CPtr epit1_cap = enable_irq(EPIT1_IRQ, minted_timer_irq_cap);
+    seL4_CPtr copied_epit1_cap = cspace_copy_cap(proc->croot, cur_cspace, epit1_cap, seL4_AllRights);
+    conditional_panic(!copied_epit1_cap, "Cannot copy epit1");
+    conditional_panic(copied_epit1_cap != 5, "epit1 slot not 5");
+    // EPIT2 slot 6
+    seL4_CPtr epit2_cap = enable_irq(EPIT2_IRQ, minted_timer_irq_cap);
+    seL4_CPtr copied_epit2_cap = cspace_copy_cap(proc->croot, cur_cspace, epit2_cap, seL4_AllRights);
+    conditional_panic(!copied_epit2_cap, "Cannot copy epit2");
+    conditional_panic(copied_epit2_cap != 6, "epit2 slot not 6");
+
     // Map devices
-    do_map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE, proc->vroot);
-    do_map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE, proc->vroot);
+    do_map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE, proc->vroot, (void*)DEVICE_START);
+    do_map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE, proc->vroot, (void*)(DEVICE_START + PAGE_SIZE));
 
     dprintf(0, "Timer setup all done!\n");
 }

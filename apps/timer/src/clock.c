@@ -12,19 +12,20 @@
 #include "clock.h"
 #include <vmem_layout.h>
 
-#define GPT_IRQ 87
 #define EPIT1_IRQ 88
 #define EPIT2_IRQ 89
+#define EPIT1_ADDRESS (void*) DEVICE_START
+#define EPIT2_ADDRESS (void*) (DEVICE_START + PAGE_SIZE)
 
 // Caps copied in
 #define SYSCALL_ENDPOINT_SLOT 1
 #define TIMER_EP_CAP 2
 #define TIMER_IRQ_CAP 3
 #define CNODE_CAP 4
-
-// Created here
 #define EPIT1_CAP 5
 #define EPIT2_CAP 6
+
+// Created here
 #define REPLY_CAP 7
 
 #define CSPACE_DEPTH 32
@@ -63,9 +64,6 @@ uint32_t overflow_offset;
 /* Number allocator for timer id allocation */
 struct number_allocator *allocator;
 
-#define EPIT1_BASE_ADDRESS (void*) 0x20D0000
-#define EPIT2_BASE_ADDRESS (void*) 0x20D4000
-
 static volatile struct epit_clocks {
     unsigned int cr;   /* Control register */
     unsigned int sr;   /* Status register */
@@ -84,51 +82,30 @@ static void fassert(bool condition, char *err_msg) {
     *NULL;
 }
 
-/* Taken from network.c */
-static seL4_CPtr
-enable_irq(int irq, int slot) {
-    /* Create an IRQ handler */
-    int err = seL4_IRQControl_Get(seL4_CapIRQControl,
-                               irq,
-                               CNODE_CAP, 
-                               slot, 
-                               CSPACE_DEPTH);
-    fassert(err, "Getting an IRQ control cap");
-
-    /* Assign to an end point */
-    err = seL4_IRQHandler_SetEndpoint(slot, TIMER_IRQ_CAP);
-    fassert(err, "Assign irq to endpoint failed");
-
-    /* Ack the handler before continuing */
-    err = seL4_IRQHandler_Ack(slot);
-    fassert(err, "Ack irq failed");
-
-    return slot;
-}
-
 static int start_timer() {
-    seL4_DebugPutChar('X');
-    seL4_DebugPutChar('\n');
     clock_irqs[0].irq = EPIT1_IRQ;
-    clock_irqs[0].cap = enable_irq(EPIT1_IRQ, EPIT1_CAP);
+    clock_irqs[0].cap = EPIT1_CAP;
     
     clock_irqs[1].irq = EPIT2_IRQ;
-    clock_irqs[1].cap = enable_irq(EPIT2_IRQ, EPIT2_CAP);
+    clock_irqs[1].cap = EPIT2_CAP;
+
+    printf("Start timer\n");
 
     /* Head of the list of registered timers */
     head = NULL;
     
     /* Map hardware address into a virtual address */
-    epit_clocks[0] = (struct epit_clocks *)DEVICE_START;//map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE);
+    epit_clocks[0] = (struct epit_clocks *)EPIT1_ADDRESS;//map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE);
     if (epit_clocks[0] == NULL) {
         return EFAULT;
     }
-    epit_clocks[1] = (struct epit_clocks *)DEVICE_START;//map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE);
+    epit_clocks[1] = (struct epit_clocks *)EPIT2_ADDRESS;//map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE);
     if (epit_clocks[1] == NULL) {
         return EFAULT;
     }
    
     /* Set up */ 
+
     epit_clocks[0]->cr &= ~(BIT(EN));  // Disable
     epit_clocks[0]->cr |= BIT(RLD);    // Set and forget mode
     epit_clocks[0]->cr |= BIT(CLKSRC); // Set CLKSRC to peripheral clock
@@ -161,7 +138,7 @@ static int start_timer() {
         return ENOMEM;
     }
 
-    // printf("Finished initialising timer\n");
+    printf("Finished initialising timer\n");
 
     return 0;
 }
@@ -286,6 +263,7 @@ static uint32_t register_timer(uint64_t delay, void *callback, void *data) {
     }
     int node_id = node->id;
     
+    //printf("done registering\n");
     return node_id;
 }
 
@@ -312,9 +290,7 @@ static int remove_timer(uint32_t id) {
 
         if (head->next == NULL) {
             //allocator_release_num(allocator, head->id); 
-            if (!head->is_user_provided) {
-                free(head);
-            }
+            free(head);
             return 0;
         }
         if (head->delay > MAX_US_EPIT) {
@@ -327,9 +303,7 @@ static int remove_timer(uint32_t id) {
         struct timer_list_node *to_free = head;
         head = head->next;
         //allocator_release_num(allocator, to_free->id);
-        if (!to_free->is_user_provided) {
-            free(to_free);
-        }
+        free(to_free);
 
         /* Must reschedule timer since we modified the head */
         reschedule(head->delay);
@@ -354,15 +328,18 @@ static int remove_timer(uint32_t id) {
 }
 
 static void callback_reply(struct timer_list_node *node) {
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    //printf("callback_reply starting\n");
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(TIMER_CALLBACK_LABEL, 0, 0, 3);
     seL4_SetTag(tag);
     seL4_SetMR(0, node->id);
     seL4_SetMR(1, (seL4_Word)node->data);
     seL4_SetMR(2, (seL4_Word)node->callback);
-    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+    seL4_Send(SYSCALL_ENDPOINT_SLOT, tag);
+    //printf("callback_reply done\n");
 }
 
 static int timer_interrupt(void) {
+    //printf("timer interrupt\n");
     /*
      * Check which timer actually generated the interrupt.
      * The status register of that timer will be set.
@@ -370,14 +347,19 @@ static int timer_interrupt(void) {
     if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
 
+        //printf("acking\n");
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
+        //printf("acked\n");
         assert(!err);
         if (head == NULL) {
-            assert(!"Timer interrupt with no queued timers");
+            printf("NO TIMERS AJFAKSDJSAF\n");
+            //assert(!"Timer interrupt with no queued timers");
             //int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
             //assert(!err);
             return 0;
         }
+
+        //printf("found timer\n");
 
         /*
          * Timer isn't finished - just one loop of the EPIT
@@ -386,7 +368,9 @@ static int timer_interrupt(void) {
         if (head->delay > MAX_US_EPIT) {
             head->delay -= MAX_US_EPIT;
             if (head->delay < MAX_US_EPIT) {
+                //printf("rescheduling\n");
                 reschedule(head->delay);
+                //printf("rescheduled\n");
             }
         } else {
             struct timer_list_node *to_free = head;
@@ -398,25 +382,29 @@ static int timer_interrupt(void) {
              * the callback registers a new timer
              */
             if (head != NULL) {
+                //printf("rescheduling 2\n");
                 reschedule(head->delay);
+                //printf("rescheduled 2\n");
             } else {
                 epit_clocks[0]->cr &= ~(BIT(EN));
             }
             //allocator_release_num(allocator, to_free->id);
 
+            //printf("calling back\n");
             callback_reply(to_free);
+            //printf("done\n");
 
-            if (!to_free->is_user_provided) {
-                free(to_free);
-            }
+            free(to_free);
         }
     }
     if (epit_clocks[1]->sr) {
+        //printf("epit 2\n");
         epit_clocks[1]->sr = 0xFFFFFFFF;
         overflow_offset++;
         int err = seL4_IRQHandler_Ack(clock_irqs[1].cap);
         assert(!err);
     }
+    //printf("timer interrupt done\n");
     return 0;
 }
 
@@ -479,8 +467,12 @@ static void timer_loop(seL4_CPtr ep) {
         switch (call_number) {
             case REGISTER_TIMER_CALL:
                 asm("nop");
-                uint64_t delay = ((uint64_t)seL4_GetMR(2) << 32) & (uint64_t)seL4_GetMR(1);
-                uint32_t register_ret = register_timer(delay, (void*)seL4_GetMR(3), (void*)seL4_GetMR(4));
+                uint64_t delay = ((uint64_t)seL4_GetMR(2) << 32) | (uint64_t)seL4_GetMR(1);
+                void *cb = (void*) seL4_GetMR(3);
+                void *data = (void*) seL4_GetMR(4);
+                //printf("delay = %llu\n", delay);
+                uint32_t register_ret = register_timer(delay, cb, data);
+
 
                 seL4_SetMR(0, register_ret);
                 seL4_Send(REPLY_CAP, reply);
@@ -512,7 +504,7 @@ static void timer_loop(seL4_CPtr ep) {
 
                 break;
             default:
-                printf("Unknown timer call\n");
+                //printf("Unknown timer call\n");
                 break;
         }
     }

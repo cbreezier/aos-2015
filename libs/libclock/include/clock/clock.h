@@ -26,6 +26,8 @@
 #define TIMESTAMP_CALL 2
 #define STOP_TIMER_CALL 3
 
+#define TIMER_CALLBACK_LABEL 6
+
 typedef uint64_t timestamp_t;
 typedef void (*timer_callback_t)(uint32_t id, void *data);
 

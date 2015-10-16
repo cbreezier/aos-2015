@@ -26,6 +26,8 @@
 #define TIMESTAMP_CALL 2
 #define STOP_TIMER_CALL 3
 
+#define TIMER_CALLBACK_LABEL 6
+
 typedef uint64_t timestamp_t;
 
 /* 
@@ -42,8 +44,6 @@ struct timer_list_node {
     void *data;
 
     seL4_CPtr reply_cap;
-
-    bool is_user_provided;
 
     struct timer_list_node *next;
 };
