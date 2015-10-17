@@ -50,6 +50,7 @@ struct file_t {
     read_type read;
     write_type write;
 
+    /* List of pages of file data that are cached, sorted by base offset */
     struct vfs_cache_entry *cache_entry_head; 
 
     fhandle_t fh;

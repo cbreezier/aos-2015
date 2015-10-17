@@ -29,6 +29,11 @@ struct vfs_cache_dir_entry {
 
 sync_mutex_t dir_cache_lock;
 
+/*
+ * Go through every cache entry and write it out to disk
+ * if it is dirty. This gets called every WRITE_TICK_TIME
+ * nanoseconds and provides some guarantee of disk coherence
+ */
 static void write_tick(uint32_t id, void *data) {
     sync_acquire(cache_lock);
     /* Do flushing of pages stuff */
@@ -90,6 +95,7 @@ void vfs_cache_init() {
 /* MUST BE HOLDING CACHE_LOCK BEFORE CALLING THIS */
 static int cache_out() {
     int num_loops = 0;
+    /* Find first unreferenced cache entry to reuse - clock algorithm */
     while (cache[_cur_cache_entry].referenced || cache[_cur_cache_entry].pinned) {
         cache[_cur_cache_entry].referenced = false;   
         
@@ -102,6 +108,7 @@ static int cache_out() {
         conditional_panic(num_loops > NUM_CACHE_ENTRIES*2 + 1, "All vfs cache entries are pinned");
     }
 
+    /* Write out page to disk if dirty */
     if (cache[_cur_cache_entry].dirty) {
         cache[_cur_cache_entry].pinned = true;
 
@@ -119,6 +126,7 @@ static int cache_out() {
         memset(cache[_cur_cache_entry].data, 0, PAGE_SIZE);
     }
 
+    /* Remove the cache entry from the list of cache entries on a file */
     struct file_t *file_obj = cache[_cur_cache_entry].file_obj;
     if (file_obj != NULL) {
         struct vfs_cache_entry *prev = NULL;
@@ -167,6 +175,13 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
 
     sync_acquire(cache_lock);
 
+    /*
+     * Cache entries associated with file are stored sorted by
+     * base offset. Find the first offset which matches or is just
+     * past where we want to start reading from.
+     *
+     * This is incremented as we read pages.
+     */
     struct vfs_cache_entry *cur = fe->cache_entry_head;
     struct vfs_cache_entry *prev = NULL;
     while (cur != NULL && cur->offset < aligned_offset) {
@@ -174,6 +189,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
         cur = cur->file_obj_next;
     }
     while (nbytes > 0) {
+        /* Found a cache hit */
         if (cur != NULL && cur->offset == aligned_offset) {
             if (cur->nbytes <= offset) {
                 /* Trying to read past the end of the file */
@@ -206,6 +222,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
             prev = cur;
             cur = cur->file_obj_next;
         } else {
+            /* No cache hit, get ready to replace and read into a cache entry */
             int entry = cache_out();
             conditional_panic(entry < 0 || entry >= NUM_CACHE_ENTRIES, "Invalid cache entry (vfs_cache_read)");
 
@@ -213,6 +230,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
             
             sync_release(cache_lock);
 
+            /* Actual read from disk */
             int nfs_nread = nfs_sos_read_sync(fe->fh, aligned_offset, cache[entry].data, PAGE_SIZE);
             if (nfs_nread < 0) {
                 sync_acquire(cache_lock);
@@ -227,6 +245,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
             to_read = min(to_read, nbytes);
             to_read = min(to_read, nfs_nread);
 
+            /* Copyout to user space */
             int err = copyout(proc, usr_buf, cache[entry].data + offset, to_read);
             if (err) {
                 sync_release(cache_lock);
@@ -243,6 +262,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
 
             sync_acquire(cache_lock);
 
+            /* Set cache entry data */
             cache[entry].pinned = false;
             cache[entry].referenced = true;
             cache[entry].dirty = false;
@@ -252,6 +272,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
 
             aligned_offset += PAGE_SIZE;
 
+            /* Add new cache entry to list of cache entries on this file */
             if (prev == NULL) {
                 fe->cache_entry_head = &cache[entry];
             } else {
@@ -370,6 +391,7 @@ void vfs_cache_clear_file(struct file_t *fe) {
 
     struct vfs_cache_entry *next_entry = NULL;
     for (struct vfs_cache_entry *cur = fe->cache_entry_head; cur != NULL; ) {
+        /* Write out to disk if dirty */
         if (cur->dirty) {
             cur->pinned = true;
 
@@ -399,6 +421,7 @@ int vfs_cache_lookup(char *path, fhandle_t *ret_fh, fattr_t *ret_fattr) {
 
     sync_acquire(dir_cache_lock);
     if (strcmp(dir_cache[hash].path, path) != 0) {
+        /* Overwrites previous hash entry if it exists*/
         int err = nfs_lookup_sync(path, &dir_cache[hash].fh, &dir_cache[hash].fattr);
         if (err) {
             return err;
