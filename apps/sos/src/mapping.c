@@ -75,25 +75,23 @@ map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
     return err;
 }
 
+/*
+ * usr_map_page differs from map_page by having the option to also retrieve
+ * the pagetable cap, and pagetable addr, if a new pagetable had to be created.
+ */
 int 
 usr_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
-                seL4_CapRights rights, seL4_ARM_VMAttributes attr, seL4_ARM_PageTable *pt_cap, seL4_Word *pt_addr){
+                seL4_CapRights rights, seL4_ARM_VMAttributes attr, seL4_ARM_PageTable *ret_pt_cap, seL4_Word *ret_pt_addr){
     int err;
 
     /* Attempt the mapping */
     err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
-    //dprintf(0, "sos map page err %d (seL4_FailedLookup is %d)\n", err, seL4_FailedLookup);
-    //dprintf(0, "err = %u, %u\n", err, seL4_FailedLookup);
     if(err == seL4_FailedLookup){
         /* Assume the error was because we have no page table */
-        err = _map_page_table(pd, vaddr, pt_cap, pt_addr);
-    //dprintf(0, "sos map page table err %d\n", err);
-        //dprintf(0, "err = %u\n", err);
+        err = _map_page_table(pd, vaddr, ret_pt_cap, ret_pt_addr);
         if(!err){
             /* Try the mapping again */
-            //dprintf(0, "err = %u\n", err);
             err = seL4_ARM_Page_Map(frame_cap, pd, vaddr, rights, attr);
-    //dprintf(0, "sos map page 2 %d\n", err);
         }
     }
 

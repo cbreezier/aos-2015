@@ -3,6 +3,7 @@
 #include <sys/debug.h>
 #include <vmem_layout.h>
 #include <clock/clock.h>
+#include <utils/page.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +40,7 @@ seL4_MessageInfo_t sos_mmap2(process_t *proc, int num_args) {
 
     seL4_Word insert_location;
 
+    /* Add a region in the first available slot after PROCESS_VMEM_START */
     int err = as_search_add_region(proc->as, PROCESS_VMEM_START, length, prot & PROT_WRITE, prot & PROT_READ, prot & PROT_EXEC, &insert_location);
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
@@ -72,6 +74,7 @@ seL4_MessageInfo_t sos_nanosleep(process_t *proc, int num_args) {
     (void) num_args;
 
     uint64_t delay = (uint64_t) seL4_GetMR(1);
+    /* Delay is given in milliseconds. Must convert it to microseconds */
     delay *= 1000ull;
 
     seL4_CPtr *data = kmalloc(sizeof(seL4_CPtr));
@@ -105,6 +108,7 @@ seL4_MessageInfo_t sos_clock_gettime(process_t *proc, int num_args) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 3);
 
     seL4_SetMR(0, 0);
+    /* Split a 64 bit integer into 2 32-bit message registers */
     seL4_SetMR(1, (seL4_Word)(timestamp & 0x00000000FFFFFFFF));
     seL4_SetMR(2, (seL4_Word)((timestamp >> 32) & 0x00000000FFFFFFFF));
 
@@ -115,12 +119,16 @@ seL4_MessageInfo_t sos_brk(process_t *proc, int num_args) {
     (void) num_args;
     
     seL4_Word new_top = seL4_GetMR(1);        
-    seL4_Word new_top_align = ((new_top - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
+    seL4_Word new_top_align = PAGE_ALIGN(new_top, PAGE_SIZE);
 
     struct region_entry *heap = proc->as->heap_region;
 
     int err = ENOMEM;
 
+    /* 
+     * Increase heap size if the new_top is above the previous top,
+     * and increasing doesn't cause it to collide with another region.
+     */
     if ((heap->next == NULL || new_top_align <= heap->next->start) && new_top_align > heap->start) {
         size_t new_size = new_top_align - heap->start;
         heap->size = new_size;
@@ -135,6 +143,7 @@ seL4_MessageInfo_t sos_brk(process_t *proc, int num_args) {
     return reply;
 }
 
+/* Given an nfs mode, converts it to a sos mode */
 static fmode_t nfs_mode_to_sos(uint32_t mode) {
     fmode_t ret = 0;
     if (mode & S_IRUSR) {
@@ -149,6 +158,7 @@ static fmode_t nfs_mode_to_sos(uint32_t mode) {
     return ret;
 }
 
+/* Given a sos mode, converts it to an nfs mode */
 static uint32_t sos_mode_to_nfs(fmode_t mode) {
     fmode_t ret = 0;
     if (mode & FM_READ) {
@@ -188,6 +198,7 @@ seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
     bool exists = false;
     int open_entry = -1;
 
+    /* Check if the file is already in the open file table */
     sync_acquire(open_files_lock);
     for (int i = OPEN_FILE_MAX; i >= 0; --i) {
         if (open_files[i].ref_count > 0) {
@@ -201,12 +212,14 @@ seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
         }
     }
 
+    /* It doesn't exist, and there are no open slots */
     if (!exists && open_entry == -1) {
         sync_release(open_files_lock);
         err = ENFILE;
         goto sos_open_end;
     }
 
+    /* No free file descriptors */
     fd = proc->files_head_free;
     if (fd == -1) {
         sync_release(open_files_lock);
@@ -226,6 +239,7 @@ seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
             fattr_t fattr;
             err = nfs_lookup_sync(path, &fh, &fattr);
 
+            /* Create the file it if doesn't exist */
             if (err == ENOENT/* && (mode & O_CREAT)*/) {
                 uint32_t nfs_mode = sos_mode_to_nfs(FM_WRITE | FM_READ);
                 err = nfs_create_sync(path, nfs_mode, 0, &fh, &fattr);
@@ -234,6 +248,7 @@ seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
                 goto sos_open_end;
             }
 
+            /* Check if the file has the requested permissions */
             fmode_t file_mode = nfs_mode_to_sos(fattr.mode);
             if ((!(file_mode & FM_READ) && (mode & FM_READ)) ||
                 (!(file_mode & FM_WRITE) && (mode & FM_WRITE)) ||
@@ -286,6 +301,7 @@ seL4_MessageInfo_t sos_close(process_t *proc, int num_args) {
         err = EBADF;
         goto sos_close_end;
     }
+
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
         err = EBADF;
@@ -294,6 +310,10 @@ seL4_MessageInfo_t sos_close(process_t *proc, int num_args) {
 
     fd_entry->used = false;
 
+    /* 
+     * Decrement the reference counter on the open file table,
+     * and clear cache data if no-one is referencing it 
+     */
     sync_acquire(open_files_lock);
 
     open_files[fd_entry->open_file_idx].ref_count--;
@@ -335,12 +355,14 @@ seL4_MessageInfo_t sos_read(process_t *proc, int num_args) {
         goto sos_read_end;
     }
 
+    /* Check that the fd is open */
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
         err = EBADF;
         goto sos_read_end;
     }
     
+    /* Check that the file can be read */
     if (!(fd_entry->mode & FM_READ)) {
         err = EBADF;
         goto sos_read_end;
@@ -383,12 +405,14 @@ seL4_MessageInfo_t sos_write(process_t *proc, int num_args) {
         goto sos_write_end;
     }
 
+    /* Check that the fd is open */
     struct fd_entry *fd_entry = &proc->proc_files[fd];
     if (!fd_entry->used) {
         err = EBADF;
         goto sos_write_end;
     }
 
+    /* Check that the file can be written to */
     if (!(proc->proc_files[fd].mode & FM_WRITE)) {
         err = EBADF;
         goto sos_write_end;
@@ -428,6 +452,7 @@ seL4_MessageInfo_t sos_stat(process_t *proc, int num_args) {
     void *user_path = (void*) seL4_GetMR(1);
     void *usr_buf = (void*) seL4_GetMR(2);
 
+    /* Copyin the file name */
     char *path = kmalloc(NAME_MAX * sizeof(char));
     if (path == NULL) {
         err = ENOMEM;
@@ -448,6 +473,7 @@ seL4_MessageInfo_t sos_stat(process_t *proc, int num_args) {
         goto sos_stat_end;
     }
 
+    /* Set sos_stat_t fields, and copy it out to the user */
     sos_stat_t stat;
     stat.st_type = (st_type_t)fattr.type;
     stat.st_fmode = nfs_mode_to_sos(fattr.mode);
@@ -487,6 +513,10 @@ seL4_MessageInfo_t sos_getdents(process_t *proc, int num_args) {
         goto sos_getdents_end;
     }
 
+    /* 
+     * Allocate an array of file names with FILES_PER_DIR files, each
+     * with NAME_MAX characters
+     */
     dir_entries = kmalloc(sizeof(char*)*FILES_PER_DIR);
     if (dir_entries == NULL) {
         err = ENOMEM;
@@ -502,7 +532,6 @@ seL4_MessageInfo_t sos_getdents(process_t *proc, int num_args) {
 
     int num_files = 0;
     err = nfs_readdir_sync((void*)dir_entries, &num_files);
-    dir_entries[FILES_PER_DIR-1][0] = '\0';
     if (err) {
         goto sos_getdents_end;
     }
@@ -511,18 +540,22 @@ seL4_MessageInfo_t sos_getdents(process_t *proc, int num_args) {
         goto sos_getdents_end;
     }
 
+    dir_entries[FILES_PER_DIR-1][0] = 0;
+
     file_name_size = strlen(dir_entries[pos]);
     if (file_name_size >= usr_buf_sz) {
         err = EINVAL;
         goto sos_getdents_end;
     }
 
+    /* Copy out the name of the file at the requested position to the user */
     err = copyoutstring(proc, usr_buf, dir_entries[pos], usr_buf_sz);
     if (err) {
         goto sos_getdents_end;
     }
 
 sos_getdents_end:
+    /* Free all memory associated with dir_entries */
     if (dir_entries != NULL) {
         for (int i = 0; i < FILES_PER_DIR; ++i) {
             if (dir_entries[i] == NULL) {
@@ -608,6 +641,10 @@ seL4_MessageInfo_t sos_ustat(process_t *proc, int num_args) {
         goto sos_ustat_end;
     }
 
+    /* 
+     * Go through every running process, and set a sos_process_t object 
+     * with the process data.
+     */
     for (int i = 0; i < MAX_PROCESSES && num_procs < max_procs; ++i) {
         pid_t pid = processes[i].pid;
         if (pid != -1) {
@@ -619,6 +656,10 @@ seL4_MessageInfo_t sos_ustat(process_t *proc, int num_args) {
             strcpy(sos_proc.command, processes[i].command);
             sync_release(processes[i].proc_lock);
 
+            /* 
+             * usr_buf is an array of sos_process_t. Copy it out, and then
+             * increase usr_buf by sizeof(sos_process_t)
+             */
             err = copyout(proc, usr_buf, &sos_proc, sizeof(sos_process_t));
             if (err) {
                 goto sos_ustat_end;
@@ -668,6 +709,13 @@ seL4_MessageInfo_t sos_waitid(process_t *proc, int num_args) {
         }
         sync_release(processes[pid_idx].proc_lock);
     }
+    
+    /* 
+     * As we release the lock of the process we want to wait on,
+     * there is a race condition where the child might exit
+     * before we wait. A timer (in main.c) is set to tick every 
+     * so often, and wake up any parents in this situation.
+     */
 
     seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
 
@@ -702,11 +750,16 @@ seL4_MessageInfo_t sos_kill(process_t *proc, int num_args) {
     process_t *to_kill = &processes[pid_idx];
 
     sync_acquire(to_kill->proc_lock);
+    /* If the process has exited, or is a zombie, simply ignore */
     if (to_kill->pid != pid_idx || to_kill->zombie) {
         err = ESRCH;
         sync_release(to_kill->proc_lock);
         goto sos_kill_end;
     }
+    /* 
+     * If an SOS thread is handling the process about to be killed,
+     * set it to be a zombie. Otherwise, kill it.
+     */
     if (to_kill->sos_thread_handling) {
         to_kill->zombie = true;
     } else {

@@ -2,6 +2,18 @@
 #define _SOS_SYSCALL_H_
 #include "proc.h"
 
+/* 
+ * All of the below functions handle a syscall for a given process.
+ *
+ * Arguments are read from message registers, and return values also placed 
+ * into message registers prior to returning.
+ *
+ * A seL4_MessageInfo_t object is returned, which is expected to be sent
+ * back to the user process.
+ *
+ * They behave as per linux standards.
+ */
+
 seL4_MessageInfo_t sos_null(process_t *proc, int num_args); 
 
 seL4_MessageInfo_t sos_mmap2(process_t *proc, int num_args); 

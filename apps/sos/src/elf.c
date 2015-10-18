@@ -16,6 +16,7 @@
 #include <elf/elf32.h>
 
 #include "elf.h"
+#include "addrspace.h"
 #include "pagetable.h"
 #include "frametable.h"
 #include "vmem_layout.h"
@@ -31,14 +32,6 @@
 
 /* Minimum of two values. */
 #define MIN(a,b) (((a)<(b))?(a):(b))
-
-#ifndef PAGESIZE
-    #define PAGESIZE              (1 << (seL4_PageBits))
-#endif
-#define PAGEMASK              ((PAGESIZE) - 1)
-#define PAGE_ALIGN(addr)      ((addr) & ~(PAGEMASK))
-#define IS_PAGESIZE_ALIGNED(addr) !((addr) &  (PAGEMASK))
-
 
 /*
  * Convert ELF permissions into seL4 permissions.

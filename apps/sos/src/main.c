@@ -78,8 +78,13 @@ process_t tty_test_process;
 
 
 #define NUM_SYSCALLS 378
+/* Function type for all user syscalls */
 typedef seL4_MessageInfo_t (*sos_syscall_t)(process_t *proc, int num_args);
 
+/* 
+ * Jump table from syscall number to a function which is the entrypoint
+ * for handling that syscall 
+ */
 sos_syscall_t syscall_jt[NUM_SYSCALLS];
 
 /**
@@ -92,6 +97,10 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
  */
 #define BEREAVING_PARENTS_TICK_TIME 500000ull
 
+/*
+ * Data given to register_timer. These get re-used when registering a new timer,
+ * avoiding multiple mallocs and frees.
+ */
 struct timer_list_node nfs_timer_node;
 struct timer_list_node bereaving_parents_timer_node;
 
@@ -103,7 +112,16 @@ struct mutex_ep {
     uint32_t ep_addr;
 };
 
-void* sync_new_ep(seL4_CPtr* ep, int badge) {
+
+/*
+ * Given a badge, creates a new endpoint with that badge. This has the
+ * side effect of requiring the creation of two eps (one unminted).
+ *
+ * ret_ep denotes the minted ep.
+ *
+ * Returns data necessary for freeing the endpoints.
+ */
+void* sync_new_ep(seL4_CPtr* ret_ep, int badge) {
     struct mutex_ep *ret = kmalloc(sizeof(struct mutex_ep));
 
     if (!ret) {
@@ -122,12 +140,15 @@ void* sync_new_ep(seL4_CPtr* ep, int badge) {
         return NULL;
     }
 
-    *ep = cspace_mint_cap(cur_cspace, cur_cspace, ret->unminted, seL4_AllRights, seL4_CapData_Badge_new(badge));
-    ret->minted = *ep;
+    *ret_ep = cspace_mint_cap(cur_cspace, cur_cspace, ret->unminted, seL4_AllRights, seL4_CapData_Badge_new(badge));
+    ret->minted = *ret_ep;
 
     return (void*)ret;
 }
 
+/*
+ * Frees all data created by the corresponding sync_new_ep.
+ */
 void sync_free_ep(void *ep) {
     struct mutex_ep *to_free = (struct mutex_ep*)ep;
 
@@ -141,6 +162,10 @@ void sync_free_ep(void *ep) {
     kfree(to_free);
 }
 
+/*
+ * Unkown_syscall should be triggered if a syscall number is outside
+ * the bounds of valid syscalls, or the syscall has not been implemented.
+ */
 seL4_MessageInfo_t unknown_syscall(process_t *proc, int num_args) {
     dprintf(0, "Unknown syscall %d\n", seL4_GetMR(0)); 
 
@@ -148,13 +173,24 @@ seL4_MessageInfo_t unknown_syscall(process_t *proc, int num_args) {
     return reply;
 }
 
-void copyMR(seL4_Word *buf, bool in, size_t num_args) {
+/*
+ * Copies message registers into a given buffer, or words in a buffer into
+ * message registers.
+ *
+ * @param in  | if true, copies from MRs into the buffer.
+ *              else, copies from the buffer into MRs.
+ * @param num_args | Denotes the number of words to copy, starting from index 0.
+ */
+static void copyMR(seL4_Word *buf, bool in, size_t num_args) {
     for (int i = 0; i < num_args; ++i) {
         if (in) buf[i] = seL4_GetMR(i);
         else seL4_SetMR(i, buf[i]);
     }
 }
 
+/*
+ * If following a syscall the error is fatal, the user process must die.
+ */
 static bool is_fatal_error(int err) {
     switch (err) {
         case EACCES:
@@ -164,53 +200,62 @@ static bool is_fatal_error(int err) {
     }
 }
 
+/*
+ * Handles a syscall. Note that this has the possible side effect of killing 
+ * the user process.
+ *
+ * param @badge  | Pid of calling process.
+ * param @num_args | Number of message registers containing valid data.
+ * param @saved_mr | A buffer of size seL4_MsgMaxLength words, containing
+ *                   the message registers.
+ */
 void handle_syscall(seL4_Word badge, int num_args, seL4_CPtr reply_cap, seL4_Word *saved_mr) {
     seL4_Word syscall_number;
 
     syscall_number = saved_mr[0];
 
-    /* Process system call */
     dprintf(-1, "got syscall number %u from pid %u\n", syscall_number, badge);
 
     seL4_MessageInfo_t reply;
-    switch (syscall_number) {
-    default:
-        if (syscall_number >= NUM_SYSCALLS) {
-            unknown_syscall(NULL, 0);   
-        } else {
+    /* Process system call */
+    if (syscall_number >= NUM_SYSCALLS) {
+        unknown_syscall(NULL, 0);   
+    } else {
+        uint32_t proc_idx = badge & PROCESSES_MASK;
+        process_t *proc = &processes[proc_idx];
 
-            uint32_t proc_idx = badge & PROCESSES_MASK;
-            process_t *proc = &processes[proc_idx];
-
-            sync_acquire(proc->proc_lock);
-            if (proc->pid != badge) {
-                sync_release(proc->proc_lock);
-                goto handle_syscall_end;
-            }
-            proc->sos_thread_handling = true;
+        /* Handle race condition of a process being killed after triggering a syscall */
+        sync_acquire(proc->proc_lock);
+        if (proc->pid != badge) {
             sync_release(proc->proc_lock);
-
-            copyMR(saved_mr, false, num_args + 1);
-
-            reply = syscall_jt[syscall_number](proc, num_args);
-
-            if (syscall_number != SYS_exit) {
-                /* Check if zombie - if so kill the thread */
-                if (proc->zombie || is_fatal_error(saved_mr[0])) {
-                    proc_exit(proc);    
-                } else {
-                    seL4_Send(reply_cap, reply);
-
-                    sync_acquire(proc->proc_lock);
-                    proc->sos_thread_handling = false;
-                    sync_release(proc->proc_lock);
-                }
-            }
-
-            handle_syscall_end:
-            cspace_free_slot(cur_cspace, reply_cap);
+            goto handle_syscall_end;
         }
-        break;
+        proc->sos_thread_handling = true;
+        sync_release(proc->proc_lock);
+
+        /* 
+         * Syscall handlers assume that input is passed through MRs. Must write
+         * saved_mr back onto ipc buffer 
+         */
+        copyMR(saved_mr, false, num_args + 1);
+
+        reply = syscall_jt[syscall_number](proc, num_args);
+
+        if (syscall_number != SYS_exit) {
+            /* Check if zombie - if so kill the thread */
+            if (proc->zombie || is_fatal_error(saved_mr[0])) {
+                proc_exit(proc);    
+            } else {
+                seL4_Send(reply_cap, reply);
+
+                sync_acquire(proc->proc_lock);
+                proc->sos_thread_handling = false;
+                sync_release(proc->proc_lock);
+            }
+        }
+
+        handle_syscall_end:
+        cspace_free_slot(cur_cspace, reply_cap);
     }
 
 }
@@ -221,17 +266,10 @@ void syscall_loop(seL4_CPtr ep) {
         seL4_Word badge;
         seL4_Word label;
         seL4_MessageInfo_t message;
-        //dprintf(0, "waiting on syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
-        //dprintf(0, "W %x\n", get_cur_thread()->wakeup_async_ep);
-        //dprintf(0, "W\n");
         message = seL4_Wait(ep, &badge);
-        //dprintf(0, "G\n");
-        //dprintf(0, "_");
-        //dprintf(0, "got something in syscall loop %x\n", get_cur_thread()->wakeup_async_ep);
         label = seL4_MessageInfo_get_label(message);
 
         if(badge & IRQ_EP_BADGE){
-            //dprintf(0, "badge %d\n", badge);
 
             if (badge & IRQ_BADGE_NETWORK) {
                 sync_acquire(network_lock);
@@ -260,6 +298,7 @@ void syscall_loop(seL4_CPtr ep) {
             sync_acquire(proc->proc_lock);
             proc->sos_thread_handling = true;
 
+            /* Handle race condition of a process being killed after triggering a syscall */
             if (proc->pid != badge) {
                 sync_release(proc->proc_lock);    
                 continue;
@@ -303,6 +342,10 @@ void syscall_loop(seL4_CPtr ep) {
             /* System call */
             
             size_t num_args = seL4_MessageInfo_get_length(message) - 1;
+            /* 
+             * Message registers are saved, as the ipc buffer gets overwritten
+             * when acquiring locks 
+             */
             seL4_Word saved_mr[seL4_MsgMaxLength];
             copyMR(saved_mr, true, num_args + 1);
 
@@ -396,11 +439,6 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
                                 async_ep);
     conditional_panic(err, "Failed to allocate c-slot for Interrupt endpoint");
 
-    /* Bind the Async endpoint to our TCB */
-    //err = seL4_TCB_BindAEP(seL4_CapInitThreadTCB, *async_ep);
-    //conditional_panic(err, "Failed to bind ASync EP to TCB");
-
-
     /* Create an endpoint for user application IPC */
     ep_addr = kut_alloc(seL4_EndpointBits);
     conditional_panic(!ep_addr, "No memory for endpoint");
@@ -450,6 +488,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Initialiase other system compenents here */
     _sos_ipc_init(ipc_ep, async_ep);
 
+    /* Initialise syscall jump table */
     for (uint32_t i = 0; i < NUM_SYSCALLS; ++i) {
         syscall_jt[i] = unknown_syscall;
     }
@@ -479,15 +518,15 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-//timestamp_t last_time = 0;
-//void setup_tick_timer(uint32_t id, void *data) {
-//    timestamp_t t = time_stamp();
-//    timestamp_t diff = t - last_time;
-//    last_time = t;
-//    dprintf(0, "Timer = %llu, Time: %llu, difference: %llu\n", *((uint64_t*) data), t, diff);
-//    register_timer(*((uint64_t*) data), setup_tick_timer, data);
-//}
-
+/*
+ * Timer tick, period defined in BEREAVING_PARENTS_TICK_TIME.
+ *
+ * Wakes up any parents if the process they're waiting on is dead.
+ * This will usually be done upon process deletion, but an unavoidable
+ * race condition may occur, causing the parent to not be woken up.
+ *
+ * More information about the race condition in sos_waitid.
+ */
 static void bereaving_parents_tick(uint32_t id, void *data) {
     int count = 0;
     for (int i = 0; i < MAX_PROCESSES; ++i) {
@@ -510,10 +549,13 @@ static void bereaving_parents_tick(uint32_t id, void *data) {
         sync_release(processes[i].proc_lock);
     }
     register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, &bereaving_parents_timer_node);
-
-    //dprintf(0, "Num user processes: %d\n", count);
 }
 
+/*
+ * Timer tick, period defined in NFS_TICK_TIME.
+ *
+ * Calls nfs_timeout, in order to handle any dropped packets.
+ */
 void nfs_tick(uint32_t id, void *data) {
     sync_acquire(network_lock);
     nfs_timeout();
@@ -521,63 +563,6 @@ void nfs_tick(uint32_t id, void *data) {
 
     register_timer(NFS_TICK_TIME, nfs_tick, data, &nfs_timer_node);
 }
-
-//static void test0() {
-//    dprintf(0, "Starting test0\n");
-//    /* Allocate 10 pages and make sure you can touch them all */
-//    for (int i = 0; i < 10; i++) {
-//        /* Allocate a page */
-//        seL4_Word vaddr = frame_alloc(1, 1);
-//        assert(vaddr);
-//
-//        /* Test you can touch the page */
-//        *((int*)vaddr) = 0x37;
-//        assert(*((int*)vaddr) == 0x37);
-//
-//        dprintf(0, "Page #%d allocated at %p\n",  i, (void *) vaddr);
-//    }
-//    dprintf(0, "test0 done\n");
-//}
-//
-//static void test1() {
-//    dprintf(0, "Starting test1\n");
-//    /* Test that you eventually run out of memory gracefully,
-//     *    and doesn't crash */
-//    for (int i = 0;; ++i) {
-//        /* Allocate a page */
-//        seL4_Word vaddr = frame_alloc(1, 1);
-//        if (!vaddr) {
-//            dprintf(0, "Page #%d allocated at %p\n",  i, (int*)vaddr);
-//            break;
-//        }
-//
-//
-//        /* Test you can touch the page */
-//        *((int*)vaddr) = 0x37;
-//        assert(*((int*)vaddr) == 0x37);
-//    }
-//    dprintf(0, "test1 done\n");
-//}
-//
-//static void test2() {
-//    dprintf(0, "Starting test2\n");
-//    /* Test that you never run out of memory if you always free frames. 
-//     *     This loop should never finish */
-//    for (int i = 0;; i++) {
-//        /* Allocate a page */
-//        seL4_Word vaddr = frame_alloc(1, 1);
-//        assert(vaddr != 0);
-//
-//        /* Test you can touch the page */
-//        *((int*)vaddr) = 0x37;
-//        assert(*((int*)vaddr) == 0x37);
-//
-//        if (i % 10000 == 0) dprintf(0, "Page #%d allocated at %p\n",  i, (int*)vaddr);
-//
-//        frame_free(vaddr);
-//    }
-//    dprintf(0, "test2 done\n");
-//}
 
 void sos_sync_thread_entrypoint() {
     dprintf(0, "Ipc buffer = %x\n", (uint32_t)seL4_GetIPCBuffer());
@@ -628,12 +613,11 @@ int main(void) {
 
     /* Allocate all SOS threads */
     printf("thread init\n");
-    threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint, _sos_interrupt_ep_cap);
+    threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint);
     printf("thread init finished\n");
 
     /* Start the timer hardware */
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    //nfs_tick(0, NULL);
 
     /* Initialise swap table */
     size_t ft_lo_idx, ft_hi_idx;
@@ -656,17 +640,8 @@ int main(void) {
     int pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
     conditional_panic(pid < 0, "Cannot start first process");
 
-    dprintf(0, "initial pid = %d\n", pid);
-
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
-    dprintf(0, "Mains IPC = %x\n", (uint32_t)seL4_GetIPCBuffer());
-
-    //syscall_loop(_sos_ipc_ep_cap);
-    //seL4_Wait(sos_threads[0].wakeup_async_ep, NULL);
-
-    printf("cur cpsace levels = %u\n", cur_cspace->levels);
-    //syscall_loop(_sos_interrupt_ep_cap);
     syscall_loop(_sos_interrupt_ep_cap);
 
     /* Not reached */

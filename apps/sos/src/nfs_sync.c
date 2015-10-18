@@ -13,6 +13,7 @@
 #include "alloc_wrappers.h"
 
 struct token {
+    /* Endpoint on which the SYNC thread is waiting. Notified by callbacks. */
     seL4_CPtr async_ep;
     fhandle_t fh;
     fattr_t fattr;
@@ -37,6 +38,7 @@ void nfs_sync_init() {
     conditional_panic(!network_lock, "Cannot initialise nfs sync lock"); 
 }
 
+/* Transforms an rpc_stat into an SOS error code */
 static int rpc_stat_to_err(enum rpc_stat stat) {
     switch(stat) {
         case RPC_OK:
@@ -50,6 +52,7 @@ static int rpc_stat_to_err(enum rpc_stat stat) {
     return 0;
 }
 
+/* Transforms an nfs_stat into an SOS error code */
 static int nfs_stat_to_err(enum nfs_stat stat) {
     switch(stat) {
         case NFS_OK:
@@ -113,12 +116,14 @@ int nfs_lookup_sync(const char *name, fhandle_t *ret_fh, fattr_t *ret_fattr) {
     sync_acquire(network_lock);
     enum rpc_stat res = nfs_lookup(&mnt_point, name, nfs_lookup_cb, (uintptr_t)(&t));
     sync_release(network_lock);
+
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;
     }
 
     seL4_Wait(t.async_ep, NULL);
+
     err = nfs_stat_to_err(t.status);
     if (err) {
         return err;
@@ -138,14 +143,12 @@ static void nfs_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, i
         t->finished = true;
     }
 
-    // t->err = copyout(t->proc, t->usr_buf + t->count, data, count);
     memcpy(t->sos_buf, data, count);
     t->count += count;
     
     seL4_Notify(t->async_ep, 0);
 }
 
-/* Returns number of bytes read. Returns -error upon error */
 int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
@@ -155,6 +158,12 @@ int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf
     t.finished = false;
     t.err = 0;
 
+    /* 
+     * To avoid nfs_read_cb calling copyout (slow, and possible cause
+     * of deadlocks for an ASYNC thread), we read one page at a time
+     * into an SOS buffer. This is not a big performance hit, as
+     * nfs doesn't support large reads/writes in one call.
+     */
     void *sos_buf = kmalloc(PAGE_SIZE);
     if (sos_buf == NULL) {
         return -ENOMEM;
@@ -168,10 +177,7 @@ int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf
         sync_acquire(network_lock);
         enum rpc_stat res = nfs_read(fh, offset + t.count, to_read, nfs_read_cb, (uintptr_t)(&t));
         sync_release(network_lock);
-        if (t.err) {
-            kfree(sos_buf);
-            return -t.err;
-        }
+
         int err = rpc_stat_to_err(res);
         if (err) {
             kfree(sos_buf);
@@ -179,13 +185,13 @@ int nfs_read_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf
         }
 
         seL4_Wait(t.async_ep, NULL);
+
         err = nfs_stat_to_err(t.status);
         if (err) {
             kfree(sos_buf);
             return -err;
         }
         
-        //dprintf(0, "copying to %x\n", usr_buf + before_count);
         err = copyout(proc, usr_buf + before_count, sos_buf, t.count - before_count);
         if (err) {
             dprintf(0, "Error copying out to %p\n", usr_buf + before_count);
@@ -212,7 +218,7 @@ static void nfs_sos_read_cb(uintptr_t token, enum nfs_stat status, fattr_t *fatt
 }
 
 int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes) {
-    assert(nbytes <= PAGE_SIZE);
+    assert(nbytes <= PAGE_SIZE && "nfs_sos_read_sync only handles reading at most PAGE_SIZE bytes");
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
     t.sos_buf = sos_buf;
@@ -224,15 +230,14 @@ int nfs_sos_read_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyte
         sync_acquire(network_lock);
         enum rpc_stat res = nfs_read(&fh, offset + t.count, nbytes - t.count, nfs_sos_read_cb, (uintptr_t)(&t));
         sync_release(network_lock);
-        if (t.err) {
-            return -t.err;
-        }
+
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
         }
 
         seL4_Wait(t.async_ep, NULL);
+
         err = nfs_stat_to_err(t.status);
         if (err) {
             return -err;
@@ -254,7 +259,6 @@ static void nfs_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, 
     seL4_Notify(t->async_ep, 0);
 }
 
-/* Returns number of bytes written. Returns -error upon error */
 int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_buf, size_t nbytes) {
     struct token t;
     t.async_ep = get_cur_thread()->wakeup_async_ep;
@@ -263,16 +267,25 @@ int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_bu
 
     bool region_r;
     if (!usr_buf_in_region(proc, usr_buf, nbytes, &region_r, NULL)) {
-        return -EFAULT;
+        return -EACCES;
     }
     
     if (!region_r) {
         return -EACCES;
     }
  
+    /* 
+     * Write one page at a time. This is done, as while the user buffer
+     * is continuous in its address space, the corresponding SOS frames
+     * are not. 
+     */
     while (!t.finished && nbytes > 0) {
         seL4_Word svaddr;
         size_t to_write = 0;
+        /* 
+         * Get an sos address for the user buffer. Note that the frame
+         * is pinned by usr_buf_sos.
+         */
         int err = usr_buf_to_sos(proc, usr_buf, nbytes, &svaddr, &to_write);
         if (err) {
             return -err;
@@ -282,12 +295,15 @@ int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_bu
         sync_acquire(network_lock);
         enum rpc_stat res = nfs_write(fh, offset + t.count, to_write, (void*)(svaddr), nfs_write_cb, (uintptr_t)(&t));
         sync_release(network_lock);
+
         err = rpc_stat_to_err(res);
         if (err) {
             frame_change_swappable(svaddr, true);
             return -err;
         }
         seL4_Wait(t.async_ep, NULL);
+
+        /* Unpin the frame */
         frame_change_swappable(svaddr, true);
 
         err = nfs_stat_to_err(t.status);
@@ -302,7 +318,6 @@ int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_bu
     return t.count;
 }
 
-/* Returns number of bytes written. Returns -error upon error */
 int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbytes) {
     assert(nbytes <= PAGE_SIZE && "nfs_sos_write_sync only handles writing at most PAGE_SIZE bytes");
     struct token t;
@@ -312,9 +327,11 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  
     while (!t.finished && nbytes > 0) {
         int count_before = t.count;
+
         sync_acquire(network_lock);
         enum rpc_stat res = nfs_write(&fh, offset + t.count, nbytes, (void*)sos_buf, nfs_write_cb, (uintptr_t)(&t));
         sync_release(network_lock);
+
         int err = rpc_stat_to_err(res);
         if (err) {
             return -err;
@@ -340,6 +357,7 @@ static void nfs_readdir_cb(uintptr_t token, enum nfs_stat status, int num_files,
 
     char **dst = (char **)t->sos_buf;
 
+    /* Copy all file names into the given sos_buf. */
     for (int i = 0; i < num_files; ++i) {
         if (t->count+i >= FILES_PER_DIR) {
             break;
@@ -367,7 +385,9 @@ int nfs_readdir_sync(void *sos_buf, int *ret_num_files) {
         if (res) {
             return err;
         }
+
         seL4_Wait(t.async_ep, NULL);
+
         err = nfs_stat_to_err(t.status);
         if (err) {
             return err;
@@ -404,11 +424,14 @@ int nfs_create_sync(const char *name, uint32_t mode, size_t sz, fhandle_t *ret_f
     sync_acquire(network_lock);
     enum rpc_stat res = nfs_create(&mnt_point, name, &sattr, nfs_create_cb, (uintptr_t)(&t));
     sync_release(network_lock);
+
     int err = rpc_stat_to_err(res);
     if (err) {
         return err;
     }
+
     seL4_Wait(t.async_ep, NULL);
+
     err = nfs_stat_to_err(t.status);
     if (err) {
         return err;

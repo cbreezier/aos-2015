@@ -26,11 +26,12 @@ static int create_ep(seL4_CPtr *ep, uint32_t *ep_addr) {
     return 0;
 }
 
-void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void), seL4_CPtr sos_interrupt_ep_cap) {
+void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void)) {
     /* Create extra notification endpoint for main SOS thread */
 
     int err = create_ep(&sos_threads[0].wakeup_async_ep, &sos_threads[0].wakeup_ep_addr);
     conditional_panic(err, "Cannot create thread 0 ep");
+    /* The first NUM_ASYNC_SOS_THREADS - 1 are async threads. Rest are sync threads */
     for (size_t i = 1; i < NUM_SOS_THREADS; ++i) {
         struct sos_thread thread;
 
@@ -40,9 +41,6 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         uint32_t frame_idx = svaddr_to_frame_idx(thread.ipc_addr);
         conditional_panic(!frame_idx, "Can't get IPC cap - SOS thread");
         thread.ipc_cap = ft[frame_idx].cap;
-
-        dprintf(0, "Ipc addr = %x\n", (uint32_t)thread.ipc_addr);
-
 
         /* Create TCB */
         thread.tcb_addr = kut_alloc(seL4_TCBBits);
@@ -54,6 +52,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         conditional_panic(err, "Failed to create thread TCB - SOS thread");
 
 
+        /* Priority is 255 for async threads, 254 for sync threads */
         seL4_Uint8 priority = (i < NUM_ASYNC_SOS_THREADS) ? 255 : 254;
         err = seL4_TCB_Configure(thread.tcb_cap,
                                  0, 
@@ -69,6 +68,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         /* Allocate stack guard */
         thread.stack_top = frame_alloc_sos(false);
         conditional_panic(err, "Cannot allocate guard page 1");
+        /* Don't allow the stack to be executed */
         err = frame_change_permissions(thread.stack_top, 0, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
         conditional_panic(err, "Cannot allocate guard page 2");
         /* Allocate stack memory */
@@ -107,6 +107,7 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
         high_ipc_addr = thread.ipc_addr;
         high_ipc_addr = thread.ipc_addr;
 
+        /* Create notifying thread ep */
         err = create_ep(&sos_threads[i].wakeup_async_ep, &sos_threads[i].wakeup_ep_addr);
         conditional_panic(err, "Cannot create thread 0 ep");
 
@@ -117,6 +118,12 @@ void threads_init(void (*async_entry_point)(void), void (*sync_entry_point)(void
     }
 }
 
+/* 
+ * Uses the address of the current IPC buffer to determine the running thread.
+ *
+ * Note that this assumes that IPC buffers are allocated contiguously,
+ * which should be ensured by threads_init.
+ */
 struct sos_thread *get_cur_thread() {
     seL4_Word ipc_buf_addr = (seL4_Word)seL4_GetIPCBuffer();
     int idx = -1;
