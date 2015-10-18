@@ -193,6 +193,9 @@ int ut_table_init(const seL4_BootInfo *bi){
     _low = UT_PSTART(0);
     _high = _low + (1024*1024*7.7875) + (1 << 23);
     //_high = _low + (1024*1024*5.7) + (1 << 23);
+    //lo = 6.625
+    //hi = 6.6875
+    //_high = _low + (1024*1024*5.5875) + (1 << 23);
     //_high = UT_PEND(_ut.count - 1);
 
     _print_table();

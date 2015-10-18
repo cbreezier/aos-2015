@@ -23,7 +23,7 @@ count = 0
 NUM_RUNS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 print 'Attempting %d runs' % (NUM_RUNS)
 
-commands = ['ps', 'ls', 'cat a.cpp', 'time']
+commands = ['ps', 'ls', 'cat abc3', 'cp bootimg.elf abc2', 'cp abc.xyz abc2', 'time', 'sleep 2']
 
 numCommands = 1
 
@@ -71,31 +71,6 @@ while running:
                     print 'Finished ' + str(count) + ' runs successfully!'
                     state = 'done'
 
-                
-
-#                #time.sleep(random.uniform(0.01, 0.03))
-#                for i in range(numReady):
-#                    if state == 'exec':
-#                        print 'exec sosh'
-#                        s.sendto('exec sosh\n', sabreAddr)
-#                        state = 'exit'
-#                    elif state == 'exit':
-#                        print 'exit'
-#                        s.sendto('exit\n', sabreAddr)
-#                        state = 'exec'
-#                    elif state == 'done':
-#                        pass
-#                    else:
-#                        print 'warning warning'
-#                
-#
-#                count += numReady
-#                if numReady:
-#                    print '<<Run %d starting>>' % (count)
-#
-#                if state != 'done' and count >= NUM_RUNS:
-#                    print 'Finished ' + str(count) + ' runs successfully!'
-#                    state = 'done'
             else:
                 time.sleep(0.01)
         elif x == sys.stdin:
