@@ -50,6 +50,9 @@ uint32_t svaddr_to_frame_idx(seL4_Word vaddr);
 /* Given a frametable index, returns an SOS addr */
 seL4_Word frame_idx_to_svaddr(uint32_t idx);
 
+/* Given a vaddr, get the frame's swappable bit */
+int frame_get_swappable(seL4_Word svaddr);
+
 /* Given a vaddr, set the frame's swappable bit */
 int frame_change_swappable(seL4_Word svaddr, bool swappable);
 

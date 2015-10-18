@@ -83,7 +83,7 @@ process_t processes[MAX_PROCESSES];
 
 void proc_init();
 
-int proc_create(pid_t parent, char *program_name);
+int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages);
 
 void proc_exit(process_t *proc);
 

@@ -558,7 +558,7 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
 
     printf("sos_execve %s\n", path);
 
-    pid = proc_create(proc->pid, path);
+    pid = proc_create(proc->pid, path, -1, false);
     if (pid < 0) {
         err = -pid;
         goto sos_execve_end;

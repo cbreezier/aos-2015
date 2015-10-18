@@ -63,7 +63,8 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
 static int load_segment_into_vspace(process_t *proc,
                                     unsigned long offset, unsigned long segment_size,
                                     unsigned long file_size, unsigned long dst,
-                                    unsigned long permissions, fhandle_t *fhandle) {
+                                    unsigned long permissions, fhandle_t *fhandle,
+                                    bool pin_pages) {
 
     /* Overview of ELF segment loading
 
@@ -104,11 +105,32 @@ static int load_segment_into_vspace(process_t *proc,
     dprintf(0, "as_add_region done (elf load)\n");
 
     dprintf(0, "nfs_read_sync (elf load)\n");
+    sync_acquire(ft_lock);
+    dprintf(0, "elf loading ft lock acquired\n");
     err = nfs_read_sync(proc, fhandle, offset, (void*)dst, file_size);
     if (err < 0) {
         dprintf(0, "nfs_read_sync failed - reading segment %d\n", -err);
+        sync_release(ft_lock);
         return -err;
     }
+    /* Pin all the pages if required */
+    if (pin_pages) {
+        for (seL4_Word vaddr = PAGE_ALIGN(dst); vaddr < dst + segment_size; vaddr += PAGE_SIZE) {
+            int frame = vaddr_to_pt_entry(proc->as, vaddr)->frame;
+            struct ft_entry *fte = &ft[svaddr_to_frame_idx(frame)];
+            if (fte->user_cap) {
+                fte->is_swappable = false;
+            } else {
+                seL4_Word sos_addr;
+                err = pt_add_page(proc, vaddr, &sos_addr, NULL);
+                if (err) {
+                    sync_release(ft_lock);
+                    return err;
+                }
+            }
+        }
+    }
+    sync_release(ft_lock);
     dprintf(0, "nfs_read_sync done (elf load)\n");
 
     as_change_region_perms(proc->as, (void*)dst,
@@ -151,7 +173,7 @@ static int load_segment_into_vspace(process_t *proc,
 //    return 0;
 }
 
-int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
+int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint, bool pin_pages) {
 
     int num_headers;
     int err;
@@ -217,7 +239,7 @@ int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
         err = load_segment_into_vspace(proc, source_offset, segment_size, file_size, vaddr,
-                                       get_sel4_rights_from_elf(flags) & seL4_AllRights, &fhandle);
+                                       get_sel4_rights_from_elf(flags) & seL4_AllRights, &fhandle, pin_pages);
         if (err) {
             return err;
         }

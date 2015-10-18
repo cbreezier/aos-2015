@@ -723,7 +723,7 @@ int main(void) {
     proc_init();
 
     /* Start the timer app */
-    pid_t timer_pid = proc_create(-1, TIMER_APP);
+    pid_t timer_pid = proc_create(-1, TIMER_APP, 255, true);
     conditional_panic(timer_pid < 0, "Cannot start timer process");
     setup_timer_app(&processes[timer_pid]); 
 
@@ -734,7 +734,7 @@ int main(void) {
     register_timer(BEREAVING_PARENTS_TICK_TIME, bereaving_parents_tick, NULL, timer_ep);
 
     /* Start the user application */
-    pid_t pid = proc_create(-1, CONFIG_SOS_STARTUP_APP);
+    pid_t pid = proc_create(-1, CONFIG_SOS_STARTUP_APP, -1, false);
     conditional_panic(pid < 0, "Cannot start first process");
 
     dprintf(0, "initial pid = %d\n", pid);

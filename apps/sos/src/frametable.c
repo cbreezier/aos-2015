@@ -194,6 +194,21 @@ seL4_Word frame_idx_to_svaddr(uint32_t idx) {
     return low_addr + PAGE_SIZE*idx;
 }
 
+int frame_get_swappable(seL4_Word svaddr) {
+    uint32_t idx = svaddr_to_frame_idx(svaddr);
+
+    if (!idx) {
+        return EFAULT;
+    }
+    conditional_panic(idx >= num_frames, "frame_get_swappable invalid idx");
+    
+    sync_acquire(ft_lock);
+    bool swappable = ft[idx].is_swappable;
+    sync_release(ft_lock);
+
+    return swappable;
+}
+
 int frame_change_swappable(seL4_Word svaddr, bool swappable) {
     uint32_t idx = svaddr_to_frame_idx(svaddr);
 
