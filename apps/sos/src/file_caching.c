@@ -2,6 +2,7 @@
 #include <sys/debug.h>
 #include <sys/panic.h>
 #include <string.h>
+#include <clock/clock.h>
 #include "file_caching.h"
 #include "file.h"
 #include "frametable.h"
@@ -13,8 +14,6 @@
 #define WRITE_TICK_TIME 30000000ull
 
 struct vfs_cache_entry cache[NUM_CACHE_ENTRIES];
-
-struct timer_list_node write_tick_node;
 
 uint32_t _cur_cache_entry = 0;
 
@@ -64,7 +63,7 @@ static void write_tick(uint32_t id, void *data) {
     }
     sync_release(cache_lock);
 
-    register_timer(WRITE_TICK_TIME, write_tick, NULL, &write_tick_node);
+    register_timer(WRITE_TICK_TIME, write_tick, NULL, timer_ep);
 }
 
 void vfs_cache_init() {
@@ -89,7 +88,7 @@ void vfs_cache_init() {
     dir_cache_lock = sync_create_mutex();
     conditional_panic(!dir_cache_lock, "Cannot create dir cache lock");
 
-    register_timer(WRITE_TICK_TIME, write_tick, NULL, &write_tick_node);
+    register_timer(WRITE_TICK_TIME, write_tick, NULL, timer_ep);
 }
 
 /* MUST BE HOLDING CACHE_LOCK BEFORE CALLING THIS */
