@@ -21,7 +21,6 @@
 #include "alloc_wrappers.h"
 #include "frametable.h"
 
-
 sync_mutex_t proc_table_lock;
 
 void proc_init() {
@@ -38,6 +37,13 @@ void proc_init() {
     conditional_panic(!proc_table_lock, "Can't create proc table lock");
 }
 
+/*
+ * When creating a process, if any step fails, the previously allocated
+ * data must be destroyed, in order to prevent leaks.
+ *
+ * To handle this, we set all data to invalid values, and call proc_exit
+ * if any step fails. proc_exit then destroys anything which is not invalid.
+ */
 int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) {
     int err = 0;
 
@@ -55,6 +61,7 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
 
     pid_t pid = processes[idx].next_pid;
 
+    /* Set all relevant values to be invalid */
     processes[idx].as = NULL;
     processes[idx].vroot_addr = 0;
     processes[idx].vroot = 0;
@@ -86,8 +93,6 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
     seL4_UserContext context;
 
     /* These required for loading program sections */
-    //char* elf_base;
-    //unsigned long elf_size;
     seL4_Word program_entrypoint = 0;
 
     dprintf(0, "as initing\n");
@@ -129,6 +134,7 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
         goto proc_create_end;
     }
 
+    /* Add IPC buffer region */
     dprintf(0, "adding IPC region\n");
     err = as_add_region(processes[idx].as, PROCESS_IPC_BUFFER, PAGE_SIZE, 1, 1, 1);
     if (err) {
@@ -137,7 +143,7 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
     }
     dprintf(0, "Added IPC region\n");
 
-    /* Create an IPC buffer */
+    /* Create an IPC buffer page, and pin it */
     seL4_Word ipcbuf_svaddr;
     err = pt_add_page(&processes[idx], PROCESS_IPC_BUFFER, &ipcbuf_svaddr, &processes[idx].ipc_buffer_cap);
     if (err) {
@@ -189,15 +195,6 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
         goto proc_create_end;
     }
 
-
-    ///* parse the cpio image */
-    //dprintf(1, "\nStarting \"%s\"...\n", program_name);
-    //elf_base = cpio_get_file(_cpio_archive, program_name, &elf_size);
-    //if (!elf_base) {
-    //    err = ENOENT;
-    //    goto proc_create_end;
-    //}
-
     /* load the elf image */
     dprintf(0, "elf load\n");
     err = elf_load(&processes[idx], program_name, &program_entrypoint, pin_pages);
@@ -207,20 +204,21 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
         goto proc_create_end;
     }
 
-    /* Create a stack frame */
+    /* Create a heap */
     dprintf(0, "adding heap and stack regions\n");
     err = as_add_heap(&processes[idx], pin_pages);
     if (err) {
         dprintf(0, "FAIL N");
         goto proc_create_end;
     }
+    /* Create a stack frame */
     err = as_add_stack(&processes[idx], pin_pages);
     if (err) {
         dprintf(0, "FAIL O");
         goto proc_create_end;
     }
 
-    /* File descriptor table stuff */
+    /* Initialise file descriptor table */
     processes[idx].proc_files = kmalloc(sizeof(struct fd_entry) * OPEN_FILE_MAX);
     if (!processes[idx].proc_files) {
         dprintf(0, "FAIL P");
@@ -239,6 +237,10 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
 
     sync_acquire(open_files_lock);
 
+    /* 
+     * We must open console for stdout and stderr, first check if
+     * an entry exists in the open file table.
+     */
     int open_entry = 0;
     bool exists = (strcmp(open_files[open_entry].file_obj.name, "console") == 0);
 
@@ -252,10 +254,10 @@ int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) 
     }
     sync_release(open_files_lock);
 
+    /* Open FDs 1 and 2 for write */
     for (int i = 1; i < 3; ++i) {
         processes[idx].proc_files[i].used = true;
         processes[idx].proc_files[i].open_file_idx = open_entry;
-        //processes[idx].proc_files[i].mode = (i == 0) ? FM_READ : FM_WRITE;
         processes[idx].proc_files[i].mode = FM_WRITE;
     }
 
@@ -290,7 +292,7 @@ void proc_exit(process_t *proc) {
     proc->pid = -1;
 
     if (proc->proc_files) {
-        /* Close all fd and free related data structures */
+        /* Close all FDs and free related data structures */
         sync_acquire(open_files_lock);
         for (int i = 0; i < OPEN_FILE_MAX; ++i) {
             struct fd_entry *fd_entry = &proc->proc_files[i];
@@ -349,8 +351,6 @@ void proc_exit(process_t *proc) {
         kut_free(proc->vroot_addr, seL4_PageDirBits);
     }
 
-    //char outbuf[100];
-    //sprintf(outbuf, "Not all proc memory freed %d\n", proc->size);
     conditional_panic(proc->size != 0, "Not all memory freed");
 
     sync_release(proc->proc_lock);
@@ -360,6 +360,10 @@ void proc_exit(process_t *proc) {
         uint32_t parent_idx = pid_parent & PROCESSES_MASK;
         dprintf(0, "acquiring parent proc lock\n");
         sync_acquire(processes[parent_idx].proc_lock);
+        /* 
+         * Check that the parent pcb still belongs to the original parent,
+         * and that the parent is actually waiting
+         */
         if (processes[parent_idx].pid == pid_parent && processes[parent_idx].wait_ep) {
             if (processes[parent_idx].wait_pid == -1 || processes[parent_idx].wait_pid == pid_proc) {
                 processes[parent_idx].wait_pid = pid_proc;

@@ -1,6 +1,7 @@
 #include <utils/mapping.h>
 #include <sel4/types.h>
 #include <sel4/types_gen.h>
+#include <utils/page.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/panic.h>
@@ -14,8 +15,9 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     int err = 0;
 
-    vaddr = (vaddr / PAGE_SIZE) * PAGE_SIZE;
+    vaddr = PAGE_ALIGN(vaddr, PAGE_SIZE);
 
+    /* Ensure that the address is within a valid region */
     struct region_entry *cur = NULL;
     for (cur = proc->as->region_head; cur != NULL; cur = cur->next) {
         if (cur->start <= vaddr && cur->start + cur->size > vaddr) 
@@ -38,6 +40,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     /* Second level index */
     seL4_Word sl_idx = (vaddr << TOP_LEVEL_SIZE) >> (TOP_LEVEL_SIZE + OFFSET_SIZE);
 
+    /* Creates a pagetable for the user page, if one does not exist */
     if (proc->as->page_directory[tl_idx] == NULL) {
         assert(PAGE_SIZE == sizeof(struct pt_entry) * (1 << SECOND_LEVEL_SIZE));
         proc->as->page_directory[tl_idx] = (struct pt_entry *)frame_alloc_sos(true);
@@ -50,8 +53,13 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     sync_acquire(ft_lock);
     seL4_Word svaddr = 0;
-    /* Swapped out page */
+
     if (proc->as->page_directory[tl_idx][sl_idx].frame < 0) {
+        /* 
+         * Swapped out page. Simply swap it in.
+         * Note that as there may be space in RAM due to freed frames,
+         * we possibly provide swapin with an address to swap into.
+         */
         svaddr = frame_alloc(1, 1);
         int err = swapin(proc, vaddr, &svaddr);
         if (err) {
@@ -60,9 +68,10 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
             return err;
         }
     } else if (proc->as->page_directory[tl_idx][sl_idx].frame > 0) {
-        // simply map page back in and set reference to true
+        /* Page is in memory, but it is unmapped */
         svaddr = proc->as->page_directory[tl_idx][sl_idx].frame;
     } else {
+        /* Brand new page */
         proc->size++;
         svaddr = frame_alloc(1, 1);
         if (svaddr == 0) {
@@ -81,6 +90,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
 
     if (ret_svaddr != NULL) {
         *ret_svaddr = svaddr;
+        /* Pin frame if the caller requests svaddr */
         frame_change_swappable(svaddr, 0);
     }
 
@@ -91,7 +101,7 @@ int pt_add_page(process_t *proc, seL4_Word vaddr, seL4_Word *ret_svaddr, seL4_CP
     seL4_ARM_PageTable pt_cap = 0;
     seL4_Word pt_addr = 0;
 
-    // Only map in if not already mapped in
+    /* Only map in if not already mapped in */
     if (!ft[frame_idx].user_cap) {
         seL4_CPtr user_cap = cspace_copy_cap(cur_cspace, cur_cspace, ft[frame_idx].cap, seL4_AllRights);
         err = usr_map_page(user_cap, proc->vroot, vaddr, cap_rights, cap_attr, &pt_cap, &pt_addr);

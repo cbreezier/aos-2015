@@ -14,8 +14,10 @@
 #include <assert.h>
 #include <cspace/cspace.h>
 #include <elf/elf32.h>
+#include <utils/page.h>
 
 #include "elf.h"
+#include "addrspace.h"
 #include "pagetable.h"
 #include "frametable.h"
 #include "vmem_layout.h"
@@ -28,17 +30,6 @@
 
 #include <sys/debug.h>
 #include <sys/panic.h>
-
-/* Minimum of two values. */
-#define MIN(a,b) (((a)<(b))?(a):(b))
-
-#ifndef PAGESIZE
-    #define PAGESIZE              (1 << (seL4_PageBits))
-#endif
-#define PAGEMASK              ((PAGESIZE) - 1)
-#define PAGE_ALIGN(addr)      ((addr) & ~(PAGEMASK))
-#define IS_PAGESIZE_ALIGNED(addr) !((addr) &  (PAGEMASK))
-
 
 /*
  * Convert ELF permissions into seL4 permissions.
@@ -116,7 +107,7 @@ static int load_segment_into_vspace(process_t *proc,
     }
     /* Pin all the pages if required */
     if (pin_pages) {
-        for (seL4_Word vaddr = PAGE_ALIGN(dst); vaddr < dst + segment_size; vaddr += PAGE_SIZE) {
+        for (seL4_Word vaddr = PAGE_ALIGN(dst, PAGE_SIZE); vaddr < dst + segment_size; vaddr += PAGE_SIZE) {
             bool need_add_page = false;
             struct pt_entry *pte = vaddr_to_pt_entry(proc->as, vaddr);
             struct ft_entry *fte;

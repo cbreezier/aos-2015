@@ -24,6 +24,7 @@ typedef int pid_t;
 
 struct fd_entry;
 
+/* Exposed process information to the user */
 typedef struct {
     pid_t     pid;
     unsigned  size;       /* in pages */
@@ -65,13 +66,22 @@ typedef struct {
     struct addrspace *as;
 
     struct fd_entry *proc_files;
+    /* Linked list of free file descriptors */
     int files_head_free, files_tail_free;
 
+    /* Next free pcb */
     int next_free;
 
     bool zombie;
+    /* 
+     * If an SOS thread is handling a syscall or vm fault, this
+     * process must be set to a zombie, and cannot die until
+     * the SOS thread finishes.
+     */
     bool sos_thread_handling;
 
+    /* Next pid associated with this pcb (increased by MAX_PROCESSES
+     * on each process create). */
     pid_t next_pid;
 
 } process_t;
@@ -82,8 +92,18 @@ process_t processes[MAX_PROCESSES];
 
 void proc_init();
 
+/*
+ * Loads a program from the file system, and sets up all data necessary
+ * for the process to run.
+ *
+ * If priority is -1, default priority for user apps USER_PRIORITY is used
+ * If pin_pages is true, will pin all elf loaded regions as well as stack and heap
+ */
 int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages);
 
+/*
+ * Destroys all data associated with the given process.
+ */
 void proc_exit(process_t *proc);
 
 #endif /* _PROC_H_ */
