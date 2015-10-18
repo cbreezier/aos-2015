@@ -1,4 +1,5 @@
 #include <string.h>
+#include <utils/page.h>
 #include <stdio.h>
 #include <sys/debug.h>
 #include "copy.h"
@@ -32,7 +33,7 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
     sync_acquire(ft_lock);
     /* Find relevant page table entry */
     struct pt_entry *pte = vaddr_to_pt_entry(proc->as, (seL4_Word)usr_buf);
-    seL4_Word offset = ((seL4_Word)usr_buf - ((seL4_Word)usr_buf / PAGE_SIZE) * PAGE_SIZE);
+    seL4_Word offset = (seL4_Word)usr_buf - PAGE_ALIGN(usr_buf, PAGE_SIZE);
     if (pte == NULL || pte->frame <= 0) {
         /* Mapping not valid, use pt_add_page to handle everything */
         int err = pt_add_page(proc, (seL4_Word)usr_buf, ret_svaddr, NULL);

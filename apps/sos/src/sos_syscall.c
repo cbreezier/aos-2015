@@ -505,7 +505,7 @@ seL4_MessageInfo_t sos_getdents(process_t *proc, int num_args) {
     void *usr_buf= (void*)seL4_GetMR(2);
     size_t usr_buf_sz = (size_t)seL4_GetMR(3);
 
-    char **dir_entries = NULL;
+    char *file_name = NULL;
     size_t file_name_size = 0;
 
     if (pos < 0 || pos >= FILES_PER_DIR) {
@@ -513,57 +513,39 @@ seL4_MessageInfo_t sos_getdents(process_t *proc, int num_args) {
         goto sos_getdents_end;
     }
 
-    /* 
-     * Allocate an array of file names with FILES_PER_DIR files, each
-     * with NAME_MAX characters
-     */
-    dir_entries = kmalloc(sizeof(char*)*FILES_PER_DIR);
-    if (dir_entries == NULL) {
+    file_name = kmalloc(sizeof(char)*NAME_MAX);
+    if (file_name == NULL) {
         err = ENOMEM;
         goto sos_getdents_end;
     }
-    for (int i = 0; i < FILES_PER_DIR; ++i) {
-        dir_entries[i] = kmalloc(sizeof(char)*NAME_MAX);
-        if (dir_entries[i] == NULL) {
-            err = ENOMEM;
-            goto sos_getdents_end;
-        }
+
+    err = nfs_readdir_pos_sync((void*)file_name, pos);
+
+    if (err == -1) {
+        file_name[0] = '\0';
+        err = 0;
     }
 
-    int num_files = 0;
-    err = nfs_readdir_sync((void*)dir_entries, &num_files);
     if (err) {
         goto sos_getdents_end;
     }
 
-    if (num_files <= pos) {
-        goto sos_getdents_end;
-    }
-
-    dir_entries[FILES_PER_DIR-1][0] = 0;
-
-    file_name_size = strlen(dir_entries[pos]);
+    file_name_size = strlen(file_name);
     if (file_name_size >= usr_buf_sz) {
         err = EINVAL;
         goto sos_getdents_end;
     }
 
     /* Copy out the name of the file at the requested position to the user */
-    err = copyoutstring(proc, usr_buf, dir_entries[pos], usr_buf_sz);
+    err = copyoutstring(proc, usr_buf, file_name, usr_buf_sz);
     if (err) {
         goto sos_getdents_end;
     }
 
 sos_getdents_end:
     /* Free all memory associated with dir_entries */
-    if (dir_entries != NULL) {
-        for (int i = 0; i < FILES_PER_DIR; ++i) {
-            if (dir_entries[i] == NULL) {
-                break;
-            }
-            kfree(dir_entries[i]);
-        }
-        kfree(dir_entries);
+    if (file_name != NULL) {
+        kfree(file_name);
     }
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 2);
 

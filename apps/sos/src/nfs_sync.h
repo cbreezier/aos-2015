@@ -78,6 +78,17 @@ int nfs_sos_write_sync(fhandle_t fh, uint32_t offset, void *sos_buf, size_t nbyt
  */
 int nfs_readdir_sync(void *sos_buf, int *ret_num_files);
 
+
+/*
+ * Similar to nfs_readdir_sync, but only reads one file name, at a specified position.
+ *
+ * Returns -1 if the file position is invalid.
+ *
+ * Returns 0 if successful, greater than zero if error.
+ *
+ */
+int nfs_readdir_pos_sync(void *sos_buf, int file_pos);
+
 /*
  * Creates a file in the directory defined by mnt_point.
  *

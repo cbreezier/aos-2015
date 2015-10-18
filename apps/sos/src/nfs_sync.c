@@ -30,6 +30,7 @@ struct token {
 
     /* For readdir */
     nfscookie_t cookie;
+    int file_pos;
 };
 
 
@@ -396,6 +397,59 @@ int nfs_readdir_sync(void *sos_buf, int *ret_num_files) {
     } while (t.cookie);
 
     if (ret_num_files != NULL) *ret_num_files = t.count;
+
+    return 0;
+}
+
+static void nfs_readdir_pos_cb(uintptr_t token, enum nfs_stat status, int num_files, char *file_names[], nfscookie_t nfscookie) {
+    struct token *t = (struct token*)token;
+    t->status = status;
+    t->cookie = nfscookie;
+
+    char *dst = (char *)t->sos_buf;
+
+    /* Copy the file name into the given sos_buf */
+    if (t->count + num_files > t->file_pos) {
+        int files_pos = t->file_pos - t->count;
+        strncpy(dst, file_names[files_pos], NAME_MAX);
+        dst[NAME_MAX-1] = '\0';
+        t->finished = true;
+    }
+
+    t->count += num_files;
+
+    seL4_Notify(t->async_ep, 0);
+}
+
+int nfs_readdir_pos_sync(void *sos_buf, int file_pos) {
+    struct token t;
+    t.async_ep = get_cur_thread()->wakeup_async_ep;
+    t.sos_buf = sos_buf;
+    t.count = 0;
+    t.cookie = 0;
+    t.file_pos = file_pos;
+
+    do {
+        sync_acquire(network_lock);
+        enum rpc_stat res = nfs_readdir(&mnt_point, t.cookie, nfs_readdir_pos_cb, (uintptr_t)(&t));
+        sync_release(network_lock);
+        int err = rpc_stat_to_err(res);
+        if (res) {
+            return err;
+        }
+
+        seL4_Wait(t.async_ep, NULL);
+
+        err = nfs_stat_to_err(t.status);
+        if (err) {
+            return err;
+        }
+    } while (t.cookie && !t.finished);
+
+    /* Handle case where file_pos is past the number of files in the directory */
+    if (file_pos >= t.count) {
+        return -1;
+    }
 
     return 0;
 }

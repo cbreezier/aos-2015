@@ -22,7 +22,8 @@
 #define IS_ALIGNED_4K(addr) IS_ALIGNED(addr, PAGE_BITS_4K)
 #define BYTES_TO_4K_PAGES(b) (((b) / PAGE_SIZE_4K) + ((((b) % PAGE_SIZE_4K) > 0) ? 1 : 0))
 
-#define PAGE_ALIGN(addr, size) ((addr) & ~(size-1))
+#define PAGE_ALIGN(addr, size) (((uint32_t)addr) & ~(size-1))
+#define PAGE_ALIGN_UP(addr, size) (PAGE_ALIGN(addr-1, size) + size)
 
 #define SAME_PAGE_4K(a, b) \
     ((((uintptr_t)(a)) & ~PAGE_MASK_4K) == (((uintptr_t)(b)) & ~PAGE_MASK_4K))

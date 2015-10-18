@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <utils/page.h>
 #include <frametable.h>
 #include <ut_manager/ut.h>
 #include <bits/limits.h>
@@ -10,8 +11,6 @@
 #include <sys/debug.h>
 #include "swap.h"
 #include "alloc_wrappers.h"
-
-#define ROUND_UP(n, b) (((((n) - 1ul) >> (b)) + 1ul) << (b))
 
 /*
  * This frametable uses a linked list approach for finding the next
@@ -39,10 +38,9 @@ void frametable_init() {
     seL4_Word memory_size = hi_addr - low_addr;
 
     /* Figure out how much of the frametable is needed to store itself based on memory size */
-    num_frames = memory_size / PAGE_SIZE;
+    num_frames = PAGE_ALIGN_UP(memory_size, PAGE_SIZE) / PAGE_SIZE;
     seL4_Word frametable_size = num_frames * sizeof(struct ft_entry);
-    frametable_size = ROUND_UP(frametable_size, seL4_PageBits);
-    seL4_Word frametable_frames_required = frametable_size / PAGE_SIZE;
+    seL4_Word frametable_frames_required = PAGE_ALIGN_UP(frametable_size, PAGE_SIZE) / PAGE_SIZE;
 
     ft = (struct ft_entry*) low_addr;
     free_head = frametable_frames_required;

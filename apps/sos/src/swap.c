@@ -1,4 +1,5 @@
 #include <nfs/nfs.h>
+#include <utils/page.h>
 #include <sync/mutex.h>
 #include <sys/panic.h>
 #include <sys/debug.h>
@@ -35,8 +36,7 @@ void swap_init(size_t lo_ft_idx, size_t hi_ft_idx) {
 
     size_t num_entries = (hi_ft_idx - lo_ft_idx) * SWAP_MULTIPLIER;
     size_t mem_required = num_entries * sizeof(struct swap_entry);
-    /* Ceil(mem_required, PAGE_SIZE) / PAGE_SIZE */
-    size_t frames_required = (mem_required + PAGE_SIZE - 1) / PAGE_SIZE;
+    size_t frames_required = PAGE_ALIGN_UP(mem_required, PAGE_SIZE) / PAGE_SIZE;
 
     /* Allocate memory for free entry list. This memory must be contiguous */
     for (size_t i = 1; i < frames_required; ++i) {

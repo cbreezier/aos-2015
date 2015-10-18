@@ -1,4 +1,5 @@
 #include <string.h>
+#include <utils/page.h>
 #include <stdlib.h>
 #include <sys/panic.h>
 #include <sys/debug.h>
@@ -142,9 +143,9 @@ int as_destroy(process_t *proc) {
 static int as_do_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bool w, bool x, struct region_entry **ret) {
 
     /* Round down starting vaddr */
-    start = (start / PAGE_SIZE) * PAGE_SIZE;
+    start = PAGE_ALIGN(start, PAGE_SIZE);
     /* Round up size */
-    size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
+    size = PAGE_ALIGN_UP(size, PAGE_SIZE);
 
     bool invalid_location = (size == 0 || size == MEMORY_TOP || start < 0 || start > MEMORY_TOP - size - 1);
     if (as == NULL || invalid_location) {
@@ -243,9 +244,9 @@ int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool 
     assert(ret_insert_location != NULL);
 
     /* Round down starting vaddr */
-    min = (min / PAGE_SIZE) * PAGE_SIZE;
+    min = PAGE_ALIGN(min, PAGE_SIZE);
     /* Round up size */
-    size = ((size - 1) / PAGE_SIZE + 1) * PAGE_SIZE;
+    size = PAGE_ALIGN_UP(size, PAGE_SIZE);
 
     bool invalid_location = (size == 0 || size == MEMORY_TOP || min <= 0 || min > MEMORY_TOP - size - 1);
     if (as == NULL || invalid_location) {
@@ -305,7 +306,7 @@ int as_remove_region(process_t *proc, seL4_Word addr) {
     struct region_entry *prev = NULL;
     struct region_entry *cur;
 
-    addr = (addr / PAGE_SIZE) * PAGE_SIZE;
+    addr = PAGE_ALIGN(addr, PAGE_SIZE);
     size_t size = 0;
     /* Remove from region list */
     for (cur = as->region_head; cur != NULL; cur = cur->next) {
