@@ -63,7 +63,8 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
 static int load_segment_into_vspace(process_t *proc,
                                     unsigned long offset, unsigned long segment_size,
                                     unsigned long file_size, unsigned long dst,
-                                    unsigned long permissions, fhandle_t *fhandle) {
+                                    unsigned long permissions, fhandle_t *fhandle,
+                                    bool pin_pages) {
 
     /* Overview of ELF segment loading
 
@@ -105,11 +106,46 @@ static int load_segment_into_vspace(process_t *proc,
 
     /* Read all contents page by page into the region */
     dprintf(0, "nfs_read_sync (elf load)\n");
+    sync_acquire(ft_lock);
+    dprintf(0, "elf loading ft lock acquired\n");
     err = nfs_read_sync(proc, fhandle, offset, (void*)dst, file_size);
     if (err < 0) {
         dprintf(0, "nfs_read_sync failed - reading segment %d\n", -err);
+        sync_release(ft_lock);
         return -err;
     }
+    /* Pin all the pages if required */
+    if (pin_pages) {
+        for (seL4_Word vaddr = PAGE_ALIGN(dst); vaddr < dst + segment_size; vaddr += PAGE_SIZE) {
+            bool need_add_page = false;
+            struct pt_entry *pte = vaddr_to_pt_entry(proc->as, vaddr);
+            struct ft_entry *fte;
+
+            if (pte != NULL) {
+                int frame = pte->frame;
+                if (frame != 0) {
+                    dprintf(0, "frame = %d, svaddr = %u\n", frame, svaddr_to_frame_idx(frame));
+                    fte = &ft[svaddr_to_frame_idx(frame)];
+                    conditional_panic(!fte, "Not enough memory - elf nfs read swapping each other out (probably clock)");
+                } else {
+                    need_add_page = true;
+                }
+            } else {
+                need_add_page = true;
+            }
+            if (!need_add_page) {
+                fte->is_swappable = false;
+            } else {
+                seL4_Word sos_addr;
+                err = pt_add_page(proc, vaddr, &sos_addr, NULL);
+                if (err) {
+                    sync_release(ft_lock);
+                    return err;
+                }
+            }
+        }
+    }
+    sync_release(ft_lock);
     dprintf(0, "nfs_read_sync done (elf load)\n");
 
     /* Set proper permissions on region now that we're done */
@@ -123,7 +159,7 @@ static int load_segment_into_vspace(process_t *proc,
     return 0;
 }
 
-int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
+int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint, bool pin_pages) {
 
     int num_headers;
     int err;
@@ -182,7 +218,7 @@ int elf_load(process_t *proc, char *file_name, seL4_Word *ret_entrypoint) {
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
         err = load_segment_into_vspace(proc, source_offset, segment_size, file_size, vaddr,
-                                       get_sel4_rights_from_elf(flags) & seL4_AllRights, &fhandle);
+                                       get_sel4_rights_from_elf(flags) & seL4_AllRights, &fhandle, pin_pages);
         if (err) {
             return err;
         }

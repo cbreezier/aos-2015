@@ -14,8 +14,9 @@ sos-components-$(CONFIG_APP_SOSH) += sosh
 sos-components-$(CONFIG_APP_TTY_TEST) += tty_test
 sos-components=$(addprefix $(STAGE_BASE)/bin/, $(sos-components-y))
 sos-components-$(CONFIG_APP_TESTAPP) += test
+sos-components-$(CONFIG_APP_TIMERAPP) += timer
 
-sos: export COMPONENTS=${sos-components}
+#sos: export COMPONENTS=${sos-components}
 sos: ${sos-components-y} \
      libsel4 libelf $(libc) libcpio \
      libsel4cspace libserial libclock \

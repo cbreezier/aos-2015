@@ -38,7 +38,7 @@ void proc_init() {
     conditional_panic(!proc_table_lock, "Can't create proc table lock");
 }
 
-int proc_create(pid_t parent, char *program_name) {
+int proc_create(pid_t parent, char *program_name, int priority, bool pin_pages) {
     int err = 0;
 
     dprintf(0, "acquiring proc table lock\n");
@@ -71,7 +71,11 @@ int proc_create(pid_t parent, char *program_name) {
     processes[idx].pid = pid;
     processes[idx].next_pid = (pid + MAX_PROCESSES) & PID_MAX;
     processes[idx].size = 0;
-    processes[idx].stime = (unsigned)(time_stamp() / 1000);
+    if (timer_ep) {
+        processes[idx].stime = (unsigned)(time_stamp(timer_ep) / 1000);
+    } else {
+        processes[idx].stime = 0;
+    }
     strncpy(processes[idx].command, program_name, NAME_MAX);
     processes[idx].command[NAME_MAX - 1] = '\0';
     processes[idx].wait_ep = 0;
@@ -86,7 +90,7 @@ int proc_create(pid_t parent, char *program_name) {
     //unsigned long elf_size;
     seL4_Word program_entrypoint = 0;
 
-     dprintf(0, "as initing\n");
+    dprintf(0, "as initing\n");
     /* Initialise address space */
     err = as_init(&processes[idx].as);
     if (err) {
@@ -175,7 +179,8 @@ int proc_create(pid_t parent, char *program_name) {
 
     /* Configure the TCB */
     dprintf(0, "more tcb stuff\n");
-    err = seL4_TCB_Configure(processes[idx].tcb_cap, processes[idx].user_ep_cap, USER_PRIORITY,
+    err = seL4_TCB_Configure(processes[idx].tcb_cap, processes[idx].user_ep_cap,
+                             priority == -1 ? USER_PRIORITY : priority,
                              processes[idx].croot->root_cnode, seL4_NilData,
                              processes[idx].vroot, seL4_NilData, PROCESS_IPC_BUFFER,
                              processes[idx].ipc_buffer_cap);
@@ -195,7 +200,7 @@ int proc_create(pid_t parent, char *program_name) {
 
     /* load the elf image */
     dprintf(0, "elf load\n");
-    err = elf_load(&processes[idx], program_name, &program_entrypoint);
+    err = elf_load(&processes[idx], program_name, &program_entrypoint, pin_pages);
     if (err) {
         dprintf(0, "error is %d\n", err);
         dprintf(0, "FAIL M");
@@ -204,12 +209,12 @@ int proc_create(pid_t parent, char *program_name) {
 
     /* Create a stack frame */
     dprintf(0, "adding heap and stack regions\n");
-    err = as_add_heap(processes[idx].as);
+    err = as_add_heap(&processes[idx], pin_pages);
     if (err) {
         dprintf(0, "FAIL N");
         goto proc_create_end;
     }
-    err = as_add_stack(&processes[idx]);
+    err = as_add_stack(&processes[idx], pin_pages);
     if (err) {
         dprintf(0, "FAIL O");
         goto proc_create_end;

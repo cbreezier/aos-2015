@@ -86,17 +86,22 @@ int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bo
 
 /*
  * Specifically adds the stack of size STACK_SIZE, ending at PROCESS_STACK_TOP
+ * Additionally it adds a guard region at the bottom of the stack
+ *
+ * Optionally pin the first stack page 
  * 
  * Returns 0 on success and an error code otherwise.
  */
-int as_add_stack(process_t *proc);
+int as_add_stack(process_t *proc, bool pin_pages);
 
 /*
  * Specifically adds the heap of size PROCESS_HEAP_SIZE, starting at PROCESS_HEAP_START
+ *
+ * Optionally pins all initial heap pages
  * 
  * Returns 0 on success and an error code otherwise.
  */
-int as_add_heap(struct addrspace *as);
+int as_add_heap(process_t *proc, bool pin_pages);
 
 /*
  * Similar to as_add_region but searches for the first place that a region

@@ -114,6 +114,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
     size_t can_read = 0;
     int err = 0;
     size_t bytes_left = nbytes;
+    bool swappable;
     for (size_t i = 0; i < nbytes; ++i, ++buf_pos, --buf_size, --can_read) {
         if (buf_pos >= MAX_BUFF_SIZE) {
             buf_pos -= MAX_BUFF_SIZE;
@@ -125,11 +126,11 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
 
             /* Unpin previous page if valid */
             if (svaddr != 0) {
-                frame_change_swappable(svaddr, true);
+                frame_change_swappable(svaddr, swappable);
             }
 
             /* Map in page and get the base svaddr as well as how many bytes we can_read */
-            err = usr_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read);
+            err = usr_buf_to_sos(proc, dest, bytes_left, &svaddr, &can_read, &swappable);
             if (err) {
                 return -err;
             }
@@ -154,7 +155,7 @@ static int read_buf(process_t *proc, void *dest, size_t nbytes, bool *read_newli
     sync_release(read_serial_lock);
 
     if (svaddr != 0) {
-        frame_change_swappable(svaddr, true);
+        frame_change_swappable(svaddr, swappable);
     }
     return num_read;
 }
@@ -233,7 +234,8 @@ int console_write(process_t *proc, struct file_t *fe, uint32_t offset, void *src
 
     /* Write page by page */
     while (bytes_left > 0) {
-        err = usr_buf_to_sos(proc, src, (size_t) bytes_left, &svaddr, &to_write);
+        bool swappable;
+        err = usr_buf_to_sos(proc, src, (size_t) bytes_left, &svaddr, &to_write, &swappable);
         if (err) {
             sync_release(write_serial_lock);
             return -err;
@@ -241,7 +243,7 @@ int console_write(process_t *proc, struct file_t *fe, uint32_t offset, void *src
         sync_acquire(network_lock);
         int written = serial_send(serial, (char *)svaddr, (int) to_write);
         sync_release(network_lock);
-        frame_change_swappable(svaddr, true);
+        frame_change_swappable(svaddr, swappable);
 
         bytes_left -= written;
     }

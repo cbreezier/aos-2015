@@ -26,7 +26,7 @@ bool usr_buf_in_region(process_t *proc, void *usr_buf, size_t buf_size, bool *re
     return true;
 }
 
-int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *ret_svaddr, size_t *ret_buf_page_left) {
+int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *ret_svaddr, size_t *ret_buf_page_left, bool *ret_was_swappable) {
     assert(ret_svaddr != NULL);
 
     sync_acquire(ft_lock);
@@ -40,9 +40,15 @@ int usr_buf_to_sos(process_t *proc, void *usr_buf, size_t buf_size, seL4_Word *r
             sync_release(ft_lock);
             return err;
         }
+        if (ret_was_swappable) {
+            *ret_was_swappable = true;
+        }
     } else {
         /* Page exists, pin it */
         *ret_svaddr = (seL4_Word)pte->frame;
+        if (ret_was_swappable) {
+            *ret_was_swappable = frame_get_swappable(*ret_svaddr);
+        }
         frame_change_swappable(*ret_svaddr, 0);
     }
     *ret_svaddr += offset;
@@ -87,7 +93,8 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
     size_t to_copy;
     while (nbytes > 0) {
         sync_acquire(ft_lock);
-        int err = usr_buf_to_sos(proc, usr, nbytes, (seL4_Word*)(&svaddr), &to_copy);
+        bool swappable;
+        int err = usr_buf_to_sos(proc, usr, nbytes, (seL4_Word*)(&svaddr), &to_copy, &swappable);
         if (err) {
             sync_release(ft_lock);
             return err;
@@ -103,8 +110,8 @@ static int docopy(process_t *proc, void *usr, void *sos, size_t nbytes, bool is_
         } else {
             memcpy(*dst, *src, to_copy);
         }
-        /* Unpin page when done */
-        frame_change_swappable((seL4_Word)svaddr, true);
+        /* Restore swappable state */
+        frame_change_swappable((seL4_Word)svaddr, swappable);
         sync_release(ft_lock);
 
         nbytes -= to_copy;

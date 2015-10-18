@@ -79,7 +79,7 @@ seL4_MessageInfo_t sos_nanosleep(process_t *proc, int num_args) {
     if (data != NULL) {
         seL4_CPtr async_ep = get_cur_thread()->wakeup_async_ep;
         *data = async_ep;
-        err = register_timer(delay, sos_nanosleep_notify, (void*)data, &proc->timer_sleep_node);
+        err = register_timer(delay, sos_nanosleep_notify, (void*)data, timer_ep);
         seL4_Wait(async_ep, NULL);
     } else {
         err = ENOMEM;
@@ -100,7 +100,7 @@ seL4_MessageInfo_t sos_clock_gettime(process_t *proc, int num_args) {
     (void) proc;
     (void) num_args;
 
-    uint64_t timestamp = time_stamp();
+    uint64_t timestamp = time_stamp(timer_ep);
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 3);
 
@@ -563,7 +563,7 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
 
     printf("sos_execve %s\n", path);
 
-    pid = proc_create(proc->pid, path);
+    pid = proc_create(proc->pid, path, -1, false);
     if (pid < 0) {
         err = -pid;
         goto sos_execve_end;

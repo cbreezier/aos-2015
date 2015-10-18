@@ -273,7 +273,8 @@ int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_bu
     while (!t.finished && nbytes > 0) {
         seL4_Word svaddr;
         size_t to_write = 0;
-        int err = usr_buf_to_sos(proc, usr_buf, nbytes, &svaddr, &to_write);
+        bool swappable;
+        int err = usr_buf_to_sos(proc, usr_buf, nbytes, &svaddr, &to_write, &swappable);
         if (err) {
             return -err;
         }
@@ -284,11 +285,11 @@ int nfs_write_sync(process_t *proc, fhandle_t *fh, uint32_t offset, void *usr_bu
         sync_release(network_lock);
         err = rpc_stat_to_err(res);
         if (err) {
-            frame_change_swappable(svaddr, true);
+            frame_change_swappable(svaddr, swappable);
             return -err;
         }
         seL4_Wait(t.async_ep, NULL);
-        frame_change_swappable(svaddr, true);
+        frame_change_swappable(svaddr, swappable);
 
         err = nfs_stat_to_err(t.status);
         if (err) {

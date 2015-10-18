@@ -199,20 +199,44 @@ int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bo
     return as_do_add_region(as, start, size, r, w, x, NULL);
 }
 
-int as_add_stack(process_t *proc) {
+int as_add_stack(process_t *proc, bool pin_pages) {
     int err = as_do_add_region(proc->as, PROCESS_STACK_TOP - STACK_SIZE, STACK_SIZE , 1, 1, 0, &(proc->as->stack_region));
     if (err) {
         return err;
     }
 
-    /* Map in the first page at the top of the stack */
-    err = pt_add_page(proc, PROCESS_STACK_TOP - STACK_SIZE, NULL, NULL);
-    return err;
+    if (pin_pages) {
+        /* Pass in sos_addr to ensure page gets pinned */
+        seL4_Word sos_addr;
+        err = pt_add_page(proc, PROCESS_STACK_TOP - PAGE_SIZE, &sos_addr, NULL);
+        if (err) {
+            return err;
+        }
+    }
+    
+    /* Add guard region */
+    return as_add_region(proc->as, PROCESS_STACK_TOP - STACK_SIZE - PAGE_SIZE, PAGE_SIZE, false, false, false);
 }
 
-int as_add_heap(struct addrspace *as) {
+int as_add_heap(process_t *proc, bool pin_pages) {
     seL4_Word start = PROCESS_HEAP_START;
-    return as_do_add_region(as, start, PROCESS_HEAP_SIZE, 1, 1, 0, &(as->heap_region));
+    int err = as_do_add_region(proc->as, start, PROCESS_HEAP_SIZE, 1, 1, 0, &(proc->as->heap_region));
+    if (err) {
+        return err;
+    }
+
+    if (pin_pages) {
+        for (; start < PROCESS_HEAP_START + PROCESS_HEAP_SIZE; start += PAGE_SIZE) {
+            /* Pass in sos_addr to ensure page gets pinned */
+            seL4_Word sos_addr;
+            err = pt_add_page(proc, start, &sos_addr, NULL);
+            if (err) {
+                return err;
+            }
+        }
+    }
+
+    return 0;
 }
 
 int as_search_add_region(struct addrspace *as, seL4_Word min, size_t size, bool r, bool w, bool x, seL4_Word *ret_insert_location) {

@@ -33,7 +33,7 @@
 
 #define PROCESS_SCRATCH     (0xD0000000)
 
-#define PROCESS_HEAP_SIZE   (0x10000000)
+#define PROCESS_HEAP_SIZE   (0x00010000)
 
 
 #endif /* _MEM_LAYOUT_H_ */

@@ -21,36 +21,17 @@
 #define CLOCK_R_CNCL (-2)       /* operation cancelled (driver stopped) */
 #define CLOCK_R_FAIL (-3)       /* operation failed for other reason */
 
+#define REGISTER_TIMER_CALL 0
+#define REMOVE_TIMER_CALL 1
+#define TIMESTAMP_CALL 2
+#define STOP_TIMER_CALL 3
+
+#define TIMER_CALLBACK_LABEL 6
+
 typedef uint64_t timestamp_t;
 typedef void (*timer_callback_t)(uint32_t id, void *data);
 
-/* 
- * List of timers, sorted by their order of activation.
- * Delay is relative to the previous timer in the list, such
- * rescheduling a timer can be done in constant time
- */
-struct timer_list_node {
-    uint64_t delay;
-
-    uint32_t id;
-
-    timer_callback_t callback;
-    void *data;
-
-    bool is_user_provided;
-
-    struct timer_list_node *next;
-};
-
-
-/*
- * Initialise driver. Performs implicit stop_timer() if already initialised.
- *    interrupt_ep:       A (possibly badged) async endpoint that the driver
- should use for deliverying interrupts to
- *
- * Returns CLOCK_R_OK iff successful.
- */
-int start_timer(seL4_CPtr interrupt_ep);
+seL4_CPtr timer_ep;
 
 /*
  * Register a callback to be called after a given delay
@@ -60,34 +41,27 @@ int start_timer(seL4_CPtr interrupt_ep);
  *
  * Returns 0 on failure, otherwise an unique ID for this timeout
  */
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, struct timer_list_node *given_node);
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, seL4_CPtr timer_ep);
 
 /*
  * Remove a previously registered callback by its ID
- *    id: Unique ID returned by register_time
- * Returns CLOCK_R_OK iff successful.
+ *  id: Unique ID returned by register_time
+ * Returns CLOCK_R_OK iff successful. 
  */
-int remove_timer(uint32_t id);
-
-/*
- * Handle an interrupt message sent to 'interrupt_ep' from start_timer
- *
- * Returns CLOCK_R_OK iff successful
- */
-int timer_interrupt(void);
+int remove_timer(uint32_t id, seL4_CPtr timer_ep);
 
 /*
  * Returns present time in microseconds since booting.
  *
  * Returns a negative value if failure.
  */
-timestamp_t time_stamp(void);
+timestamp_t time_stamp(seL4_CPtr timer_ep);
 
 /*
  * Stop clock driver operation.
  *
  * Returns CLOCK_R_OK iff successful.
  */
-int stop_timer(void);
+int stop_timer(seL4_CPtr timer_ep);
 
 #endif /* _CLOCK_H_ */

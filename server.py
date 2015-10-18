@@ -24,8 +24,6 @@ NUM_RUNS = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 print 'Attempting %d runs' % (NUM_RUNS)
 
 commands = ['ps', 'ls', 'cat a.cpp', 'time']
-#commands = ['ps', 'time']
-#commands = ['ps']
 
 numCommands = 1
 
@@ -53,7 +51,6 @@ while running:
                 s.sendto('sosh\n', sabreAddr)
 
                 numCommands = random.randint(1, 4)
-                #numCommands = 1
 
                 for i in range(numCommands):
                     #command = commands[0]
