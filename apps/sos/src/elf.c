@@ -116,9 +116,23 @@ static int load_segment_into_vspace(process_t *proc,
     /* Pin all the pages if required */
     if (pin_pages) {
         for (seL4_Word vaddr = PAGE_ALIGN(dst); vaddr < dst + segment_size; vaddr += PAGE_SIZE) {
-            int frame = vaddr_to_pt_entry(proc->as, vaddr)->frame;
-            struct ft_entry *fte = &ft[svaddr_to_frame_idx(frame)];
-            if (fte->user_cap) {
+            bool need_add_page = false;
+            struct pt_entry *pte = vaddr_to_pt_entry(proc->as, vaddr);
+            struct ft_entry *fte;
+
+            if (pte != NULL) {
+                int frame = pte->frame;
+                if (frame != 0) {
+                    dprintf(0, "frame = %d, svaddr = %u\n", frame, svaddr_to_frame_idx(frame));
+                    fte = &ft[svaddr_to_frame_idx(frame)];
+                    conditional_panic(!fte, "Not enough memory - elf nfs read swapping each other out (probably clock)");
+                } else {
+                    need_add_page = true;
+                }
+            } else {
+                need_add_page = true;
+            }
+            if (!need_add_page) {
                 fte->is_swappable = false;
             } else {
                 seL4_Word sos_addr;

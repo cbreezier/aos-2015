@@ -93,9 +93,6 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
  */
 #define BEREAVING_PARENTS_TICK_TIME 500000ull
 
-// struct timer_list_node nfs_timer_node;
-// struct timer_list_node bereaving_parents_timer_node;
-
 extern fhandle_t mnt_point;
 
 struct mutex_ep {
@@ -322,7 +319,6 @@ void syscall_loop(seL4_CPtr ep) {
             uint32_t id = (uint32_t) seL4_GetMR(0);
             void *data = (void *) seL4_GetMR(1);
             timer_callback_t callback = (timer_callback_t) seL4_GetMR(2);
-            dprintf(0, "timer callback %p %u %p\n", callback, id, data);
 
             callback(id, data);
         } else{

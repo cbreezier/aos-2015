@@ -79,8 +79,12 @@ static void fassert(bool condition, char *err_msg) {
     }
 
     // Segfault and die
-    *NULL;
+    int *a = NULL;
+    int b = *a;
+    a = &b;
 }
+
+static timestamp_t time_stamp(void);
 
 static int start_timer() {
     clock_irqs[0].irq = EPIT1_IRQ;
@@ -133,7 +137,7 @@ static int start_timer() {
 
     overflow_offset = 0;
 
-    //allocator = init_allocator(time_stamp());
+    allocator = init_allocator(time_stamp());
     if (allocator == NULL) {
         return ENOMEM;
     }
@@ -178,7 +182,7 @@ static uint32_t register_timer(uint64_t delay, void *callback, void *data) {
 
     node->callback = callback;
     node->data = data;
-    node->id = 0;//allocator_get_num(allocator);
+    node->id = allocator_get_num(allocator);
     node->delay = delay;
 
     epit_clocks[0]->cr &= ~(BIT(EN));
@@ -289,7 +293,7 @@ static int remove_timer(uint32_t id) {
         epit_clocks[0]->cr |= BIT(EN);
 
         if (head->next == NULL) {
-            //allocator_release_num(allocator, head->id); 
+            allocator_release_num(allocator, head->id); 
             free(head);
             return 0;
         }
@@ -302,7 +306,7 @@ static int remove_timer(uint32_t id) {
         /* Remove the timer and free its memory */
         struct timer_list_node *to_free = head;
         head = head->next;
-        //allocator_release_num(allocator, to_free->id);
+        allocator_release_num(allocator, to_free->id);
         free(to_free);
 
         /* Must reschedule timer since we modified the head */
@@ -388,7 +392,7 @@ static int timer_interrupt(void) {
             } else {
                 epit_clocks[0]->cr &= ~(BIT(EN));
             }
-            //allocator_release_num(allocator, to_free->id);
+            allocator_release_num(allocator, to_free->id);
 
             //printf("calling back\n");
             callback_reply(to_free);
@@ -432,7 +436,7 @@ static int stop_timer(void) {
     free((struct epit_clocks*)epit_clocks[0]);
     free((struct epit_clocks*)epit_clocks[1]);
 
-    //destroy_allocator(allocator);
+    destroy_allocator(allocator);
 
     struct timer_list_node *prev;
     struct timer_list_node *cur = head;
@@ -447,10 +451,8 @@ static int stop_timer(void) {
 static void timer_loop(seL4_CPtr ep) {
     while (true) {
         seL4_Word badge;
-        seL4_Word label;
-        seL4_MessageInfo_t message;
 
-        message = seL4_Wait(ep, &badge);
+        seL4_Wait(ep, &badge);
 
         // Async timer interrupt
         if (badge & IRQ_BADGE_TIMER) {

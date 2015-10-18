@@ -74,7 +74,6 @@ typedef struct {
 
     pid_t next_pid;
 
-    // struct timer_list_node timer_sleep_node;
 } process_t;
 
 int procs_head_free, procs_tail_free;

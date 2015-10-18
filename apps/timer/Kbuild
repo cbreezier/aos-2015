@@ -1,2 +1,2 @@
 apps-$(CONFIG_APP_TIMERAPP) += timer
-test: $(libc) libsel4 libsos
+timer: $(libc) libsel4 libsos libutils

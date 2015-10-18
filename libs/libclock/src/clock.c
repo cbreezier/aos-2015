@@ -8,7 +8,6 @@
 #include <assert.h>
 
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, seL4_CPtr timer_ep) {
-    printf("registering timer\n");
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 5);
     seL4_SetTag(tag);
     seL4_SetMR(0, REGISTER_TIMER_CALL);
@@ -20,8 +19,6 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data, s
     seL4_Call(timer_ep, tag);
 
     uint32_t id = seL4_GetMR(0);
-
-    printf("sel4 call succeeded %u\n", id);
 
     return id;
 }
