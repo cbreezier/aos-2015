@@ -12,6 +12,8 @@
 
 #define WRITE_TICK_TIME 30000000ull
 
+#define FILE_CACHEING_VERBOSITY 5
+
 struct vfs_cache_entry cache[NUM_CACHE_ENTRIES];
 
 struct timer_list_node write_tick_node;
@@ -91,6 +93,7 @@ void vfs_cache_init() {
 static int cache_out() {
     int num_loops = 0;
     while (cache[_cur_cache_entry].referenced || cache[_cur_cache_entry].pinned) {
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out loop %d\n", num_loops);
         cache[_cur_cache_entry].referenced = false;   
         
         _cur_cache_entry++;
@@ -102,29 +105,41 @@ static int cache_out() {
         conditional_panic(num_loops > NUM_CACHE_ENTRIES*2 + 1, "All vfs cache entries are pinned");
     }
 
+    dprintf(FILE_CACHEING_VERBOSITY, "cache out check dirty\n");
     if (cache[_cur_cache_entry].dirty) {
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out dirty\n");
         cache[_cur_cache_entry].pinned = true;
 
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out releasing\n");
         sync_release(cache_lock);
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out released\n");
 
         struct vfs_cache_entry *entry = &cache[_cur_cache_entry];
 
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out before nfs\n");
         int nwritten = nfs_sos_write_sync(entry->file_obj->fh, entry->offset, entry->data, entry->nbytes);
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out after nfs\n");
         conditional_panic(nwritten != entry->nbytes, "Writing out cache entry failed");
 
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out before lock\n");
         sync_acquire(cache_lock);
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out after lock\n");
 
         cache[_cur_cache_entry].pinned = false;
 
         memset(cache[_cur_cache_entry].data, 0, PAGE_SIZE);
     }
+    dprintf(FILE_CACHEING_VERBOSITY, "cache out done dirty\n");
 
     struct file_t *file_obj = cache[_cur_cache_entry].file_obj;
+    dprintf(FILE_CACHEING_VERBOSITY, "cache out check file_obj\n");
     if (file_obj != NULL) {
+        dprintf(FILE_CACHEING_VERBOSITY, "cache out file_obj not null\n");
         struct vfs_cache_entry *prev = NULL;
         bool found = false;
 
         for (struct vfs_cache_entry *cur = file_obj->cache_entry_head; cur != NULL; cur = cur->file_obj_next) {
+            dprintf(FILE_CACHEING_VERBOSITY, "cache out for loop %p\n", cur);
 
             if (cur->offset == cache[_cur_cache_entry].offset) {
                 found = true;
@@ -141,6 +156,7 @@ static int cache_out() {
         }
         conditional_panic(!found, "file entries and vfs cache are not consistent");
     }
+    dprintf(FILE_CACHEING_VERBOSITY, "cache out check file_obj done\n");
 
     int ret = _cur_cache_entry;
     _cur_cache_entry++;
@@ -159,13 +175,17 @@ static int max(int a, int b) {
 }
 
 int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *usr_buf, size_t nbytes) {
+    dprintf(FILE_CACHEING_VERBOSITY, "read file lock before %d\n", proc->pid);
     sync_acquire(fe->file_lock);
+    dprintf(FILE_CACHEING_VERBOSITY, "read file lock after %d\n", proc->pid);
     int nread = 0;
 
     uint32_t aligned_offset = PAGE_ALIGN(offset, PAGE_SIZE);
     offset -= aligned_offset;
 
+    dprintf(FILE_CACHEING_VERBOSITY, "read cache lock before %d\n", proc->pid);
     sync_acquire(cache_lock);
+    dprintf(FILE_CACHEING_VERBOSITY, "read cache lock after %d\n", proc->pid);
 
     struct vfs_cache_entry *cur = fe->cache_entry_head;
     struct vfs_cache_entry *prev = NULL;
@@ -173,47 +193,71 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
         prev = cur;
         cur = cur->file_obj_next;
     }
+
+    if (cur) cur->pinned = true;
+    if (prev) prev->pinned = true;
+
     while (nbytes > 0) {
+        dprintf(FILE_CACHEING_VERBOSITY, "wtf %d\n", proc->pid);
         if (cur != NULL && cur->offset == aligned_offset) {
+            dprintf(FILE_CACHEING_VERBOSITY, "read if %d", proc->pid);
             if (cur->nbytes <= offset) {
                 /* Trying to read past the end of the file */
                 break;
             }
             cur->pinned = true;
+            dprintf(FILE_CACHEING_VERBOSITY, "read if a %d\n", proc->pid);
             sync_release(cache_lock);
+            dprintf(FILE_CACHEING_VERBOSITY, "read if b %d\n", proc->pid);
 
             size_t to_copy = min(PAGE_SIZE - offset, cur->nbytes - offset);
+            dprintf(FILE_CACHEING_VERBOSITY, "read if c %d\n", proc->pid);
             to_copy = min(to_copy, nbytes);
 
+            dprintf(FILE_CACHEING_VERBOSITY, "read copyout before %d\n", proc->pid);
             int err = copyout(proc, usr_buf, cur->data + offset, to_copy);
+            dprintf(FILE_CACHEING_VERBOSITY, "read copyout after %d\n", proc->pid);
             if (err) {
                 sync_acquire(cache_lock);
                 cur->pinned = false;
                 sync_release(cache_lock);
+                sync_release(fe->file_lock);
                 return -err;
             }
 
+            dprintf(FILE_CACHEING_VERBOSITY, "read if d %d\n", proc->pid);
             nread += to_copy;
             nbytes -= to_copy;
             usr_buf += to_copy;
             aligned_offset += PAGE_SIZE;
             offset = 0;
+            dprintf(FILE_CACHEING_VERBOSITY, "read if e %d\n", proc->pid);
 
+            dprintf(FILE_CACHEING_VERBOSITY, "read re-acquire %d\n", proc->pid);
             sync_acquire(cache_lock);
+            dprintf(FILE_CACHEING_VERBOSITY, "read re-acquire done %d\n", proc->pid);
             cur->pinned = false;
             cur->referenced = true;
         
+            dprintf(FILE_CACHEING_VERBOSITY, "read if f %d\n", proc->pid);
+            if (prev) prev->pinned = false;
             prev = cur;
             cur = cur->file_obj_next;
+            if (cur) cur->pinned = true;
+            dprintf(FILE_CACHEING_VERBOSITY, "read if g %d\n", proc->pid);
         } else {
+            dprintf(FILE_CACHEING_VERBOSITY, "read else cache_out before %d\n", proc->pid);
             int entry = cache_out();
+            dprintf(FILE_CACHEING_VERBOSITY, "read else cache_out after %d\n", proc->pid);
             conditional_panic(entry < 0 || entry >= NUM_CACHE_ENTRIES, "Invalid cache entry (vfs_cache_read)");
 
             cache[entry].pinned = true;
             
             sync_release(cache_lock);
 
+            dprintf(FILE_CACHEING_VERBOSITY, "read nfs_read before %d\n", proc->pid);
             int nfs_nread = nfs_sos_read_sync(fe->fh, aligned_offset, cache[entry].data, PAGE_SIZE);
+            dprintf(FILE_CACHEING_VERBOSITY, "read nfs_read after %d\n", proc->pid);
             if (nfs_nread < 0) {
                 sync_acquire(cache_lock);
                 cache[entry].pinned = false;
@@ -229,7 +273,7 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
 
             int err = copyout(proc, usr_buf, cache[entry].data + offset, to_read);
             if (err) {
-                sync_release(cache_lock);
+                sync_acquire(cache_lock);
                 cache[entry].pinned = false;
                 sync_release(cache_lock);
                 sync_release(fe->file_lock);
@@ -241,7 +285,9 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
             usr_buf += to_read;
             offset = 0;
 
+            dprintf(FILE_CACHEING_VERBOSITY, "read else re-acquire %d\n", proc->pid);
             sync_acquire(cache_lock);
+            dprintf(FILE_CACHEING_VERBOSITY, "read else re-acquire done %d\n", proc->pid);
 
             cache[entry].pinned = false;
             cache[entry].referenced = true;
@@ -252,22 +298,38 @@ int vfs_cache_read(process_t *proc, struct file_t *fe, uint32_t offset, void *us
 
             aligned_offset += PAGE_SIZE;
 
+            conditional_panic(prev == cur && prev != NULL, "something something has grone wrong");
+            dprintf(FILE_CACHEING_VERBOSITY, "read else a %d\n", proc->pid);
             if (prev == NULL) {
+                dprintf(FILE_CACHEING_VERBOSITY, "read else b %d\n", proc->pid);
                 fe->cache_entry_head = &cache[entry];
             } else {
+                dprintf(FILE_CACHEING_VERBOSITY, "read else c %d\n", proc->pid);
                 prev->file_obj_next = &cache[entry];
             }
+            dprintf(FILE_CACHEING_VERBOSITY, "read else d %d\n", proc->pid);
             cache[entry].file_obj_next = cur;
+            dprintf(FILE_CACHEING_VERBOSITY, "read else e %d\n", proc->pid);
 
             if (nfs_nread < PAGE_SIZE) {
+                dprintf(FILE_CACHEING_VERBOSITY, "read else f %d\n", proc->pid);
                 break;
             }
 
+            if (prev) prev->pinned = false;
             prev = &cache[entry];
+            if (prev) prev->pinned = true;
+            dprintf(FILE_CACHEING_VERBOSITY, "read else g %d\n", proc->pid);
         }
     }
+
+    if (prev) prev->pinned = false;
+    if (cur) cur->pinned = false;
+
     sync_release(cache_lock);
     sync_release(fe->file_lock);
+
+    dprintf(FILE_CACHEING_VERBOSITY, "read all done %d\n", proc->pid);
     return nread;
 }
 
@@ -287,6 +349,7 @@ static int hash_string(char *path) {
 
 int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *usr_buf, size_t nbytes) {
     // Invalidate dir_cache since we are modifying this file
+    dprintf(FILE_CACHEING_VERBOSITY, "write dir lock before\n");
     sync_acquire(dir_cache_lock);
     int hash = hash_string(fe->name);
     dir_cache[hash].path[0] = '\0';
@@ -294,17 +357,23 @@ int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *u
 
     int nwritten = 0;
 
+    dprintf(FILE_CACHEING_VERBOSITY, "write file lock before %d\n", proc->pid);
     sync_acquire(fe->file_lock);
+    dprintf(FILE_CACHEING_VERBOSITY, "write file lock after %d\n", proc->pid);
 
     uint32_t aligned_offset = PAGE_ALIGN(offset, PAGE_SIZE);
     offset -= aligned_offset;
 
+    dprintf(FILE_CACHEING_VERBOSITY, "write cache lock before %d\n", proc->pid);
     sync_acquire(cache_lock);
+    dprintf(FILE_CACHEING_VERBOSITY, "write cache lock after %d\n", proc->pid);
 
     struct vfs_cache_entry *cur = fe->cache_entry_head;
     while (cur != NULL && cur->offset < aligned_offset) {
         cur = cur->file_obj_next;
     }
+
+    if (cur) cur->pinned = true;
    
     while (nbytes > 0) {
         if (cur != NULL && cur->offset == aligned_offset) {
@@ -315,11 +384,14 @@ int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *u
             cur->pinned = true;
             sync_release(cache_lock);
 
+            dprintf(FILE_CACHEING_VERBOSITY, "write copyin before %d\n", proc->pid);
             int err = copyin(proc, cur->data + offset, usr_buf, to_write);
+            dprintf(FILE_CACHEING_VERBOSITY, "write copyin after %d\n", proc->pid);
             if (err) {
                 sync_acquire(cache_lock);
                 cur->pinned = false;
                 sync_release(cache_lock);
+                sync_release(fe->file_lock);
                 return -err;
             }
 
@@ -329,7 +401,9 @@ int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *u
             offset = 0;
             aligned_offset += PAGE_SIZE;
 
+            dprintf(FILE_CACHEING_VERBOSITY, "write re-acquire %d\n", proc->pid);
             sync_acquire(cache_lock);
+            dprintf(FILE_CACHEING_VERBOSITY, "write re-acquire done %d\n", proc->pid);
             
             cur->pinned = false;
             cur->nbytes = max(cur->nbytes, end_loc);
@@ -337,12 +411,15 @@ int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *u
             cur->referenced = true;
 
             cur = cur->file_obj_next;
+            if (cur) cur->pinned = true;
         } else {
             sync_release(cache_lock);
 
             /* Cache entry does not exist. Write through */
             size_t to_write = min(PAGE_SIZE - offset, nbytes);
+            dprintf(FILE_CACHEING_VERBOSITY, "write nfs_write before %d\n", proc->pid);
             int nfs_nwritten = nfs_write_sync(proc, &fe->fh, aligned_offset + offset, usr_buf, to_write);
+            dprintf(FILE_CACHEING_VERBOSITY, "write nfs_write after %d\n", proc->pid);
             if (nfs_nwritten < 0) {
                 sync_release(fe->file_lock);
                 return nfs_nwritten; 
@@ -355,12 +432,18 @@ int vfs_cache_write(process_t *proc, struct file_t *fe, uint32_t offset, void *u
             offset = 0;
             aligned_offset += PAGE_SIZE;
 
+            dprintf(FILE_CACHEING_VERBOSITY, "write else re-acquire %d\n", proc->pid);
             sync_acquire(cache_lock);
+            dprintf(FILE_CACHEING_VERBOSITY, "write else re-acquire done %d\n", proc->pid);
         }
     }
+
+    if (cur) cur->pinned = false;
+
     sync_release(cache_lock);
 
     sync_release(fe->file_lock);
+    dprintf(FILE_CACHEING_VERBOSITY, "write all done %d\n", proc->pid);
     return nwritten;
 }
 
