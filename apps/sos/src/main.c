@@ -97,7 +97,7 @@ sos_syscall_t syscall_jt[NUM_SYSCALLS];
 /*
  * Notifying bereaving parents
  */
-#define BEREAVING_PARENTS_TICK_TIME 500000ull
+#define BEREAVING_PARENTS_TICK_TIME 10000000ull
 
 extern fhandle_t mnt_point;
 
@@ -691,9 +691,7 @@ int main(void) {
     nfs_sync_init();
 
     /* Allocate all SOS threads */
-    printf("thread init\n");
     threads_init(sos_async_thread_entrypoint, sos_sync_thread_entrypoint);
-    printf("thread init finished\n");
 
     /* Initialise swap table */
     size_t ft_lo_idx, ft_hi_idx;
@@ -703,13 +701,13 @@ int main(void) {
     /* Initialise pcbs and bookkeeping table */
     proc_init();
 
-    /* Initialise vfs caching */
-    vfs_cache_init();
-
     /* Start the timer app */
     pid_t timer_pid = proc_create(-1, TIMER_APP, 255, true);
     conditional_panic(timer_pid < 0, "Cannot start timer process");
     setup_timer_app(&processes[timer_pid]); 
+
+    /* Initialise vfs caching */
+    vfs_cache_init();
 
     /* Register 100ms nfs tick timer */
     register_timer(NFS_TICK_TIME, nfs_tick, NULL, timer_ep);

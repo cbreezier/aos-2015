@@ -11,7 +11,6 @@
 #include "alloc_wrappers.h"
 
 #define MEMORY_TOP (0xFFFFFFFF)
-#define STACK_SIZE (0x40000000)
 
 int as_init(struct addrspace **ret_as) {
     assert(ret_as != NULL);
@@ -201,7 +200,7 @@ int as_add_region(struct addrspace *as, seL4_Word start, size_t size, bool r, bo
 }
 
 int as_add_stack(process_t *proc, bool pin_pages) {
-    int err = as_do_add_region(proc->as, PROCESS_STACK_TOP - STACK_SIZE, STACK_SIZE , 1, 1, 0, &(proc->as->stack_region));
+    int err = as_do_add_region(proc->as, PROCESS_STACK_TOP - PROCESS_STACK_SIZE, PROCESS_STACK_SIZE , 1, 1, 0, &(proc->as->stack_region));
     if (err) {
         return err;
     }
@@ -216,7 +215,7 @@ int as_add_stack(process_t *proc, bool pin_pages) {
     }
     
     /* Add guard region */
-    return as_add_region(proc->as, PROCESS_STACK_TOP - STACK_SIZE - PAGE_SIZE, PAGE_SIZE, false, false, false);
+    return as_add_region(proc->as, PROCESS_STACK_TOP - PROCESS_STACK_SIZE - PAGE_SIZE, PAGE_SIZE, false, false, false);
 }
 
 int as_add_heap(process_t *proc, bool pin_pages) {

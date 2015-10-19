@@ -15,7 +15,7 @@
 #include <alloc_wrappers.h>
 #include <sync/mutex.h>
 
-#define verbose -2
+#define verbose 0
 
 void plogf(const char *msg, ...);
 
