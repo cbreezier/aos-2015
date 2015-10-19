@@ -237,7 +237,7 @@ seL4_MessageInfo_t sos_open(process_t *proc, int num_args) {
         } else {
             fhandle_t fh;
             fattr_t fattr;
-            err = nfs_lookup_sync(path, &fh, &fattr);
+            err = vfs_cache_lookup(path, &fh, &fattr);
 
             /* Create the file it if doesn't exist */
             if (err == ENOENT/* && (mode & O_CREAT)*/) {
@@ -467,7 +467,7 @@ seL4_MessageInfo_t sos_stat(process_t *proc, int num_args) {
 
     fhandle_t fh;
     fattr_t fattr;
-    err = nfs_lookup_sync(path, &fh, &fattr); 
+    err = vfs_cache_lookup(path, &fh, &fattr); 
 
     if (err) {
         goto sos_stat_end;
@@ -575,8 +575,6 @@ seL4_MessageInfo_t sos_execve(process_t *proc, int num_args) {
         goto sos_execve_end;
     }
     path[NAME_MAX-1] = 0;
-
-    printf("sos_execve %s\n", path);
 
     pid = proc_create(proc->pid, path, -1, false);
     if (pid < 0) {

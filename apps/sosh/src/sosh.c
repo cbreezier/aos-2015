@@ -125,9 +125,12 @@ static int sosh_read(int argc, char **argv) {
     if (nread < 0) {
         printf("Warning warning nread = %d\n", nread);
     } else {
-        printf("%s\n", buf + atoi(argv[2]));
+        for (int i = 0; i < nread; i++) {
+            printf("%c", buf[atoi(argv[2]) + i]);
+        }
     }
 
+    printf("\n");
     return 0;
 }   
 
@@ -569,17 +572,14 @@ int main(void) {
     }
     for (blabla = 0; blabla < 400000; blabla++) {
         assert(bufff[blabla] == 'A' + (blabla / 4096) % 26);
-//        for (int ax = 0; ax < 4096; ax++) {
-//            assert(bufff[blabla] == 'A' + (blabla % 26));
-//        }
-//        blabla += 4096;
     }
-    //read(fd2, bufff, 500000);
     after = mtime();
     printf("second time %llu\n", after - before);
 
     close(fd);
     close(fd2);
+
+    pt_test(1, NULL);
     /* Testing mapped pages */
 
 //    read_res_fd = open("readres", O_RDWR);

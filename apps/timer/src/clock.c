@@ -72,18 +72,6 @@ static volatile struct epit_clocks {
     unsigned int cnr;  /* Counter */
 } *epit_clocks[2];
 
-// Fixed assert
-static void fassert(bool condition, char *err_msg) {
-    if (condition) {
-        printf("Assertion failed: %s\n", err_msg);
-    }
-
-    // Segfault and die
-    int *a = NULL;
-    int b = *a;
-    a = &b;
-}
-
 static timestamp_t time_stamp(void);
 
 static int start_timer() {
@@ -92,8 +80,6 @@ static int start_timer() {
     
     clock_irqs[1].irq = EPIT2_IRQ;
     clock_irqs[1].cap = EPIT2_CAP;
-
-    printf("Start timer\n");
 
     /* Head of the list of registered timers */
     head = NULL;
@@ -141,8 +127,6 @@ static int start_timer() {
     if (allocator == NULL) {
         return ENOMEM;
     }
-
-    printf("Finished initialising timer\n");
 
     return 0;
 }
@@ -267,7 +251,6 @@ static uint32_t register_timer(uint64_t delay, void *callback, void *data) {
     }
     int node_id = node->id;
     
-    //printf("done registering\n");
     return node_id;
 }
 
@@ -332,18 +315,15 @@ static int remove_timer(uint32_t id) {
 }
 
 static void callback_reply(struct timer_list_node *node) {
-    //printf("callback_reply starting\n");
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(TIMER_CALLBACK_LABEL, 0, 0, 3);
     seL4_SetTag(tag);
     seL4_SetMR(0, node->id);
     seL4_SetMR(1, (seL4_Word)node->data);
     seL4_SetMR(2, (seL4_Word)node->callback);
     seL4_Send(SYSCALL_ENDPOINT_SLOT, tag);
-    //printf("callback_reply done\n");
 }
 
 static int timer_interrupt(void) {
-    //printf("timer interrupt\n");
     /*
      * Check which timer actually generated the interrupt.
      * The status register of that timer will be set.
@@ -351,19 +331,12 @@ static int timer_interrupt(void) {
     if (epit_clocks[0]->sr) {
         epit_clocks[0]->sr = 0xFFFFFFFF;
 
-        //printf("acking\n");
         int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
-        //printf("acked\n");
         assert(!err);
         if (head == NULL) {
-            printf("NO TIMERS AJFAKSDJSAF\n");
-            //assert(!"Timer interrupt with no queued timers");
-            //int err = seL4_IRQHandler_Ack(clock_irqs[0].cap);
-            //assert(!err);
             return 0;
         }
 
-        //printf("found timer\n");
 
         /*
          * Timer isn't finished - just one loop of the EPIT
@@ -372,9 +345,7 @@ static int timer_interrupt(void) {
         if (head->delay > MAX_US_EPIT) {
             head->delay -= MAX_US_EPIT;
             if (head->delay < MAX_US_EPIT) {
-                //printf("rescheduling\n");
                 reschedule(head->delay);
-                //printf("rescheduled\n");
             }
         } else {
             struct timer_list_node *to_free = head;
@@ -386,29 +357,23 @@ static int timer_interrupt(void) {
              * the callback registers a new timer
              */
             if (head != NULL) {
-                //printf("rescheduling 2\n");
                 reschedule(head->delay);
-                //printf("rescheduled 2\n");
             } else {
                 epit_clocks[0]->cr &= ~(BIT(EN));
             }
             allocator_release_num(allocator, to_free->id);
 
-            //printf("calling back\n");
             callback_reply(to_free);
-            //printf("done\n");
 
             free(to_free);
         }
     }
     if (epit_clocks[1]->sr) {
-        //printf("epit 2\n");
         epit_clocks[1]->sr = 0xFFFFFFFF;
         overflow_offset++;
         int err = seL4_IRQHandler_Ack(clock_irqs[1].cap);
         assert(!err);
     }
-    //printf("timer interrupt done\n");
     return 0;
 }
 
@@ -472,7 +437,6 @@ static void timer_loop(seL4_CPtr ep) {
                 uint64_t delay = ((uint64_t)seL4_GetMR(2) << 32) | (uint64_t)seL4_GetMR(1);
                 void *cb = (void*) seL4_GetMR(3);
                 void *data = (void*) seL4_GetMR(4);
-                //printf("delay = %llu\n", delay);
                 uint32_t register_ret = register_timer(delay, cb, data);
 
 
@@ -506,7 +470,7 @@ static void timer_loop(seL4_CPtr ep) {
 
                 break;
             default:
-                //printf("Unknown timer call\n");
+                printf("Unknown timer call\n");
                 break;
         }
     }

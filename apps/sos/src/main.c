@@ -271,21 +271,6 @@ void syscall_loop(seL4_CPtr ep) {
                 network_irq();
                 sync_release(network_lock);
             }
-            /* Interrupt */
-            //if (badge & IRQ_BADGE_TIMER) {
-            //    timer_interrupt();
-            //}
-
-            /* TODO: FIX */
-            // if (badge & IRQ_BADGE_TIMER) {
-            //     uint32_t id = seL4_GetMR(0);
-            //     void *data = seL4_GetMR(1);
-            //     timer_callback_t callback = seL4_GetMR(2);
-
-            //     (*callback)(id, data);
-            // }
-
-
         }else if(label == seL4_VMFault){
             /* Save these as local variables, as message registers will change through lock acquiring */
             seL4_Word pc = seL4_GetMR(0);
@@ -324,10 +309,8 @@ void syscall_loop(seL4_CPtr ep) {
             /* Panic in all other cases */
             conditional_panic(err, "failed to add page(vm fault)");
 
-            if (1) {
-                /* Flush cache entry */
-                seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-            }
+            /* Flush cache entry */
+            seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
 
             sync_acquire(proc->proc_lock);
             proc->sos_thread_handling = false;
@@ -655,8 +638,6 @@ static void setup_timer_app(process_t *proc) {
     // Map devices
     do_map_device(EPIT1_BASE_ADDRESS, PAGE_SIZE, proc->vroot, (void*)DEVICE_START);
     do_map_device(EPIT2_BASE_ADDRESS, PAGE_SIZE, proc->vroot, (void*)(DEVICE_START + PAGE_SIZE));
-
-    dprintf(0, "Timer setup all done!\n");
 }
 
 /*
@@ -674,11 +655,9 @@ int main(void) {
     /* Initialise alloc wrappers */
     alloc_wrappers_init();
 
-    printf("frametable\n");
     frametable_init();
 
     /* Initialise the network hardware */
-    printf("network init\n");
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Init open file table */
